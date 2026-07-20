@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing — Arrowhead Access</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16241F; --paper:#EEF2ED; --paper-raised:#E4EAE3;
+    --teal:#2E6F5E; --teal-dark:#1F4F42; --coral:#D9684C; --slate:#6E7C77; --line:#CBD6CD;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 32px;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  a{color:inherit;text-decoration:none;}
+
+  header.site{border-bottom:1px solid var(--line);}
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:20px 32px;max-width:1000px;margin:0 auto;}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;}
+  .logo-mark{width:26px;height:26px;border-radius:6px;background:var(--teal);position:relative;flex-shrink:0;}
+  .logo-mark::after{content:"";position:absolute;top:6.5px;left:6.5px;width:7px;height:7px;background:var(--coral);border-radius:1px;transform:rotate(45deg);}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:7px;font-size:14px;font-weight:600;border:1px solid var(--line);cursor:pointer;background:none;}
+
+  .head{padding:64px 0 40px;text-align:center;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--teal-dark);background:rgba(46,111,94,.1);display:inline-flex;padding:6px 12px;border-radius:5px;margin-bottom:18px;}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:clamp(34px,4.5vw,48px);line-height:1.05;margin-bottom:14px;}
+  .head p{color:var(--slate);max-width:480px;margin:0 auto;}
+
+  .toggle-row{display:flex;justify-content:center;align-items:center;gap:14px;margin:36px 0 60px;}
+  .toggle-label{font-size:14px;font-weight:600;color:var(--slate);cursor:pointer;transition:color .15s;}
+  .toggle-label.active{color:var(--ink);}
+  .switch{width:52px;height:28px;background:var(--teal-dark);border-radius:20px;position:relative;cursor:pointer;flex-shrink:0;}
+  .switch .knob{position:absolute;top:3px;left:3px;width:22px;height:22px;background:#fff;border-radius:50%;transition:transform .2s ease;}
+  .switch.annual .knob{transform:translateX(24px);}
+  .save-chip{font-family:'IBM Plex Mono',monospace;font-size:11px;background:rgba(217,104,76,.14);color:#B44E36;padding:3px 8px;border-radius:12px;margin-left:2px;}
+
+  .audience-tag{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin-bottom:18px;}
+
+  .calc-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:36px;margin-bottom:64px;}
+  .calc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap;margin-bottom:28px;}
+  .calc-top h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:26px;margin-bottom:6px;}
+  .calc-top p{color:var(--slate);font-size:14px;max-width:400px;}
+
+  .stepper{display:flex;align-items:center;gap:14px;background:var(--paper-raised);border-radius:10px;padding:8px 8px 8px 16px;flex-shrink:0;}
+  .stepper .n-label{font-size:13px;color:var(--slate);white-space:nowrap;}
+  .stepper .controls{display:flex;align-items:center;gap:2px;}
+  .stepper button{width:32px;height:32px;border-radius:7px;border:1px solid var(--line);background:#fff;font-size:16px;font-weight:600;cursor:pointer;color:var(--ink);}
+  .stepper button:hover{background:var(--paper-raised);}
+  .stepper .count{width:44px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;}
+
+  .tier-table{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:28px;}
+  .tier-cell{background:#fff;padding:16px 14px;text-align:center;transition:background .15s;}
+  .tier-cell.active{background:var(--teal-dark);color:var(--paper);}
+  .tier-cell .range{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--slate);margin-bottom:6px;}
+  .tier-cell.active .range{color:rgba(238,242,237,.65);}
+  .tier-cell .rate{font-weight:700;font-size:15px;}
+
+  .result{display:flex;justify-content:space-between;align-items:center;background:var(--paper-raised);border-radius:10px;padding:20px 24px;flex-wrap:wrap;gap:12px;}
+  .result .r-left .r-label{font-size:12px;color:var(--slate);margin-bottom:4px;}
+  .result .r-left .r-value{font-family:'Instrument Serif',serif;font-size:32px;}
+  .result .r-right{text-align:right;}
+  .result .r-right .r-note{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--slate);}
+  .cta{display:inline-block;margin-top:20px;padding:12px 22px;border-radius:8px;font-size:14px;font-weight:600;background:var(--ink);color:var(--paper);}
+
+  .note-band{max-width:640px;margin:0 auto;text-align:center;padding:0 32px 80px;}
+  .note-band p{font-size:13px;color:var(--slate);}
+  footer{padding:36px 0;border-top:1px solid var(--line);text-align:center;}
+  footer span{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--slate);}
+
+  @media (max-width:640px){.tier-table{grid-template-columns:repeat(2,1fr);}.calc-top{flex-direction:column;}}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="nav">
+    <a href="index.html" class="logo"><span class="logo-mark"></span>Arrowhead Access</a>
+    <a href="#" class="btn">Log in</a>
+  </div>
+</header>
+
+<div class="head wrap">
+  <span class="eyebrow">Pricing</span>
+  <h1>Priced per location,<br>per rep — not per tier.</h1>
+  <p>The more locations or reps you bring, the cheaper each one gets. No flat jump from "small" to "enterprise."</p>
+</div>
+
+<div class="toggle-row">
+  <span class="toggle-label active" id="label-monthly">Monthly</span>
+  <div class="switch" id="switch" onclick="toggleBilling()"><div class="knob"></div></div>
+  <span class="toggle-label" id="label-annual">Annual <span class="save-chip">save ~17%</span></span>
+</div>
+
+<div class="wrap">
+
+  <div class="audience-tag">For doctor's offices — priced per location</div>
+  <div class="calc-card">
+    <div class="calc-top">
+      <div>
+        <h2>How many locations?</h2>
+        <p>Up to 5 locations share one policy set and calendar view. Rate per location drops as you add more.</p>
+      </div>
+      <div class="stepper">
+        <span class="n-label">Locations</span>
+        <div class="controls">
+          <button onclick="changeCount('office',-1)">−</button>
+          <span class="count" id="office-count">1</span>
+          <button onclick="changeCount('office',1)">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="tier-table" id="office-tiers"></div>
+    <div class="result">
+      <div class="r-left">
+        <div class="r-label">Total, billed monthly</div>
+        <div class="r-value" id="office-total">$29<span style="font-size:16px;color:var(--slate)"> / mo</span></div>
+      </div>
+      <div class="r-right">
+        <div class="r-note" id="office-rate-note">$29 / location</div>
+      </div>
+    </div>
+    <a href="#" class="cta">Start free trial</a>
+  </div>
+
+  <div class="audience-tag" id="reps">For sales reps — priced per seat</div>
+  <div class="calc-card">
+    <div class="calc-top">
+      <div>
+        <h2>How many reps on your team?</h2>
+        <p>One verification badge per rep, recognized at every office on Arrowhead. Solo reps welcome — teams get volume pricing.</p>
+      </div>
+      <div class="stepper">
+        <span class="n-label">Reps</span>
+        <div class="controls">
+          <button onclick="changeCount('rep',-1)">−</button>
+          <span class="count" id="rep-count">1</span>
+          <button onclick="changeCount('rep',1)">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="tier-table" id="rep-tiers"></div>
+    <div class="result">
+      <div class="r-left">
+        <div class="r-label">Total, billed monthly</div>
+        <div class="r-value" id="rep-total">$12<span style="font-size:16px;color:var(--slate)"> / mo</span></div>
+      </div>
+      <div class="r-right">
+        <div class="r-note" id="rep-rate-note">$12 / rep</div>
+      </div>
+    </div>
+    <a href="#" class="cta">Get verified</a>
+  </div>
+
+</div>
+
+<div class="note-band">
+  <p>Rates shown are a starting proposal — easy to adjust before launch. Every plan includes a 14-day free trial, monthly plans have no long-term contract.</p>
+</div>
+
+<footer><span>© 2026 Arrowhead Access</span></footer>
+
+<script>
+  const officeTiers = [
+    { max: 1, m: 29, a: 24, label: "1" },
+    { max: 4, m: 24, a: 20, label: "2–4" },
+    { max: 5, m: 19, a: 16, label: "5" },
+  ];
+  const repTiers = [
+    { max: 1, m: 15, a: 12, label: "1" },
+    { max: 4, m: 12, a: 10, label: "2–4" },
+    { max: 19, m: 10, a: 8, label: "5–19" },
+    { max: Infinity, m: 8, a: 7, label: "20+" },
+  ];
+
+  let annual = false;
+  let counts = { office: 1, rep: 1 };
+
+  function findTier(tiers, n){
+    return tiers.find(t => n <= t.max);
+  }
+
+  function renderTierTable(kind, tiers){
+    const el = document.getElementById(kind + '-tiers');
+    const n = counts[kind];
+    const active = findTier(tiers, n);
+    el.innerHTML = tiers.map(t => {
+      const rate = annual ? t.a : t.m;
+      const isActive = t === active;
+      return `<div class="tier-cell ${isActive ? 'active' : ''}">
+        <div class="range">${t.label} ${kind === 'office' ? 'locations' : 'reps'}</div>
+        <div class="rate">$${rate}/${kind === 'office' ? 'loc' : 'seat'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderResult(kind, tiers){
+    const n = counts[kind];
+    const tier = findTier(tiers, n);
+    const rate = annual ? tier.a : tier.m;
+    const total = rate * n;
+    document.getElementById(kind + '-total').innerHTML = `$${total}<span style="font-size:16px;color:var(--slate)"> / mo</span>`;
+    const noteEl = document.getElementById(kind + '-rate-note');
+    const unit = kind === 'office' ? 'location' : 'rep';
+    if (annual) {
+      noteEl.textContent = `$${rate}/${unit}/mo · billed $${total * 12}/yr`;
+    } else {
+      noteEl.textContent = `$${rate} / ${unit}`;
+    }
+  }
+
+  function renderAll(){
+    renderTierTable('office', officeTiers);
+    renderTierTable('rep', repTiers);
+    renderResult('office', officeTiers);
+    renderResult('rep', repTiers);
+  }
+
+  function changeCount(kind, delta){
+    const next = counts[kind] + delta;
+    const cap = kind === 'office' ? 5 : 50;
+    if (next < 1 || next > cap) return;
+    counts[kind] = next;
+    document.getElementById(kind + '-count').textContent = next;
+    renderAll();
+  }
+
+  function toggleBilling(){
+    annual = !annual;
+    document.getElementById('switch').classList.toggle('annual', annual);
+    document.getElementById('label-monthly').classList.toggle('active', !annual);
+    document.getElementById('label-annual').classList.toggle('active', annual);
+    renderAll();
+  }
+
+  renderAll();
+</script>
+
+</body>
+</html>

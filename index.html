@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arrowhead Access — Vendor visit scheduling for medical offices</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16241F;
+    --paper:#EEF2ED;
+    --paper-raised:#E4EAE3;
+    --teal:#2E6F5E;
+    --teal-dark:#1F4F42;
+    --coral:#D9684C;
+    --slate:#6E7C77;
+    --line:#CBD6CD;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 32px;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .serif{font-family:'Instrument Serif',serif;}
+
+  /* NAV */
+  header.site{
+    position:sticky;top:0;z-index:50;
+    background:rgba(238,242,237,0.92);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
+  }
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:20px 32px;max-width:1160px;margin:0 auto;}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-0.01em;}
+  .logo-mark{width:28px;height:28px;border-radius:6px;background:var(--teal);position:relative;flex-shrink:0;}
+  .logo-mark::after{content:"";position:absolute;top:7px;left:7px;width:8px;height:8px;background:var(--coral);border-radius:1px;transform:rotate(45deg);}
+  nav.links{display:flex;gap:32px;font-size:14px;font-weight:500;color:var(--slate);}
+  nav.links a:hover{color:var(--ink);}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:11px 20px;border-radius:7px;font-size:14px;font-weight:600;
+    text-decoration:none;border:1px solid transparent;cursor:pointer;
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .btn:hover{transform:translateY(-1px);}
+  .btn-primary{background:var(--ink);color:var(--paper);}
+  .btn-primary:hover{box-shadow:0 6px 16px rgba(22,36,31,.25);}
+  .btn-ghost{border-color:var(--line);color:var(--ink);}
+  .btn-coral{background:var(--coral);color:#fff;}
+  .btn-coral:hover{box-shadow:0 6px 16px rgba(217,104,76,.35);}
+
+  /* HERO */
+  .hero{padding:72px 0 88px;}
+  .hero-grid{display:grid;grid-template-columns:1.05fr 0.95fr;gap:56px;align-items:center;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--teal-dark);background:rgba(46,111,94,.1);
+    display:inline-flex;padding:6px 12px;border-radius:5px;margin-bottom:20px;
+  }
+  h1{
+    font-family:'Instrument Serif',serif;font-weight:400;
+    font-size:clamp(40px,5vw,60px);line-height:1.05;letter-spacing:-0.01em;
+    margin-bottom:22px;
+  }
+  h1 em{font-style:italic;color:var(--teal-dark);}
+  .hero p.lede{font-size:18px;color:var(--slate);max-width:480px;margin-bottom:32px;}
+  .hero-ctas{display:flex;gap:14px;flex-wrap:wrap;}
+
+  /* LEDGER WIDGET */
+  .ledger{
+    background:#fff;border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 20px 50px -20px rgba(22,36,31,.25);
+    overflow:hidden;
+  }
+  .ledger-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:18px 22px;border-bottom:1px solid var(--line);background:var(--paper-raised);
+  }
+  .ledger-head .office{font-weight:600;font-size:14px;}
+  .ledger-head .office span{display:block;font-weight:400;font-size:12px;color:var(--slate);margin-top:2px;}
+  .badge-verified{
+    display:inline-flex;align-items:center;gap:5px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;
+    color:var(--teal-dark);background:rgba(46,111,94,.12);
+    padding:5px 9px;border-radius:20px;
+  }
+  .badge-verified::before{content:"✓";font-weight:700;}
+  .ledger-body{padding:6px 0;}
+  .slot{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 22px;border-bottom:1px solid #F0F0EE;
+    font-size:14px;
+  }
+  .slot:last-child{border-bottom:none;}
+  .slot-time{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--slate);width:110px;flex-shrink:0;}
+  .slot-mid{flex:1;padding:0 12px;}
+  .slot-mid .who{font-weight:600;}
+  .slot-mid .what{color:var(--slate);font-size:13px;}
+  .chip{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;
+    padding:5px 10px;border-radius:20px;white-space:nowrap;
+  }
+  .chip.open{background:#F0F0EE;color:var(--slate);}
+  .chip.requested{background:rgba(217,104,76,.14);color:#B44E36;}
+  .chip.confirmed{background:rgba(46,111,94,.14);color:var(--teal-dark);}
+  .ledger-foot{
+    padding:14px 22px;background:var(--paper-raised);border-top:1px solid var(--line);
+    font-size:12px;color:var(--slate);display:flex;justify-content:space-between;align-items:center;
+  }
+
+  /* SECTION SHARED */
+  section{padding:80px 0;}
+  .section-head{max-width:600px;margin-bottom:48px;}
+  .section-head .eyebrow{margin-bottom:16px;}
+  h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:clamp(30px,3.6vw,42px);line-height:1.1;margin-bottom:14px;}
+  .section-head p{color:var(--slate);font-size:16px;max-width:480px;}
+
+  /* HOW IT WORKS */
+  .steps{border-top:1px solid var(--line);}
+  .step{
+    display:grid;grid-template-columns:80px 1fr;gap:24px;
+    padding:36px 0;border-bottom:1px solid var(--line);
+  }
+  .step-num{font-family:'Instrument Serif',serif;font-style:italic;font-size:40px;color:var(--teal);line-height:1;}
+  .step h3{font-size:19px;font-weight:600;margin-bottom:8px;}
+  .step p{color:var(--slate);font-size:15px;max-width:520px;}
+
+  /* AUDIENCE SPLIT */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  .split-panel{background:var(--paper);padding:40px;}
+  .split-panel.teal{background:var(--teal-dark);color:var(--paper);}
+  .split-panel h3{font-family:'Instrument Serif',serif;font-weight:400;font-size:26px;margin-bottom:16px;}
+  .split-panel .tag{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--slate);margin-bottom:10px;display:block;
+  }
+  .split-panel.teal .tag{color:rgba(238,242,237,.6);}
+  .split-panel ul{list-style:none;margin-top:20px;}
+  .split-panel li{
+    padding:12px 0;border-top:1px solid var(--line);font-size:14.5px;
+    display:flex;gap:10px;
+  }
+  .split-panel.teal li{border-top:1px solid rgba(238,242,237,.18);}
+  .split-panel li::before{content:"—";color:var(--coral);flex-shrink:0;}
+
+  /* TRUST STRIP */
+  .trust{background:var(--ink);color:var(--paper);}
+  .trust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:40px;}
+  .trust h3{font-size:16px;font-weight:600;margin-bottom:10px;}
+  .trust p{color:rgba(238,242,237,.65);font-size:14.5px;}
+  .trust .mono{color:var(--coral);font-size:13px;display:block;margin-bottom:14px;}
+
+  /* CTA */
+  .cta-band{
+    background:var(--teal-dark);color:var(--paper);border-radius:18px;
+    padding:64px 48px;text-align:center;margin:0 32px;
+  }
+  .cta-band h2{color:var(--paper);}
+  .cta-band p{color:rgba(238,242,237,.7);max-width:480px;margin:0 auto 32px;}
+  .cta-band .hero-ctas{justify-content:center;}
+  .cta-band .btn-ghost{border-color:rgba(238,242,237,.3);color:var(--paper);}
+
+  footer{padding:48px 0;border-top:1px solid var(--line);}
+  .foot-grid{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;}
+  footer .mono{font-size:12px;color:var(--slate);}
+
+  @media (max-width:860px){
+    .hero-grid{grid-template-columns:1fr;}
+    .split{grid-template-columns:1fr;}
+    .trust-grid{grid-template-columns:1fr;gap:32px;}
+    nav.links{display:none;}
+    .step{grid-template-columns:50px 1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="nav">
+    <div class="logo"><span class="logo-mark"></span>Arrowhead Access</div>
+    <nav class="links">
+      <a href="#how">How it works</a>
+      <a href="#offices">For offices</a>
+      <a href="#reps">For reps</a>
+      <a href="#trust">Verification</a>
+      <a href="pricing.html">Pricing</a>
+    </nav>
+    <div style="display:flex;gap:12px;">
+      <a href="#" class="btn btn-ghost">Log in</a>
+      <a href="pricing.html" class="btn btn-primary">Request access</a>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">Vendor visit scheduling</span>
+      <h1>The reservation book for <em>medical office</em> visits.</h1>
+      <p class="lede">Arrowhead Access gives offices full control over who visits, when, and how often — and gives verified reps a professional way to book lunch-and-learns without a single cold call to the front desk.</p>
+      <div class="hero-ctas">
+        <a href="pricing.html" class="btn btn-coral">Claim your office's calendar</a>
+        <a href="pricing.html#reps" class="btn btn-ghost">I'm a sales rep →</a>
+      </div>
+    </div>
+
+    <div class="ledger">
+      <div class="ledger-head">
+        <div class="office">Meridian Family Practice <span>3 providers · Front desk managed</span></div>
+        <span class="badge-verified">Verified office</span>
+      </div>
+      <div class="ledger-body">
+        <div class="slot">
+          <div class="slot-time">Tue · 12:00p</div>
+          <div class="slot-mid"><div class="what">Lunch-and-learn slot</div></div>
+          <span class="chip open">Open</span>
+        </div>
+        <div class="slot">
+          <div class="slot-time">Wed · 8:30a</div>
+          <div class="slot-mid"><div class="who">J. Alvarez</div><div class="what">Cardiometabolic · Meridian Pharma</div></div>
+          <span class="chip requested">Requested</span>
+        </div>
+        <div class="slot">
+          <div class="slot-time">Thu · 12:15p</div>
+          <div class="slot-mid"><div class="who">S. Okafor</div><div class="what">Device in-service · Halden Medical</div></div>
+          <span class="chip confirmed">Confirmed</span>
+        </div>
+        <div class="slot">
+          <div class="slot-time">Fri · 12:00p</div>
+          <div class="slot-mid"><div class="what">Lunch-and-learn slot</div></div>
+          <span class="chip open">Open</span>
+        </div>
+      </div>
+      <div class="ledger-foot">
+        <span>Max 1 visit / rep / month · office policy</span>
+        <span class="mono">Updated live</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">How it works</span>
+      <h2>One shared calendar. Two very different problems solved.</h2>
+      <p>Offices set the rules once. Reps see only what they're allowed to book — nothing more.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div><h3>The office sets access rules</h3><p>Staff define visiting hours, frequency caps per rep or per company, and which specialties or vendors are welcome — then either post open slots or leave requests open for review.</p></div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div><h3>A verified rep requests or claims a time</h3><p>Reps browse only the offices they're credentialed for, request a specific slot, or grab an open one directly — no phone tag with the front desk.</p></div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div><h3>The office confirms — or doesn't have to</h3><p>Requests route to staff for a one-tap approval; claimed open slots confirm instantly within the office's own rules. Everyone works from the same ledger.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="audience">
+  <div class="wrap">
+    <div class="split">
+      <div class="split-panel" id="offices">
+        <span class="tag">For doctor's offices</span>
+        <h3>Keep your lobby, and your lunch hour, on your terms.</h3>
+        <ul>
+          <li>Set exactly how often each rep or company can visit</li>
+          <li>Approve requests in one tap, from any device at the front desk</li>
+          <li>See a verified badge before anyone gets on your calendar</li>
+          <li>Block out clinic days, holidays, or provider-specific hours</li>
+        </ul>
+      </div>
+      <div class="split-panel teal" id="reps">
+        <span class="tag">For sales reps</span>
+        <h3>Book real time with real offices — professionally.</h3>
+        <ul>
+          <li>See live availability instead of guessing when to call</li>
+          <li>One verification, recognized across every office on Arrowhead</li>
+          <li>Track upcoming and past visits across your whole territory</li>
+          <li>Get notified the moment a slot opens at a target office</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="trust" id="trust">
+  <div class="wrap">
+    <div class="section-head" style="margin-bottom:56px;">
+      <span class="eyebrow" style="background:rgba(217,104,76,.16);color:#F0917A;">Verification</span>
+      <h2 style="color:var(--paper);">Every rep on the ledger has been checked.</h2>
+      <p style="color:rgba(238,242,237,.65);">Offices see a verified badge, not a promise.</p>
+    </div>
+    <div class="trust-grid">
+      <div>
+        <span class="mono">01 — Company email</span>
+        <h3>Domain verification</h3>
+        <p>Reps sign up with a company email address, auto-matched against known pharma and device manufacturer domains.</p>
+      </div>
+      <div>
+        <span class="mono">02 — ID upload</span>
+        <h3>Manual credential review</h3>
+        <p>Independent reps or unrecognized domains upload a company ID or badge, reviewed by our team before verification is granted.</p>
+      </div>
+      <div>
+        <span class="mono">03 — One badge, every office</span>
+        <h3>Portable verification</h3>
+        <p>Once verified, a rep's badge carries across every office on Arrowhead — no re-checking credentials office to office.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="cta-band">
+    <span class="eyebrow" style="background:rgba(238,242,237,.14);color:var(--paper);">Get started</span>
+    <h2>Bring order to your visiting hours.</h2>
+    <p>Whether you're running the front desk or running a territory, Arrowhead gives you one calendar you can actually trust.</p>
+    <div class="hero-ctas">
+      <a href="pricing.html" class="btn btn-coral">Set up my office</a>
+      <a href="pricing.html#reps" class="btn btn-ghost">Verify as a rep</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-grid">
+    <div class="logo"><span class="logo-mark"></span>Arrowhead Access</div>
+    <span class="mono">© 2026 Arrowhead Access · Built for offices and the reps who visit them</span>
+  </div>
+</footer>
+
+</body>
+</html>
