@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arrowhead Access — App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16241F; --paper:#EEF2ED; --paper-raised:#E4EAE3;
+    --teal:#2E6F5E; --teal-dark:#1F4F42; --coral:#D9684C; --slate:#6E7C77; --line:#CBD6CD;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  a{color:inherit;text-decoration:none;}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--line);background:#fff;}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;}
+  .logo-mark{width:22px;height:22px;border-radius:5px;background:var(--teal);position:relative;flex-shrink:0;}
+  .logo-mark::after{content:"";position:absolute;top:5.5px;left:5.5px;width:6px;height:6px;background:var(--coral);border-radius:1px;transform:rotate(45deg);}
+  .btn-logout{font-size:12px;color:var(--slate);border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:none;cursor:pointer;}
+
+  .wrap{max-width:480px;margin:0 auto;padding:32px 20px;}
+  .wrap.wide{max-width:640px;}
+  h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:26px;margin-bottom:6px;}
+  p.sub{color:var(--slate);font-size:14px;margin-bottom:22px;}
+
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:26px;}
+  input,select{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:10px;font-family:inherit;background:#fff;}
+  input:focus,select:focus{outline:2px solid var(--teal);outline-offset:1px;}
+  button.primary{width:100%;background:var(--ink);color:var(--paper);border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;margin-top:6px;}
+  button.primary:disabled{opacity:.4;}
+  button.link{width:100%;background:none;border:none;color:var(--slate);font-size:12px;margin-top:12px;cursor:pointer;}
+  .tile{display:flex;align-items:center;gap:14px;padding:18px;background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;cursor:pointer;text-align:left;width:100%;}
+  .tile:hover{border-color:var(--teal);}
+  .tile .t{font-weight:600;font-size:15px;}
+  .tile .d{font-size:13px;color:var(--slate);}
+
+  .msg{font-size:12.5px;padding:10px 12px;border-radius:8px;margin-bottom:12px;font-family:'IBM Plex Mono',monospace;}
+  .msg.err{background:#FDECEA;color:#A4262C;}
+  .msg.ok{background:#E6F7F0;color:#0A6B45;}
+
+  .row{display:flex;align-items:center;gap:12px;padding:14px;border-bottom:1px solid #F0F0EE;}
+  .row:last-child{border-bottom:none;}
+  .row .time{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--slate);width:150px;flex-shrink:0;}
+  .row .mid{flex:1;}
+  .row .who{font-weight:600;font-size:14px;}
+  .row .what{font-size:12.5px;color:var(--slate);}
+  .chip{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:4px 9px;border-radius:20px;white-space:nowrap;}
+  .chip.OPEN{background:#F0F0EE;color:var(--slate);}
+  .chip.REQUESTED{background:rgba(217,104,76,.14);color:#B44E36;}
+  .chip.CONFIRMED{background:rgba(46,111,94,.14);color:var(--teal-dark);}
+  .listcard{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  .empty{padding:28px;text-align:center;color:var(--slate);font-size:13px;}
+  .icon-btn{width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;font-size:14px;}
+  .icon-btn.approve{background:rgba(46,111,94,.14);color:var(--teal-dark);}
+  .icon-btn.decline{background:#F0F0EE;color:var(--slate);}
+  .note{font-size:12px;color:#B44E36;background:#FFF6EC;border:1px solid #F5E3C8;border-radius:8px;padding:10px 12px;margin-top:14px;}
+  #hidden{display:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="index.html" class="logo"><span class="logo-mark"></span>Arrowhead Access</a>
+  <button class="btn-logout" onclick="logout()" id="logoutBtn" style="display:none;">Log out</button>
+</header>
+
+<div id="app"></div>
+
+<script>
+const API = 'https://arrowhead-access-api.onrender.com';
+const DEMO_LOCATION_ID = 'demo-office-location';
+
+let state = {
+  screen: 'role',
+  role: null,
+  authMode: 'login',
+  token: localStorage.getItem('aa_token') || null,
+  me: JSON.parse(localStorage.getItem('aa_me') || 'null'),
+};
+
+if (state.token && state.me) {
+  state.screen = 'dashboard';
+  state.role = state.me.locationId ? 'office' : 'rep';
+}
+
+function setState(patch) { state = { ...state, ...patch }; render(); }
+
+function logout() {
+  localStorage.removeItem('aa_token'); localStorage.removeItem('aa_me');
+  state = { screen: 'role', role: null, authMode: 'login', token: null, me: null };
+  render();
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(API + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(state.token ? { Authorization: 'Bearer ' + state.token } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('Request failed (' + res.status + ')'));
+  return data;
+}
+
+function fmtTime(iso) {
+  return new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+// ---------- SCREENS ----------
+
+function screenRole() {
+  return `
+    <div class="wrap">
+      <h1>Log in as</h1>
+      <p class="sub">Connected to the live Arrowhead Access backend.</p>
+      <button class="tile" onclick="goLogin('office')">
+        <div><div class="t">🏥 Doctor's office</div><div class="d">Meridian Family Practice (demo account)</div></div>
+      </button>
+      <button class="tile" onclick="goLogin('rep')">
+        <div><div class="t">🧑‍💼 Sales rep</div><div class="d">Create an account or log in</div></div>
+      </button>
+    </div>`;
+}
+
+window.goLogin = function(role) {
+  setState({ screen: 'login', role, authMode: 'login', formErr: '' });
+  if (role === 'office') {
+    setTimeout(() => {
+      document.getElementById('email').value = 'staff@meridianfamilypractice.com';
+      document.getElementById('password').value = 'demo1234';
+    }, 0);
+  }
+};
+
+function screenLogin() {
+  const isRep = state.role === 'rep';
+  const isSignup = isRep && state.authMode === 'signup';
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'role'})">&larr; Back</button>
+      <h1>${isRep ? (isSignup ? 'Create rep account' : 'Rep login') : 'Office staff login'}</h1>
+      <p class="sub">${isRep ? 'Real signup — your account is created in the live database.' : 'Pre-filled with the seeded demo office account.'}</p>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        ${isSignup ? `
+          <input id="name" placeholder="Full name">
+          <input id="companyName" placeholder="Company name">
+        ` : ''}
+        <input id="email" type="email" placeholder="Email">
+        <input id="password" type="password" placeholder="Password">
+        <button class="primary" id="submitBtn" onclick="submitAuth()">${isSignup ? 'Create account' : 'Log in'}</button>
+        ${isRep ? `<button class="link" onclick="setState({authMode: state.authMode==='signup'?'login':'signup', formErr:''})">${isSignup ? 'Already have an account? Log in' : "New rep? Create an account"}</button>` : ''}
+      </div>
+    </div>`;
+}
+
+window.submitAuth = async function() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = 'Connecting…';
+  setState({ formErr: '' });
+  try {
+    let data;
+    if (state.role === 'office') {
+      data = await api('/api/auth/staff/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+      localStorage.setItem('aa_me', JSON.stringify(data.staff));
+      setState({ token: data.token, me: data.staff, screen: 'dashboard' });
+    } else if (state.authMode === 'signup') {
+      const name = document.getElementById('name').value;
+      const companyName = document.getElementById('companyName').value;
+      data = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ email, password, name, companyName }) });
+      localStorage.setItem('aa_me', JSON.stringify(data.rep));
+      setState({ token: data.token, me: data.rep, screen: 'dashboard' });
+    } else {
+      data = await api('/api/auth/rep/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+      localStorage.setItem('aa_me', JSON.stringify(data.rep));
+      setState({ token: data.token, me: data.rep, screen: 'dashboard' });
+    }
+    localStorage.setItem('aa_token', data.token);
+  } catch (err) {
+    setState({ formErr: err.message });
+  }
+};
+
+function screenDashboardOffice() {
+  return `
+    <div class="wrap wide">
+      <h1>This week's ledger</h1>
+      <p class="sub">Live from /api/bookings/locations/.../ledger</p>
+      <div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+
+function screenDashboardRep() {
+  const verified = state.me?.verificationStatus === 'VERIFIED';
+  return `
+    <div class="wrap wide">
+      <h1>Your bookings</h1>
+      <p class="sub">Logged in as ${state.me?.name || state.me?.email} ${verified ? '✅ verified' : '⏳ not verified'}</p>
+      <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
+      ${!verified ? `<div class="note">Not verified yet — booking actions are blocked server-side. Sign up with an @meridianpharma.com email to auto-verify in this demo.</div>` : ''}
+    </div>`;
+}
+
+async function loadOfficeLedger() {
+  const box = document.getElementById('ledgerBox');
+  try {
+    const slots = await api('/api/bookings/locations/' + DEMO_LOCATION_ID + '/ledger');
+    if (!slots.length) { box.innerHTML = '<div class="empty">No slots yet.</div>'; return; }
+    box.innerHTML = slots.map(s => `
+      <div class="row">
+        <div class="time">${fmtTime(s.startTime)}</div>
+        <div class="mid">
+          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>` : `<div class="what">Open slot</div>`}
+        </div>
+        <span class="chip ${s.status}">${s.status}</span>
+        ${s.status === 'REQUESTED' && s.booking ? `
+          <button class="icon-btn approve" onclick="decide('${s.booking.id}','approve')">✓</button>
+          <button class="icon-btn decline" onclick="decide('${s.booking.id}','decline')">✕</button>
+        ` : ''}
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+window.decide = async function(bookingId, decision) {
+  try {
+    await api('/api/bookings/' + bookingId + '/decide', { method: 'POST', body: JSON.stringify({ decision }) });
+    loadOfficeLedger();
+  } catch (err) { alert(err.message); }
+};
+
+async function loadMyBookings() {
+  const box = document.getElementById('bookingsBox');
+  try {
+    const bookings = await api('/api/bookings/mine');
+    if (!bookings.length) { box.innerHTML = '<div class="empty">No bookings yet.</div>'; return; }
+    box.innerHTML = bookings.map(b => `
+      <div class="row">
+        <div class="time">${fmtTime(b.slot.startTime)}</div>
+        <div class="mid"><div class="who">${b.slot.location.name}</div></div>
+        <span class="chip ${b.status}">${b.status}</span>
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+// ---------- RENDER ----------
+function render() {
+  const app = document.getElementById('app');
+  document.getElementById('logoutBtn').style.display = state.screen === 'dashboard' ? 'block' : 'none';
+
+  if (state.screen === 'role') app.innerHTML = screenRole();
+  else if (state.screen === 'login') app.innerHTML = screenLogin();
+  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
+  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); }
+}
+
+render();
+</script>
+
+</body>
+</html>
