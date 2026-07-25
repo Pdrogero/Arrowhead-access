@@ -1,0 +1,181 @@
+// schema.prisma — Arrowhead Access core data model
+// Run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrgType {
+  OFFICE
+  REP_COMPANY
+}
+
+enum StaffRole {
+  ADMIN
+  STAFF
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum VerificationMethod {
+  DOMAIN_MATCH
+  ID_UPLOAD
+}
+
+enum SlotStatus {
+  OPEN
+  REQUESTED
+  CONFIRMED
+  CANCELLED
+}
+
+enum BookingStatus {
+  REQUESTED
+  CONFIRMED
+  DECLINED
+  COMPLETED
+  NO_SHOW
+}
+
+enum SubscriptionPlan {
+  OFFICE
+  REP
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+}
+
+model Organization {
+  id            String   @id @default(cuid())
+  name          String
+  type          OrgType
+  billingEmail  String
+  createdAt     DateTime @default(now())
+
+  locations     Location[]
+  reps          Rep[]
+  subscription  Subscription?
+}
+
+model Location {
+  id                          String   @id @default(cuid())
+  organizationId              String
+  organization                Organization @relation(fields: [organizationId], references: [id])
+  name                        String
+  address                     String
+  timezone                    String
+  maxVisitsPerRepPerMonth     Int      @default(1)
+  maxVisitsPerCompanyPerMonth Int      @default(2)
+  createdAt                   DateTime @default(now())
+
+  staff  StaffUser[]
+  slots  Slot[]
+}
+
+model StaffUser {
+  id           String    @id @default(cuid())
+  locationId   String
+  location     Location  @relation(fields: [locationId], references: [id])
+  email        String    @unique
+  passwordHash String
+  role         StaffRole @default(STAFF)
+  createdAt    DateTime  @default(now())
+
+  createdSlots Slot[]
+}
+
+model Rep {
+  id                   String              @id @default(cuid())
+  organizationId       String?
+  organization         Organization?       @relation(fields: [organizationId], references: [id])
+  email                String              @unique
+  name                 String
+  companyName          String
+  passwordHash         String
+  verificationStatus   VerificationStatus  @default(UNVERIFIED)
+  verificationMethod   VerificationMethod?
+  createdAt            DateTime            @default(now())
+
+  verificationRequests VerificationRequest[]
+  bookings             Booking[]
+}
+
+model VerificationRequest {
+  id              String              @id @default(cuid())
+  repId           String
+  rep             Rep                 @relation(fields: [repId], references: [id])
+  method          VerificationMethod
+  submittedDomain String?
+  idDocumentUrl   String?
+  status          VerificationStatus  @default(PENDING_REVIEW)
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime            @default(now())
+}
+
+model KnownManufacturerDomain {
+  id     String @id @default(cuid())
+  domain String @unique
+}
+
+model Slot {
+  id               String      @id @default(cuid())
+  locationId       String
+  location         Location    @relation(fields: [locationId], references: [id])
+  startTime        DateTime
+  endTime          DateTime
+  status           SlotStatus  @default(OPEN)
+  createdByStaffId String?
+  createdByStaff   StaffUser?  @relation(fields: [createdByStaffId], references: [id])
+  createdAt        DateTime    @default(now())
+
+  booking Booking?
+
+  @@index([locationId, startTime])
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  slotId      String        @unique
+  slot        Slot          @relation(fields: [slotId], references: [id])
+  repId       String
+  rep         Rep           @relation(fields: [repId], references: [id])
+  topic       String?
+  status      BookingStatus @default(REQUESTED)
+  requestedAt DateTime      @default(now())
+  decidedAt   DateTime?
+
+  @@index([repId, status])
+}
+
+model Subscription {
+  id                   String              @id @default(cuid())
+  organizationId       String              @unique
+  organization         Organization        @relation(fields: [organizationId], references: [id])
+  stripeSubscriptionId String              @unique
+  plan                 SubscriptionPlan
+  unitCount            Int
+  billingCycle         BillingCycle
+  status               SubscriptionStatus  @default(TRIALING)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+}
