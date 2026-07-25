@@ -1,10 +1,12 @@
 // src/server.ts — application entry point
 
 import express from 'express';
+import cors from 'cors';
 import bookingsRouter from './routes/bookings.routes';
 import authRouter from './routes/auth.routes';
 
 const app = express();
+app.use(cors()); // allows the browser-based app demo (or any frontend) to call this API
 app.use(express.json());
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
