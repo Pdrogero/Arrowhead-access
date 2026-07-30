@@ -205,10 +205,57 @@ function screenDashboardRep() {
     <div class="wrap wide">
       <h1>Your bookings</h1>
       <p class="sub">Logged in as ${state.me?.name || state.me?.email} ${verified ? '✅ verified' : '⏳ not verified'}</p>
+
+      <div id="billingBox" class="card" style="margin-bottom:24px;"><div class="empty">Loading plan…</div></div>
+
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
       ${!verified ? `<div class="note">Not verified yet — booking actions are blocked server-side. Sign up with an @meridianpharma.com email to auto-verify in this demo.</div>` : ''}
     </div>`;
 }
+
+async function loadBillingStatus() {
+  const box = document.getElementById('billingBox');
+  if (!box) return;
+  try {
+    const status = await api('/api/billing/founding-status');
+    const activeStatuses = ['TRIALING', 'ACTIVE'];
+    const isSubscribed = activeStatuses.includes(state.me?.subscriptionStatus);
+
+    if (isSubscribed) {
+      box.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><strong>Professional plan</strong><div class="sub" style="margin:0;">Status: ${state.me.subscriptionStatus}</div></div>
+        </div>`;
+      return;
+    }
+
+    box.innerHTML = `
+      <strong>Choose your plan</strong>
+      <p class="sub" style="margin-bottom:14px;">14-day free trial, cancel anytime during the trial.</p>
+      ${status.isFoundingRep ? `<div class="note" style="color:#0A6B45;background:#E6F7F0;border-color:#B7E4CE;">You're eligible for the founding rate — $379.99/year, locked in for as long as you stay subscribed. (${status.foundingSpotsRemaining} spots left)</div>` : ''}
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="primary" style="margin:0;" onclick="startCheckout('MONTHLY')">Monthly — $49.95/mo</button>
+        <button class="primary" style="margin:0;background:${status.isFoundingRep ? '#D9684C' : 'var(--teal-dark)'};" onclick="startCheckout('ANNUAL')">
+          ${status.isFoundingRep ? 'Annual — $379.99/yr' : 'Annual — $39.95/mo'}
+        </button>
+      </div>`;
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+}
+
+window.startCheckout = async function(billingCycle) {
+  try {
+    const { url } = await api('/api/billing/rep/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ billingCycle }),
+    });
+    window.location.href = url;
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 
 async function loadOfficeLedger() {
   const box = document.getElementById('ledgerBox');
