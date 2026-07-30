@@ -313,7 +313,17 @@ function render() {
     else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
 
 
+}
+
+const billingParam = new URLSearchParams(window.location.search).get('billing');
+if (billingParam === 'success') {
+  setTimeout(() => alert('Subscription started! Your 14-day trial has begun.'), 300);
+} else if (billingParam === 'cancelled') {
+  setTimeout(() => alert('Checkout cancelled — no charge was made.'), 300);
+}
+
 render();
+
 </script>
 
 </body>
