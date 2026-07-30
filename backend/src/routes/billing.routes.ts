@@ -22,10 +22,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06
 
 const FOUNDING_REP_LIMIT = 30;
 
-// --- Create a Checkout Session for the logged-in rep ---------------------
 router.post('/rep/checkout', requireAuth, requireRole('rep'), async (req, res) => {
   try {
-    const { billingCycle } = req.body; // 'MONTHLY' | 'ANNUAL'
+    const { billingCycle } = req.body;
     const rep = await prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } });
 
     let priceId: string;
@@ -37,7 +36,6 @@ router.post('/rep/checkout', requireAuth, requireRole('rep'), async (req, res) =
       priceId = process.env.STRIPE_PRICE_MONTHLY!;
     }
 
-    // Reuse an existing Stripe customer if we already made one for this rep
     let customerId = rep.stripeCustomerId;
     if (!customerId) {
       const customer = await stripe.customers.create({ email: rep.email, name: rep.name, metadata: { repId: rep.id } });
@@ -49,12 +47,12 @@ router.post('/rep/checkout', requireAuth, requireRole('rep'), async (req, res) =
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-            subscription_data: { trial_period_days: 14 },
+      subscription_data: { trial_period_days: 14 },
       success_url: `${process.env.APP_URL}/app.html?billing=success`,
       cancel_url: `${process.env.APP_URL}/app.html?billing=cancelled`,
       metadata: { repId: rep.id, billingCycle },
     });
-    
+
     res.json({ url: session.url });
   } catch (err) {
     console.error(err);
@@ -62,7 +60,6 @@ router.post('/rep/checkout', requireAuth, requireRole('rep'), async (req, res) =
   }
 });
 
-// --- Check founding-rate eligibility (used by the frontend before checkout) ---
 router.get('/founding-status', requireAuth, requireRole('rep'), async (req, res) => {
   const rep = await prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } });
   const foundingCount = await prisma.rep.count({ where: { isFoundingRep: true } });
@@ -70,13 +67,8 @@ router.get('/founding-status', requireAuth, requireRole('rep'), async (req, res)
     isFoundingRep: rep.isFoundingRep,
     foundingSpotsRemaining: Math.max(0, FOUNDING_REP_LIMIT - foundingCount),
   });
+});
 
-
-  
-// --- Stripe webhook --------------------------------------------------------
-// NOTE: this route needs the raw request body for signature verification.
-// See the server.ts wiring note below — this router must be mounted BEFORE
-// express.json() runs on this specific path, using express.raw().
 router.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'] as string;
   let event: Stripe.Event;
@@ -89,42 +81,35 @@ router.post('/webhook', async (req, res) => {
   }
 
   try {
-    switch (event.type) {
-      case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session;
-        const repId = session.metadata?.repId;
-        const billingCycle = session.metadata?.billingCycle as 'MONTHLY' | 'ANNUAL' | undefined;
-        if (repId && session.subscription) {
-          await prisma.rep.update({
-            where: { id: repId },
-            data: {
-              stripeSubscriptionId: session.subscription as string,
-              billingCycle,
-              subscriptionStatus: 'TRIALING',
-            },
-          });
-        }
-        break;
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const repId = session.metadata?.repId;
+      const billingCycle = session.metadata?.billingCycle as 'MONTHLY' | 'ANNUAL' | undefined;
+      if (repId && session.subscription) {
+        await prisma.rep.update({
+          where: { id: repId },
+          data: {
+            stripeSubscriptionId: session.subscription as string,
+            billingCycle,
+            subscriptionStatus: 'TRIALING',
+          },
+        });
       }
-      case 'customer.subscription.updated': {
-        const sub = event.data.object as Stripe.Subscription;
-        const rep = await prisma.rep.findFirst({ where: { stripeSubscriptionId: sub.id } });
-        if (rep) {
-          const status = sub.status === 'trialing' ? 'TRIALING'
-            : sub.status === 'active' ? 'ACTIVE'
-            : sub.status === 'past_due' ? 'PAST_DUE'
-            : 'CANCELED';
-          await prisma.rep.update({ where: { id: rep.id }, data: { subscriptionStatus: status } });
-        }
-        break;
+    } else if (event.type === 'customer.subscription.updated') {
+      const sub = event.data.object as Stripe.Subscription;
+      const rep = await prisma.rep.findFirst({ where: { stripeSubscriptionId: sub.id } });
+      if (rep) {
+        const status = sub.status === 'trialing' ? 'TRIALING'
+          : sub.status === 'active' ? 'ACTIVE'
+          : sub.status === 'past_due' ? 'PAST_DUE'
+          : 'CANCELED';
+        await prisma.rep.update({ where: { id: rep.id }, data: { subscriptionStatus: status } });
       }
-      case 'customer.subscription.deleted': {
-        const sub = event.data.object as Stripe.Subscription;
-        const rep = await prisma.rep.findFirst({ where: { stripeSubscriptionId: sub.id } });
-        if (rep) {
-          await prisma.rep.update({ where: { id: rep.id }, data: { subscriptionStatus: 'CANCELED' } });
-        }
-        break;
+    } else if (event.type === 'customer.subscription.deleted') {
+      const sub = event.data.object as Stripe.Subscription;
+      const rep = await prisma.rep.findFirst({ where: { stripeSubscriptionId: sub.id } });
+      if (rep) {
+        await prisma.rep.update({ where: { id: rep.id }, data: { subscriptionStatus: 'CANCELED' } });
       }
     }
     res.json({ received: true });
