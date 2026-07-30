@@ -49,10 +49,13 @@ router.post('/rep/checkout', requireAuth, requireRole('rep'), async (req, res) =
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: { trial_period_days: 14 },
+            subscription_data: { trial_period_days: 14 },
       success_url: `${process.env.APP_URL}/app.html?billing=success`,
-      c
+      cancel_url: `${process.env.APP_URL}/app.html?billing=cancelled`,
+      metadata: { repId: rep.id, billingCycle },
+    });
 
+  
 // --- Stripe webhook --------------------------------------------------------
 // NOTE: this route needs the raw request body for signature verification.
 // See the server.ts wiring note below — this router must be mounted BEFORE
