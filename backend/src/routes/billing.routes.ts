@@ -54,6 +54,23 @@ router.post('/rep/checkout', requireAuth, requireRole('rep'), async (req, res) =
       cancel_url: `${process.env.APP_URL}/app.html?billing=cancelled`,
       metadata: { repId: rep.id, billingCycle },
     });
+    
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not start checkout' });
+  }
+});
+
+// --- Check founding-rate eligibility (used by the frontend before checkout) ---
+router.get('/founding-status', requireAuth, requireRole('rep'), async (req, res) => {
+  const rep = await prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } });
+  const foundingCount = await prisma.rep.count({ where: { isFoundingRep: true } });
+  res.json({
+    isFoundingRep: rep.isFoundingRep,
+    foundingSpotsRemaining: Math.max(0, FOUNDING_REP_LIMIT - foundingCount),
+  });
+
 
   
 // --- Stripe webhook --------------------------------------------------------
