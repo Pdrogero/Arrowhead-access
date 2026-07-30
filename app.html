@@ -310,8 +310,8 @@ function render() {
   if (state.screen === 'role') app.innerHTML = screenRole();
   else if (state.screen === 'login') app.innerHTML = screenLogin();
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
-  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); }
-}
+    else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
+
 
 render();
 </script>
