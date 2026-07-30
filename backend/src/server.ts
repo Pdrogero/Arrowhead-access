@@ -4,15 +4,19 @@ import express from 'express';
 import cors from 'cors';
 import bookingsRouter from './routes/bookings.routes';
 import authRouter from './routes/auth.routes';
+import billingRouter from './routes/billing.routes';
 
 const app = express();
-app.use(cors()); // allows the browser-based app demo (or any frontend) to call this API
+app.use(cors());
+
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.use('/api/auth', authRouter);
 app.use('/api/bookings', bookingsRouter);
+app.use('/api/billing', billingRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
