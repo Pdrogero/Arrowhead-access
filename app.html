@@ -105,3 +105,223 @@ async function api(path, options = {}) {
     },
   });
   const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('Request failed (' + res.status + ')'));
+  return data;
+}
+
+function fmtTime(iso) {
+  return new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+// ---------- SCREENS ----------
+
+function screenRole() {
+  return `
+    <div class="wrap">
+      <h1>Log in as</h1>
+      <p class="sub">Connected to the live Arrowhead Access backend.</p>
+      <button class="tile" onclick="goLogin('office')">
+        <div><div class="t">🏥 Doctor's office</div><div class="d">Meridian Family Practice (demo account)</div></div>
+      </button>
+      <button class="tile" onclick="goLogin('rep')">
+        <div><div class="t">🧑‍💼 Sales rep</div><div class="d">Create an account or log in</div></div>
+      </button>
+    </div>`;
+}
+
+window.goLogin = function(role) {
+  setState({ screen: 'login', role, authMode: 'login', formErr: '' });
+  if (role === 'office') {
+    setTimeout(() => {
+      document.getElementById('email').value = 'staff@meridianfamilypractice.com';
+      document.getElementById('password').value = 'demo1234';
+    }, 0);
+  }
+};
+
+function screenLogin() {
+  const isRep = state.role === 'rep';
+  const isSignup = isRep && state.authMode === 'signup';
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'role'})">&larr; Back</button>
+      <h1>${isRep ? (isSignup ? 'Create rep account' : 'Rep login') : 'Office staff login'}</h1>
+      <p class="sub">${isRep ? 'Real signup — your account is created in the live database.' : 'Pre-filled with the seeded demo office account.'}</p>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        ${isSignup ? `
+          <input id="name" placeholder="Full name">
+          <input id="companyName" placeholder="Company name">
+        ` : ''}
+        <input id="email" type="email" placeholder="Email">
+        <input id="password" type="password" placeholder="Password">
+        <button class="primary" id="submitBtn" onclick="submitAuth()">${isSignup ? 'Create account' : 'Log in'}</button>
+        ${isRep ? `<button class="link" onclick="setState({authMode: state.authMode==='signup'?'login':'signup', formErr:''})">${isSignup ? 'Already have an account? Log in' : "New rep? Create an account"}</button>` : ''}
+      </div>
+    </div>`;
+}
+
+window.submitAuth = async function() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const nameField = document.getElementById('name');
+  const companyField = document.getElementById('companyName');
+  const name = nameField ? nameField.value : '';
+  const companyName = companyField ? companyField.value : '';
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = 'Connecting…';
+  try {
+    let data;
+    if (state.role === 'office') {
+      data = await api('/api/auth/staff/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+      localStorage.setItem('aa_me', JSON.stringify(data.staff));
+      setState({ token: data.token, me: data.staff, screen: 'dashboard' });
+    } else if (state.authMode === 'signup') {
+      data = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ email, password, name, companyName }) });
+      localStorage.setItem('aa_me', JSON.stringify(data.rep));
+      setState({ token: data.token, me: data.rep, screen: 'dashboard' });
+    } else {
+      data = await api('/api/auth/rep/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+      localStorage.setItem('aa_me', JSON.stringify(data.rep));
+      setState({ token: data.token, me: data.rep, screen: 'dashboard' });
+    }
+    localStorage.setItem('aa_token', data.token);
+  } catch (err) {
+    setState({ formErr: err.message });
+  }
+};
+
+function screenDashboardOffice() {
+  return `
+    <div class="wrap wide">
+      <h1>This week's ledger</h1>
+      <p class="sub">Live from /api/bookings/locations/.../ledger</p>
+      <div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+
+function screenDashboardRep() {
+  const verified = state.me?.verificationStatus === 'VERIFIED';
+  return `
+    <div class="wrap wide">
+      <h1>Your bookings</h1>
+      <p class="sub">Logged in as ${state.me?.name || state.me?.email} ${verified ? '✅ verified' : '⏳ not verified'}</p>
+
+      <div id="billingBox" class="card" style="margin-bottom:24px;"><div class="empty">Loading plan…</div></div>
+
+      <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
+      ${!verified ? `<div class="note">Not verified yet — booking actions are blocked server-side. Sign up with an @meridianpharma.com email to auto-verify in this demo.</div>` : ''}
+    </div>`;
+}
+
+async function loadBillingStatus() {
+  const box = document.getElementById('billingBox');
+  if (!box) return;
+  try {
+    const status = await api('/api/billing/founding-status');
+    const activeStatuses = ['TRIALING', 'ACTIVE'];
+    const isSubscribed = activeStatuses.includes(state.me?.subscriptionStatus);
+
+    if (isSubscribed) {
+      box.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><strong>Professional plan</strong><div class="sub" style="margin:0;">Status: ${state.me.subscriptionStatus}</div></div>
+        </div>`;
+      return;
+    }
+
+    box.innerHTML = `
+      <strong>Choose your plan</strong>
+      <p class="sub" style="margin-bottom:14px;">14-day free trial, cancel anytime during the trial.</p>
+      ${status.isFoundingRep ? `<div class="note" style="color:#0A6B45;background:#E6F7F0;border-color:#B7E4CE;">You're eligible for the founding rate — $379.99/year, locked in for as long as you stay subscribed. (${status.foundingSpotsRemaining} spots left)</div>` : ''}
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="primary" style="margin:0;" onclick="startCheckout('MONTHLY')">Monthly — $49.95/mo</button>
+        <button class="primary" style="margin:0;background:${status.isFoundingRep ? '#D9684C' : 'var(--teal-dark)'};" onclick="startCheckout('ANNUAL')">
+          ${status.isFoundingRep ? 'Annual — $379.99/yr' : 'Annual — $39.95/mo'}
+        </button>
+      </div>`;
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+}
+
+window.startCheckout = async function(billingCycle) {
+  try {
+    const { url } = await api('/api/billing/rep/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ billingCycle }),
+    });
+    window.location.href = url;
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+async function loadOfficeLedger() {
+  const box = document.getElementById('ledgerBox');
+  try {
+    const slots = await api('/api/bookings/locations/' + DEMO_LOCATION_ID + '/ledger');
+    if (!slots.length) { box.innerHTML = '<div class="empty">No slots yet.</div>'; return; }
+    box.innerHTML = slots.map(s => `
+      <div class="row">
+        <div class="time">${fmtTime(s.startTime)}</div>
+        <div class="mid">
+          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>` : `<div class="what">Open slot</div>`}
+        </div>
+        <span class="chip ${s.status}">${s.status}</span>
+        ${s.status === 'REQUESTED' && s.booking ? `
+          <button class="icon-btn approve" onclick="decide('${s.booking.id}','approve')">✓</button>
+          <button class="icon-btn decline" onclick="decide('${s.booking.id}','decline')">✕</button>
+        ` : ''}
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+window.decide = async function(bookingId, decision) {
+  try {
+    await api('/api/bookings/' + bookingId + '/decide', { method: 'POST', body: JSON.stringify({ decision }) });
+    loadOfficeLedger();
+  } catch (err) { alert(err.message); }
+};
+
+async function loadMyBookings() {
+  const box = document.getElementById('bookingsBox');
+  try {
+    const bookings = await api('/api/bookings/mine');
+    if (!bookings.length) { box.innerHTML = '<div class="empty">No bookings yet.</div>'; return; }
+    box.innerHTML = bookings.map(b => `
+      <div class="row">
+        <div class="time">${fmtTime(b.slot.startTime)}</div>
+        <div class="mid"><div class="who">${b.slot.location.name}</div></div>
+        <span class="chip ${b.status}">${b.status}</span>
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+// ---------- RENDER ----------
+function render() {
+  const app = document.getElementById('app');
+  document.getElementById('logoutBtn').style.display = state.screen === 'dashboard' ? 'block' : 'none';
+
+  if (state.screen === 'role') app.innerHTML = screenRole();
+  else if (state.screen === 'login') app.innerHTML = screenLogin();
+  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
+  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
+}
+
+const billingParam = new URLSearchParams(window.location.search).get('billing');
+if (billingParam === 'success') {
+  setTimeout(() => alert('Subscription started! Your 14-day trial has begun.'), 300);
+} else if (billingParam === 'cancelled') {
+  setTimeout(() => alert('Checkout cancelled — no charge was made.'), 300);
+}
+
+render();
+</script>
+
+</body>
+</html>
