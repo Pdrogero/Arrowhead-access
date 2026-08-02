@@ -164,9 +164,12 @@ function screenLogin() {
 window.submitAuth = async function() {
   const email = document.getElementById('email').value;
   const password = document.getElementById('password').value;
+  const nameField = document.getElementById('name');
+  const companyField = document.getElementById('companyName');
+  const name = nameField ? nameField.value : '';
+  const companyName = companyField ? companyField.value : '';
   const btn = document.getElementById('submitBtn');
   btn.disabled = true; btn.textContent = 'Connecting…';
-  setState({ formErr: '' });
   try {
     let data;
     if (state.role === 'office') {
@@ -174,8 +177,6 @@ window.submitAuth = async function() {
       localStorage.setItem('aa_me', JSON.stringify(data.staff));
       setState({ token: data.token, me: data.staff, screen: 'dashboard' });
     } else if (state.authMode === 'signup') {
-      const name = document.getElementById('name').value;
-      const companyName = document.getElementById('companyName').value;
       data = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ email, password, name, companyName }) });
       localStorage.setItem('aa_me', JSON.stringify(data.rep));
       setState({ token: data.token, me: data.rep, screen: 'dashboard' });
