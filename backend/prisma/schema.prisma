@@ -103,6 +103,29 @@ model StaffUser {
   createdSlots Slot[]
 }
 
+// --- Manufacturer catalog (like RxVantage's company/product picker) -------
+
+model ManufacturerCompany {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+
+  products  Product[]
+  reps      Rep[]
+}
+
+model Product {
+  id         String              @id @default(cuid())
+  companyId  String
+  company    ManufacturerCompany @relation(fields: [companyId], references: [id])
+  name       String
+  createdAt  DateTime            @default(now())
+
+  reps       Rep[]               @relation("RepProducts")
+
+  @@unique([companyId, name])
+}
+
 model Rep {
   id                   String              @id @default(cuid())
   organizationId       String?
@@ -114,6 +137,16 @@ model Rep {
   verificationStatus   VerificationStatus  @default(UNVERIFIED)
   verificationMethod   VerificationMethod?
   createdAt            DateTime            @default(now())
+
+  // Profile (RxVantage-style personal info)
+  title                String?
+  phone                String?
+  specialties          String[]            @default([])
+
+  // Manufacturer catalog selection
+  manufacturerCompanyId String?
+  manufacturerCompany   ManufacturerCompany? @relation(fields: [manufacturerCompanyId], references: [id])
+  products             Product[]           @relation("RepProducts")
 
   // Billing (Stripe) — reps are the only paying side of the marketplace
   isFoundingRep        Boolean             @default(false)
