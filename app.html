@@ -87,6 +87,11 @@ if (state.token && state.me) {
   state.role = state.me.locationId ? 'office' : 'rep';
 }
 
+const SPECIALTIES = ['Wound Care Centers','Podiatry','Vascular Surgery','Plastic Surgery','General Surgery','Home Health','Long-Term Care','Hospital Value Analysis Committees','ASCs','Traveling physician groups','Medical distributors'];
+let catalogData = [];
+let profileSelectedCompany = '';
+let profileSelectedProducts = new Set();
+
 function setState(patch) { state = { ...state, ...patch }; render(); }
 
 function logout() {
