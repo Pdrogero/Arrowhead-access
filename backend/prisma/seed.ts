@@ -1,11 +1,21 @@
-// prisma/seed.ts — creates one test office (Organization + Location + StaffUser)
-// so the app demo has something real to log into.
-// Run with: npx prisma db seed  (after adding the "prisma.seed" config below)
+// prisma/seed.ts — creates a test office, plus a starter manufacturer/product
+// catalog so the company/product picker has real data to select from.
+// Run with: npx prisma db seed
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+const CATALOG: Record<string, string[]> = {
+  'Smith & Nephew': ['GrafixPL', 'Stravix', 'Oasis'],
+  'Organogenesis': ['Apligraf', 'Dermagraft', 'PuraPly AM'],
+  'Integra LifeSciences': ['Integra Wound Matrix', 'PriMatrix', 'MicroMatrix'],
+  'MTF Biologics': ['DermACELL', 'AmnioClear'],
+  'Medtronic': ['Vascular Closure Devices', 'Endovascular Stents'],
+  'Stryker': ['Foot & Ankle Plating Systems', 'Wound Care Solutions'],
+  'Boston Scientific': ['Peripheral Vascular Devices', 'Interventional Solutions'],
+};
 
 async function main() {
   const passwordHash = await bcrypt.hash('demo1234', 10);
@@ -35,7 +45,7 @@ async function main() {
     },
   });
 
-  const staff = await prisma.staffUser.upsert({
+  await prisma.staffUser.upsert({
     where: { email: 'staff@meridianfamilypractice.com' },
     update: {},
     create: {
@@ -46,18 +56,33 @@ async function main() {
     },
   });
 
-  // Also seed one known manufacturer domain so a rep signing up with a
-  // matching email auto-verifies instead of needing ID upload.
   await prisma.knownManufacturerDomain.upsert({
     where: { domain: 'meridianpharma.com' },
     update: {},
     create: { domain: 'meridianpharma.com' },
   });
 
+  // --- Manufacturer / product catalog ---
+  for (const [companyName, products] of Object.entries(CATALOG)) {
+    const company = await prisma.manufacturerCompany.upsert({
+      where: { name: companyName },
+      update: {},
+      create: { name: companyName },
+    });
+    for (const productName of products) {
+      await prisma.product.upsert({
+        where: { companyId_name: { companyId: company.id, name: productName } },
+        update: {},
+        create: { companyId: company.id, name: productName },
+      });
+    }
+  }
+
   console.log('Seeded office login:');
   console.log('  email: staff@meridianfamilypractice.com');
   console.log('  password: demo1234');
   console.log(`  locationId: ${location.id}`);
+  console.log(`Seeded ${Object.keys(CATALOG).length} manufacturer companies with products.`);
 }
 
 main()
