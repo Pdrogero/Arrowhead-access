@@ -204,6 +204,73 @@ function screenDashboardOffice() {
       <div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
+function screenProfile() {
+  const opts = catalogData.map(c => `<option value="${c.id}" ${profileSelectedCompany===c.id?'selected':''}>${c.name}</option>`).join('');
+  const selectedCompany = catalogData.find(c => c.id === profileSelectedCompany);
+  const productChecks = selectedCompany ? selectedCompany.products.map(p => `
+    <label style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:14px;">
+      <input type="checkbox" value="${p.id}" onchange="toggleProduct('${p.id}', this.checked)" ${profileSelectedProducts.has(p.id)?'checked':''}> ${p.name}
+    </label>`).join('') : '<p class="sub">Select a company to see its products.</p>';
+  const specialtyChecks = SPECIALTIES.map(s => `
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13.5px;">
+      <input type="checkbox" name="specialty" value="${s}"> ${s}
+    </label>`).join('');
+  return `
+    <div class="wrap">
+      <h1>Complete your profile</h1>
+      <p class="sub">Help offices know who they're meeting with. You can skip this and fill it in later.</p>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        <input id="title" placeholder="Title (e.g. Territory Manager)">
+        <input id="phone" placeholder="Phone number">
+        <p style="font-size:13px;font-weight:600;margin:14px 0 4px;">Manufacturer company</p>
+        <select id="companySelect" onchange="selectCompany(this.value)">
+          <option value="">Select a company…</option>
+          ${opts}
+        </select>
+        <div id="productList" style="margin-bottom:10px;">${productChecks}</div>
+        <p style="font-size:13px;font-weight:600;margin:14px 0 4px;">Specialties of interest</p>
+        <div style="max-height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:14px;">${specialtyChecks}</div>
+        <button class="primary" id="profileSubmitBtn" onclick="submitProfile()">Save and continue</button>
+        <button class="link" onclick="setState({screen:'dashboard'})">Skip for now</button>
+      </div>
+    </div>`;
+}
+
+async function loadCatalog() {
+  try { catalogData = await api('/api/profile/catalog'); render(); } catch (err) {}
+}
+
+window.selectCompany = function(companyId) {
+  profileSelectedCompany = companyId;
+  profileSelectedProducts = new Set();
+  render();
+};
+
+window.toggleProduct = function(productId, checked) {
+  if (checked) profileSelectedProducts.add(productId);
+  else profileSelectedProducts.delete(productId);
+};
+
+window.submitProfile = async function() {
+  const title = document.getElementById('title').value;
+  const phone = document.getElementById('phone').value;
+  const specialties = Array.from(document.querySelectorAll('input[name="specialty"]:checked')).map(el => el.value);
+  try {
+    await api('/api/profile/rep', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title, phone, specialties,
+        manufacturerCompanyId: profileSelectedCompany || undefined,
+        productIds: Array.from(profileSelectedProducts),
+      }),
+    });
+    setState({ screen: 'dashboard' });
+  } catch (err) {
+    setState({ formErr: err.message });
+  }
+};
+
 
 function screenDashboardRep() {
   const verified = state.me?.verificationStatus === 'VERIFIED';
