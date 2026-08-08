@@ -5,6 +5,7 @@ import cors from 'cors';
 import bookingsRouter from './routes/bookings.routes';
 import authRouter from './routes/auth.routes';
 import billingRouter from './routes/billing.routes';
+import profileRouter from './routes/profile.routes';
 
 const app = express();
 app.use(cors());
@@ -17,6 +18,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRouter);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/billing', billingRouter);
+app.use('/api/profile', profileRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
