@@ -184,7 +184,7 @@ window.submitAuth = async function() {
     } else if (state.authMode === 'signup') {
       data = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ email, password, name, companyName }) });
       localStorage.setItem('aa_me', JSON.stringify(data.rep));
-      setState({ token: data.token, me: data.rep, screen: 'dashboard' });
+      setState({ token: data.token, me: data.rep, screen: 'profile' });
     } else {
       data = await api('/api/auth/rep/login', { method: 'POST', body: JSON.stringify({ email, password }) });
       localStorage.setItem('aa_me', JSON.stringify(data.rep));
@@ -379,10 +379,12 @@ function render() {
   const app = document.getElementById('app');
   document.getElementById('logoutBtn').style.display = state.screen === 'dashboard' ? 'block' : 'none';
 
-  if (state.screen === 'role') app.innerHTML = screenRole();
+    if (state.screen === 'role') app.innerHTML = screenRole();
   else if (state.screen === 'login') app.innerHTML = screenLogin();
+  else if (state.screen === 'profile') { app.innerHTML = screenProfile(); loadCatalog(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
+
 }
 
 const billingParam = new URLSearchParams(window.location.search).get('billing');
