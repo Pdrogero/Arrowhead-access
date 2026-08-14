@@ -185,11 +185,21 @@ window.submitAuth = async function() {
   const companyField = document.getElementById('companyName');
   const name = nameField ? nameField.value : '';
   const companyName = companyField ? companyField.value : '';
+  const officeNameField = document.getElementById('officeName');
+  const locationNameField = document.getElementById('locationName');
+  const addressField = document.getElementById('address');
+  const officeName = officeNameField ? officeNameField.value : '';
+  const locationName = locationNameField ? locationNameField.value : '';
+  const address = addressField ? addressField.value : '';
   const btn = document.getElementById('submitBtn');
   btn.disabled = true; btn.textContent = 'Connecting…';
   try {
     let data;
-    if (state.role === 'office') {
+    if (state.role === 'office' && state.authMode === 'signup') {
+      data = await api('/api/auth/office/signup', { method: 'POST', body: JSON.stringify({ officeName, locationName, address, email, password }) });
+      localStorage.setItem('aa_me', JSON.stringify(data.staff));
+      setState({ token: data.token, me: data.staff, screen: 'dashboard' });
+    } else if (state.role === 'office') {
       data = await api('/api/auth/staff/login', { method: 'POST', body: JSON.stringify({ email, password }) });
       localStorage.setItem('aa_me', JSON.stringify(data.staff));
       setState({ token: data.token, me: data.staff, screen: 'dashboard' });
@@ -207,7 +217,7 @@ window.submitAuth = async function() {
     setState({ formErr: err.message });
   }
 };
-
+  
 function screenDashboardOffice() {
   return `
     <div class="wrap wide">
