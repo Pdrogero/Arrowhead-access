@@ -112,5 +112,58 @@ router.post('/staff/login', async (req, res) => {
     res.status(500).json({ error: 'Unexpected server error during login' });
   }
 });
+router.post('/office/signup', async (req, res) => {
+  try {
+    const { officeName, locationName, address, timezone, email, password } = req.body;
+    if (!officeName || !locationName || !address || !email || !password) {
+      return res.status(400).json({ error: 'officeName, locationName, address, email, and password are required' });
+    }
+
+    const existing = await prisma.staffUser.findUnique({ where: { email } });
+    if (existing) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: { name: officeName, type: 'OFFICE', billingEmail: email },
+      });
+      const location = await tx.location.create({
+        data: {
+          organizationId: org.id,
+          name: locationName,
+          address,
+          timezone: timezone || 'America/New_York',
+        },
+      });
+      const staff = await tx.staffUser.create({
+        data: { email, passwordHash, role: 'ADMIN', locationId: location.id },
+      });
+      return { org, location, staff };
+    });
+
+    const token = signToken({
+      sub: result.staff.id,
+      role: 'office_admin',
+      organizationId: result.org.id,
+      locationId: result.location.id,
+    });
+
+    res.status(201).json({
+      token,
+      staff: {
+        id: result.staff.id,
+        email: result.staff.email,
+        role: result.staff.role,
+        locationId: result.location.id,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Unexpected server error during office signup' });
+  }
+});
 
 export default router;
