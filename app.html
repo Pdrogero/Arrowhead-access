@@ -147,22 +147,33 @@ window.goLogin = function(role) {
 
 function screenLogin() {
   const isRep = state.role === 'rep';
-  const isSignup = isRep && state.authMode === 'signup';
+  const isSignup = state.authMode === 'signup';
+  const title = isRep
+    ? (isSignup ? 'Create rep account' : 'Rep login')
+    : (isSignup ? 'Create your office account' : 'Office staff login');
+  const sub = isSignup
+    ? 'Real signup — your account is created in the live database.'
+    : (isRep ? 'Log in to your rep account.' : 'Log in to your office account, or use the seeded demo account.');
   return `
     <div class="wrap">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'role'})">&larr; Back</button>
-      <h1>${isRep ? (isSignup ? 'Create rep account' : 'Rep login') : 'Office staff login'}</h1>
-      <p class="sub">${isRep ? 'Real signup — your account is created in the live database.' : 'Pre-filled with the seeded demo office account.'}</p>
+      <h1>${title}</h1>
+      <p class="sub">${sub}</p>
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
-        ${isSignup ? `
+        ${isRep && isSignup ? `
           <input id="name" placeholder="Full name">
           <input id="companyName" placeholder="Company name">
+        ` : ''}
+        ${!isRep && isSignup ? `
+          <input id="officeName" placeholder="Office/practice name">
+          <input id="locationName" placeholder="Location name (e.g. Main Office)">
+          <input id="address" placeholder="Address">
         ` : ''}
         <input id="email" type="email" placeholder="Email">
         <input id="password" type="password" placeholder="Password">
         <button class="primary" id="submitBtn" onclick="submitAuth()">${isSignup ? 'Create account' : 'Log in'}</button>
-        ${isRep ? `<button class="link" onclick="setState({authMode: state.authMode==='signup'?'login':'signup', formErr:''})">${isSignup ? 'Already have an account? Log in' : "New rep? Create an account"}</button>` : ''}
+        <button class="link" onclick="setState({authMode: state.authMode==='signup'?'login':'signup', formErr:''})">${isSignup ? 'Already have an account? Log in' : (isRep ? 'New rep? Create an account' : 'New office? Create an account')}</button>
       </div>
     </div>`;
 }
