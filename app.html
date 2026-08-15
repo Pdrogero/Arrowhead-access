@@ -354,7 +354,7 @@ window.startCheckout = async function(billingCycle) {
 async function loadOfficeLedger() {
   const box = document.getElementById('ledgerBox');
   try {
-    const slots = await api('/api/bookings/locations/' + DEMO_LOCATION_ID + '/ledger');
+        const slots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
     if (!slots.length) { box.innerHTML = '<div class="empty">No slots yet.</div>'; return; }
     box.innerHTML = slots.map(s => `
       <div class="row">
