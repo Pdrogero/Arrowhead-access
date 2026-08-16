@@ -319,7 +319,14 @@ function screenProfile() {
 }
 
 async function loadCatalog() {
-  try { catalogData = await api('/api/profile/catalog'); render(); } catch (err) {}
+  try {
+    catalogData = await api('/api/profile/catalog');
+    const sel = document.getElementById('companySelect');
+    if (sel) {
+      const opts = catalogData.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      sel.innerHTML = `<option value="">Select a company…</option>${opts}`;
+    }
+  } catch (err) {}
 }
 
 window.selectCompany = function(companyId) {
