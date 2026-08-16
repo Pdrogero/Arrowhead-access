@@ -92,6 +92,9 @@ const SPECIALTIES = ['Wound Care Centers','Podiatry','Vascular Surgery','Plastic
 let catalogData = [];
 let profileSelectedCompany = '';
 let profileSelectedProducts = new Set();
+let calendarMonth = new Date();
+let calendarBookings = [];
+let calendarSelectedDay = null;
 
 function setState(patch) { state = { ...state, ...patch }; render(); }
 
