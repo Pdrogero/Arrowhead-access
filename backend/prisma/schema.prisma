@@ -64,6 +64,13 @@ enum BillingCycle {
   ANNUAL
 }
 
+enum TransferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
 model Organization {
   id            String   @id @default(cuid())
   name          String
@@ -158,6 +165,8 @@ model Rep {
 
   verificationRequests VerificationRequest[]
   bookings             Booking[]
+  transfersSent        BookingTransfer[]   @relation("TransfersSent")
+  transfersReceived    BookingTransfer[]   @relation("TransfersReceived")
 }
 
 model VerificationRequest {
@@ -205,7 +214,25 @@ model Booking {
   requestedAt DateTime      @default(now())
   decidedAt   DateTime?
 
+  transfers   BookingTransfer[]
+
   @@index([repId, status])
+}
+
+model BookingTransfer {
+  id         String         @id @default(cuid())
+  bookingId  String
+  booking    Booking        @relation(fields: [bookingId], references: [id])
+  fromRepId  String
+  fromRep    Rep            @relation("TransfersSent", fields: [fromRepId], references: [id])
+  toRepId    String
+  toRep      Rep            @relation("TransfersReceived", fields: [toRepId], references: [id])
+  status     TransferStatus @default(PENDING)
+  createdAt  DateTime       @default(now())
+  decidedAt  DateTime?
+
+  @@index([toRepId, status])
+  @@index([fromRepId])
 }
 
 model Subscription {
