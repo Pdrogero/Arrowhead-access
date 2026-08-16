@@ -370,6 +370,7 @@ function screenDashboardRep() {
       <div id="billingBox" class="card" style="margin-bottom:24px;"><div class="empty">Loading plan…</div></div>
 
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'transfers'})">🔁 View transfers</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'profile'})">👤 Edit my profile</button>
 
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
       ${!verified ? `<div class="note">Not verified yet — booking actions are blocked server-side. Sign up with an @meridianpharma.com email to auto-verify in this demo.</div>` : ''}
