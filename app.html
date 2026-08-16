@@ -217,7 +217,66 @@ window.submitAuth = async function() {
     setState({ formErr: err.message });
   }
 };
-  
+function screenTransfers() {
+  return `
+    <div class="wrap wide">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <h1>Transfers</h1>
+      <p class="sub">Hand off a booking to a teammate, or respond to one offered to you.</p>
+
+      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Incoming</p>
+      <div id="incomingBox" class="listcard" style="margin-bottom:24px;"><div class="empty">Loading…</div></div>
+
+      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Outgoing</p>
+      <div id="outgoingBox" class="listcard"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+
+async function loadTransfers() {
+  const incomingBox = document.getElementById('incomingBox');
+  const outgoingBox = document.getElementById('outgoingBox');
+  try {
+    const incoming = await api('/api/transfers/incoming');
+    incomingBox.innerHTML = incoming.length ? incoming.map(t => `
+      <div class="row">
+        <div class="time">${fmtTime(t.booking.slot.startTime)}</div>
+        <div class="mid">
+          <div class="who">${t.booking.slot.location.name}</div>
+          <div class="what">from ${t.fromRep.name} · ${t.fromRep.companyName}</div>
+        </div>
+        <button class="icon-btn approve" onclick="decideTransfer('${t.id}','accept')">✓</button>
+        <button class="icon-btn decline" onclick="decideTransfer('${t.id}','decline')">✕</button>
+      </div>`).join('') : '<div class="empty">No incoming transfers.</div>';
+  } catch (err) {
+    incomingBox.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+
+  try {
+    const outgoing = await api('/api/transfers/outgoing');
+    outgoingBox.innerHTML = outgoing.length ? outgoing.map(t => `
+      <div class="row">
+        <div class="time">${fmtTime(t.booking.slot.startTime)}</div>
+        <div class="mid">
+          <div class="who">${t.booking.slot.location.name}</div>
+          <div class="what">to ${t.toRep.name} · ${t.toRep.companyName}</div>
+        </div>
+        <span class="chip ${t.status}">${t.status}</span>
+      </div>`).join('') : '<div class="empty">No outgoing transfers.</div>';
+  } catch (err) {
+    outgoingBox.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+window.decideTransfer = async function(id, decision) {
+  try {
+    await api('/api/transfers/' + id + '/decide', { method: 'POST', body: JSON.stringify({ decision }) });
+    loadTransfers();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+
 function screenDashboardOffice() {
   return `
     <div class="wrap wide">
@@ -415,9 +474,10 @@ function render() {
   const app = document.getElementById('app');
   document.getElementById('logoutBtn').style.display = state.screen === 'dashboard' ? 'block' : 'none';
 
-    if (state.screen === 'role') app.innerHTML = screenRole();
+      if (state.screen === 'role') app.innerHTML = screenRole();
   else if (state.screen === 'login') app.innerHTML = screenLogin();
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); loadCatalog(); }
+  else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
 
