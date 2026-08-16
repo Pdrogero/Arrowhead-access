@@ -303,6 +303,8 @@ function screenDashboardRep() {
 
       <div id="billingBox" class="card" style="margin-bottom:24px;"><div class="empty">Loading plan…</div></div>
 
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'transfers'})">🔁 View transfers</button>
+
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
       ${!verified ? `<div class="note">Not verified yet — booking actions are blocked server-side. Sign up with an @meridianpharma.com email to auto-verify in this demo.</div>` : ''}
     </div>`;
@@ -390,11 +392,23 @@ async function loadMyBookings() {
         <div class="time">${fmtTime(b.slot.startTime)}</div>
         <div class="mid"><div class="who">${b.slot.location.name}</div></div>
         <span class="chip ${b.status}">${b.status}</span>
+        ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);" onclick="offerTransfer('${b.id}')">🔁</button>` : ''}
       </div>`).join('');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
 }
+
+window.offerTransfer = async function(bookingId) {
+  const toRepEmail = prompt('Transfer this booking to which rep? Enter their email:');
+  if (!toRepEmail) return;
+  try {
+    await api('/api/transfers', { method: 'POST', body: JSON.stringify({ bookingId, toRepEmail }) });
+    alert('Transfer offered — they can accept or decline it from their Transfers screen.');
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 // ---------- RENDER ----------
 function render() {
