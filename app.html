@@ -534,12 +534,26 @@ async function loadMyBookings() {
         <div class="time">${fmtTime(b.slot.startTime)}</div>
         <div class="mid"><div class="who">${b.slot.location.name}</div></div>
         <span class="chip ${b.status}">${b.status}</span>
+        ${b.status === 'CONFIRMED' ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')" title="Order lunch">🍽️</button>` : ''}
         ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);" onclick="offerTransfer('${b.id}')">🔁</button>` : ''}
       </div>`).join('');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
 }
+
+window.orderLunch = function(address) {
+  if (address && navigator.clipboard) {
+    navigator.clipboard.writeText(address).then(() => {
+      alert('Office address copied:\n' + address + '\n\nPaste it into ezCater\'s delivery address field on the next screen.');
+      window.open('https://www.ezcater.com/', '_blank');
+    }).catch(() => {
+      window.open('https://www.ezcater.com/', '_blank');
+    });
+  } else {
+    window.open('https://www.ezcater.com/', '_blank');
+  }
+};
 
 window.offerTransfer = async function(bookingId) {
   const toRepEmail = prompt('Transfer this booking to which rep? Enter their email:');
