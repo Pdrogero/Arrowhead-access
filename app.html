@@ -220,6 +220,42 @@ window.submitAuth = async function() {
     setState({ formErr: err.message });
   }
 };
+function screenBrowseSlots() {
+  return `
+    <div class="wrap wide">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <h1>Available slots</h1>
+      <p class="sub">Browse and claim open visits across all offices.</p>
+      <div id="slotsBox" class="listcard"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+
+async function loadOpenSlots() {
+  const box = document.getElementById('slotsBox');
+  try {
+    const slots = await api('/api/slots/open');
+    if (!slots.length) { box.innerHTML = '<div class="empty">No open slots available.</div>'; return; }
+    box.innerHTML = slots.map(s => `
+      <div class="row">
+        <div class="time">${fmtTime(s.startTime)}</div>
+        <div class="mid"><div class="who">${s.location.name}</div><div class="what">${s.location.address}</div></div>
+        <button class="icon-btn approve" style="background:rgba(46,111,94,.14);color:var(--teal-dark);" onclick="claimSlot('${s.id}')">Claim</button>
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+window.claimSlot = async function(slotId) {
+  try {
+    await api('/api/slots/' + slotId + '/claim', { method: 'POST' });
+    alert('Slot claimed! You can now see it in your bookings.');
+    setState({ screen: 'dashboard' });
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 function screenTransfers() {
   return `
     <div class="wrap wide">
@@ -486,6 +522,7 @@ function screenDashboardRep() {
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'transfers'})">🔁 View transfers</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'profile'})">👤 Edit my profile</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'calendar'})">📅 View calendar</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'browseSlots'})">🔍 Browse open slots</button>
 
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
       ${!verified ? `<div class="note">Not verified yet — booking actions are blocked server-side. Sign up with an @meridianpharma.com email to auto-verify in this demo.</div>` : ''}
@@ -616,6 +653,7 @@ function render() {
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); loadCatalog(); }
   else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); loadCalendarBookings(); }
+  else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }  
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
   else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
