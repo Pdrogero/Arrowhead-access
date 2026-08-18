@@ -356,9 +356,49 @@ function screenDashboardOffice() {
     <div class="wrap wide">
       <h1>This week's ledger</h1>
       <p class="sub">Live from /api/bookings/locations/.../ledger</p>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'postSlot'})">➕ Post an open slot</button>
       <div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
+
+function screenPostSlot() {
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <h1>Post an open slot</h1>
+      <p class="sub">Let sales reps know when you're available for a visit.</p>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Date & time</label>
+        <input id="startTime" type="datetime-local" placeholder="Start date & time">
+        <input id="endTime" type="datetime-local" placeholder="End date & time">
+        <button class="primary" id="postSlotBtn" onclick="submitPostSlot()">Post slot</button>
+      </div>
+    </div>`;
+}
+
+window.submitPostSlot = async function() {
+  const startTime = document.getElementById('startTime').value;
+  const endTime = document.getElementById('endTime').value;
+  const btn = document.getElementById('postSlotBtn');
+  
+  if (!startTime || !endTime) {
+    setState({ formErr: 'Both start and end times are required' });
+    return;
+  }
+  
+  btn.disabled = true; btn.textContent = 'Posting…';
+  try {
+    await api('/api/slots', {
+      method: 'POST',
+      body: JSON.stringify({ startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString() })
+    });
+    alert('Slot posted! Sales reps can now see and claim it.');
+    setState({ screen: 'dashboard' });
+  } catch (err) {
+    setState({ formErr: err.message });
+  }
+};
 function screenProfile() {
   const opts = catalogData.map(c => `<option value="${c.id}" ${profileSelectedCompany===c.id?'selected':''}>${c.name}</option>`).join('');
   const selectedCompany = catalogData.find(c => c.id === profileSelectedCompany);
@@ -577,6 +617,7 @@ function render() {
   else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); loadCalendarBookings(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
+  else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
 
 }
