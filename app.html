@@ -611,7 +611,8 @@ async function loadMyBookings() {
         <div class="time">${fmtTime(b.slot.startTime)}</div>
         <div class="mid"><div class="who">${b.slot.location.name}</div></div>
         <span class="chip ${b.status}">${b.status}</span>
-        ${b.status === 'CONFIRMED' ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')" title="Order lunch">🍽️</button>` : ''}
+                ${b.status === 'CONFIRMED' ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')" title="Order lunch via ezCater">🍽️</button>` : ''}
+        ${b.status === 'CONFIRMED' ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);" onclick="orderCedarOlive('${(b.slot.location.address || '').replace(/'/g, "\\'")}')" title="Order from Cedar & Olive">🥙</button>` : ''}
         ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);" onclick="offerTransfer('${b.id}')">🔁</button>` : ''}
       </div>`).join('');
   } catch (err) {
@@ -629,6 +630,19 @@ window.orderLunch = function(address) {
     });
   } else {
     window.open('https://www.ezcater.com/', '_blank');
+  }
+};
+
+window.orderCedarOlive = function(address) {
+  if (address && navigator.clipboard) {
+    navigator.clipboard.writeText(address).then(() => {
+      alert('Office address copied:\n' + address + '\n\nCedar & Olive (Mediterranean, Jacksonville Beach) — paste the address in at checkout.');
+      window.open('https://cedarandolive.com/menu/catering', '_blank');
+    }).catch(() => {
+      window.open('https://cedarandolive.com/menu/catering', '_blank');
+    });
+  } else {
+    window.open('https://cedarandolive.com/menu/catering', '_blank');
   }
 };
 
