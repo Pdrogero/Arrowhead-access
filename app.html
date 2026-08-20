@@ -606,14 +606,17 @@ async function loadMyBookings() {
   try {
     const bookings = await api('/api/bookings/mine');
     if (!bookings.length) { box.innerHTML = '<div class="empty">No bookings yet.</div>'; return; }
-    box.innerHTML = bookings.map(b => `
-      <div class="row">
+        box.innerHTML = bookings.map(b => `
+      <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(b.slot.startTime)}</div>
         <div class="mid"><div class="who">${b.slot.location.name}</div></div>
         <span class="chip ${b.status}">${b.status}</span>
-                ${b.status === 'CONFIRMED' ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')" title="Order lunch via ezCater">🍽️</button>` : ''}
-        ${b.status === 'CONFIRMED' ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);" onclick="orderCedarOlive('${(b.slot.location.address || '').replace(/'/g, "\\'")}')" title="Order from Cedar & Olive">🥙</button>` : ''}
-        ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);" onclick="offerTransfer('${b.id}')">🔁</button>` : ''}
+        ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button class="icon-btn" style="background:#F0F0EE;color:var(--slate);width:28px;" onclick="offerTransfer('${b.id}')" title="Transfer">🔁</button>` : ''}
+        ${b.status === 'CONFIRMED' ? `
+          <div style="width:100%;display:flex;gap:8px;margin-top:8px;">
+            <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🍽️ Order via ezCater</button>
+            <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderCedarOlive('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🥙 Cedar & Olive</button>
+          </div>` : ''}
       </div>`).join('');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
