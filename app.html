@@ -64,8 +64,10 @@ function render() {
   else if (state.screen === 'dashboard' && state.role === 'office') {
     app.innerHTML = '<div class="wrap"><h1>Office Dashboard</h1><p class="sub">Logged in as ' + (state.me?.email || '') + '</p><button class="link" onclick="logout()">Log Out</button><div style="border:1px solid #E5E7EB;border-radius:14px;padding:20px;text-align:center;color:#6B7280;">Ledger loading...</div></div>';
   }
-  else if (state.screen === 'dashboard' && state.role === 'rep') {
-    app.innerHTML = '<div class="wrap"><h1>Rep Dashboard</h1><p class="sub">Logged in as ' + (state.me?.email || '') + '</p><button class="link" onclick="logout()">Log Out</button><div style="border:1px solid #E5E7EB;border-radius:14px;padding:20px;text-align:center;color:#6B7280;">Bookings loading...</div></div>';
+  else if (state.screen === 'dashboard' && state.role === 'office') {
+    app.innerHTML = '<div class="wrap"><h1>Office Ledger</h1><p class="sub">Logged in as ' + (state.me?.email || '') + '</p><button class="link" onclick="setState({screen:\'officeSettings\'})" style="text-align:left;margin-bottom:10px;">⚙️ Office Settings</button><button class="link" onclick="logout()">Log Out</button><div id="ledgerBox" style="border:1px solid #E5E7EB;border-radius:14px;margin-top:20px;"><div style="padding:20px;text-align:center;color:#6B7280;">Loading…</div></div></div>';
+    loadOfficeLedger();
+  }
   }
 }
 
