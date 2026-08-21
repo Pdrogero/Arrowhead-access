@@ -3,153 +3,151 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Arrowhead Access — App</title>
+  <title>Arrowhead Access</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root { --teal: #2D6F5E; --coral: #E8684A; --slate: #6B7280; --line: #E5E7EB; --ink: #1F2937; --paper: #FAFAFA; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--paper); color: var(--ink); }
-    .wrap { max-width: 480px; margin: 0 auto; padding: 32px 20px 20px; }
-    h1 { font-size: 26px; margin-bottom: 6px; }
-    p.sub { color: var(--slate); font-size: 14px; margin-bottom: 22px; }
-    .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 26px; }
-    input { width: 100%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; margin-bottom: 12px; }
-    button.primary { width: 100%; background: var(--ink); color: #fff; border: none; border-radius: 8px; padding: 12px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 12px; }
-    button.link { width: 100%; background: none; border: none; color: var(--teal); font-size: 12px; margin-bottom: 10px; cursor: pointer; }
-    .msg.err { background: #FDEAEA; color: #C23C3C; padding: 10px; border-radius: 8px; margin-bottom: 12px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #FAFAFA; color: #1F2937; }
+    .wrap { max-width: 480px; margin: 0 auto; padding: 32px 20px; }
+    h1 { font-size: 26px; margin-bottom: 12px; }
+    p { color: #6B7280; font-size: 14px; margin-bottom: 20px; }
+    .card { background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px; }
+    input { width: 100%; padding: 12px; border: 1px solid #E5E7EB; border-radius: 8px; margin-bottom: 12px; font-size: 16px; }
+    button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 12px; }
+    .btn-primary { background: #1F2937; color: white; }
+    .btn-secondary { background: #E8684A; color: white; }
+    .btn-link { background: none; color: #2D6F5E; text-align: left; }
+    .error { background: #FDEAEA; color: #C23C3C; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
   </style>
 </head>
 <body>
+
 <div id="app"></div>
 
 <script>
-const API_BASE = 'https://arrowhead-access-api.onrender.com';
+const API = 'https://arrowhead-access-api.onrender.com';
 
-let state = { screen: 'role', role: null, me: null, formErr: null };
+let state = {
+  screen: 'home',
+  role: null,
+  user: null,
+  error: null
+};
 
-async function api(path, options = {}) {
-  const token = localStorage.getItem('token');
-  const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
-  const res = await fetch(API_BASE + path, { ...options, headers: { ...headers, ...options.headers } });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(error.error || error.message || 'API error');
-  }
-  return res.json();
-}
-
-function setState(updates) {
-  Object.assign(state, updates);
+function setState(newState) {
+  state = { ...state, ...newState };
   render();
 }
 
 function render() {
   const app = document.getElementById('app');
   
-  if (state.screen === 'role') {
-    app.innerHTML = '<div class="wrap"><h1>Welcome to Arrowhead Access</h1><p class="sub">OpenTable for medical sales visits.</p><button class="primary" onclick="goToOfficeLogin()">Office</button><button class="primary" style="background:var(--coral);" onclick="goToRepLogin()">Sales Rep</button></div>';
+  if (state.screen === 'home') {
+    app.innerHTML = `<div class="wrap">
+      <h1>Arrowhead Access</h1>
+      <p>OpenTable for medical sales visits</p>
+      <div class="card">
+        <button class="btn-primary" onclick="setState({screen:'office'})">Office Login</button>
+        <button class="btn-secondary" onclick="setState({screen:'rep'})">Rep Login</button>
+      </div>
+    </div>`;
   }
-  else if (state.screen === 'login') {
-    const isOffice = state.role === 'office';
-    const email = isOffice ? 'staff@meridianfamilypractice.com' : '';
-    const pwd = isOffice ? 'demo1234' : '';
-    app.innerHTML = '<div class="wrap"><button class="link" onclick="goHome()" style="text-align:left;margin-bottom:16px;">← Back</button><h1>' + (isOffice ? 'Office Login' : 'Rep Login') + '</h1><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="email" type="email" placeholder="Email" value="' + email + '"><input id="password" type="password" placeholder="Password" value="' + pwd + '"><button class="primary" onclick="doLogin()">Log In</button></div></div>';
+  
+  else if (state.screen === 'office') {
+    app.innerHTML = `<div class="wrap">
+      <button class="btn-link" onclick="setState({screen:'home'})">← Back</button>
+      <h1>Office Login</h1>
+      <div class="card">
+        ${state.error ? '<div class="error">' + state.error + '</div>' : ''}
+        <input id="email" type="email" placeholder="Email" value="staff@meridianfamilypractice.com">
+        <input id="password" type="password" placeholder="Password" value="demo1234">
+        <button class="btn-primary" onclick="login('office')">Log In</button>
+      </div>
+    </div>`;
   }
-  else if (state.screen === 'signup') {
-    if (state.role === 'office') {
-      app.innerHTML = '<div class="wrap"><button class="link" onclick="goHome()" style="text-align:left;margin-bottom:16px;">← Back</button><h1>Create Office Account</h1><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="officeName" type="text" placeholder="Office name"><input id="locationName" type="text" placeholder="Location name"><input id="address" type="text" placeholder="Address"><input id="email" type="email" placeholder="Email"><input id="password" type="password" placeholder="Password"><button class="primary" onclick="doOfficeSignup()">Create Account</button></div></div>';
-    } else {
-      app.innerHTML = '<div class="wrap"><button class="link" onclick="goHome()" style="text-align:left;margin-bottom:16px;">← Back</button><h1>Create Rep Account</h1><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="name" type="text" placeholder="Full name"><input id="companyName" type="text" placeholder="Company name"><input id="email" type="email" placeholder="Email"><input id="password" type="password" placeholder="Password"><button class="primary" onclick="doRepSignup()">Create Account</button></div></div>';
-    }
+  
+  else if (state.screen === 'rep') {
+    app.innerHTML = `<div class="wrap">
+      <button class="btn-link" onclick="setState({screen:'home'})">← Back</button>
+      <h1>Rep Login</h1>
+      <div class="card">
+        ${state.error ? '<div class="error">' + state.error + '</div>' : ''}
+        <input id="email" type="email" placeholder="Email">
+        <input id="password" type="password" placeholder="Password">
+        <button class="btn-primary" onclick="login('rep')">Log In</button>
+      </div>
+    </div>`;
   }
-  else if (state.screen === 'dashboard' && state.role === 'office') {
-    app.innerHTML = '<div class="wrap"><h1>Office Dashboard</h1><p class="sub">Logged in as ' + (state.me?.email || '') + '</p><button class="link" onclick="logout()">Log Out</button><div style="border:1px solid #E5E7EB;border-radius:14px;padding:20px;text-align:center;color:#6B7280;">Ledger loading...</div></div>';
+  
+  else if (state.screen === 'office-dashboard') {
+    app.innerHTML = `<div class="wrap">
+      <h1>Office Dashboard</h1>
+      <p>Logged in as: ${state.user.email}</p>
+      <div class="card">
+        <div style="color: #6B7280; text-align: center;">Dashboard loading...</div>
+      </div>
+      <div class="card">
+        <button class="btn-link" onclick="logout()">Log Out</button>
+      </div>
+    </div>`;
   }
-  else if (state.screen === 'dashboard' && state.role === 'office') {
-    app.innerHTML = '<div class="wrap"><h1>Office Ledger</h1><p class="sub">Logged in as ' + (state.me?.email || '') + '</p><button class="link" onclick="setState({screen:\'officeSettings\'})" style="text-align:left;margin-bottom:10px;">⚙️ Office Settings</button><button class="link" onclick="logout()">Log Out</button><div id="ledgerBox" style="border:1px solid #E5E7EB;border-radius:14px;margin-top:20px;"><div style="padding:20px;text-align:center;color:#6B7280;">Loading…</div></div></div>';
-    loadOfficeLedger();
-  }
+  
+  else if (state.screen === 'rep-dashboard') {
+    app.innerHTML = `<div class="wrap">
+      <h1>Rep Dashboard</h1>
+      <p>Logged in as: ${state.user.email}</p>
+      <div class="card">
+        <div style="color: #6B7280; text-align: center;">Dashboard loading...</div>
+      </div>
+      <div class="card">
+        <button class="btn-link" onclick="logout()">Log Out</button>
+      </div>
+    </div>`;
   }
 }
 
-function goHome() { setState({ screen: 'role', role: null, formErr: null }); }
-function goToOfficeLogin() { setState({ screen: 'login', role: 'office', formErr: null }); }
-function goToRepLogin() { setState({ screen: 'login', role: 'rep', formErr: null }); }
-function logout() { localStorage.removeItem('token'); goHome(); }
-async function loadOfficeLedger() {
-  const box = document.getElementById('ledgerBox');
-  try {
-    const slots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
-    if (!slots.length) { box.innerHTML = '<div style="padding:20px;text-align:center;color:#6B7280;">No bookings yet.</div>'; return; }
-    box.innerHTML = slots.map(s => '<div style="display:flex;gap:12px;padding:14px;border-bottom:1px solid #E5E7EB;"><div style="font-family:monospace;font-size:13px;color:#6B7280;width:120px;flex-shrink:0;">' + new Date(s.startTime).toLocaleString('en-US', {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + '</div><div style="flex:1;"><div style="font-weight:600;">' + (s.booking?.rep?.name || 'Open') + '</div></div><span style="background:#DFE7FF;color:#1F3A8A;padding:4px 9px;font-size:11px;font-weight:600;border-radius:20px;white-space:nowrap;">' + s.status + '</span>' + (s.status === 'REQUESTED' && s.booking ? '<button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;margin-left:8px;" onclick="approveBooking(\'' + s.booking.id + '\')">✓ Approve</button>' : '') + '</div>').join('');
-  } catch (err) {
-    box.innerHTML = '<div style="padding:20px;color:#C23C3C;">' + err.message + '</div>';
-  }
-}
-
-async function doLogin() {
+async function login(role) {
   const email = document.getElementById('email').value;
   const password = document.getElementById('password').value;
-  const endpoint = state.role === 'office' ? '/api/auth/staff/login' : '/api/auth/rep/login';
-  try {
-    const res = await api(endpoint, { method: 'POST', body: JSON.stringify({ email, password }) });
-    localStorage.setItem('token', res.token);
-    state.me = res;
-    setState({ screen: 'dashboard', role: state.role });
-  } catch (err) {
-    setState({ formErr: err.message });
+  
+  if (!email || !password) {
+    setState({ error: 'Email and password required' });
+    return;
   }
-}
-
-async function doRepSignup() {
-  const name = document.getElementById('name').value;
-  const companyName = document.getElementById('companyName').value;
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
+  
   try {
-    const res = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ name, companyName, email, password }) });
-    localStorage.setItem('token', res.token);
-    state.me = res;
-    setState({ screen: 'dashboard', role: 'rep' });
-  } catch (err) {
-    setState({ formErr: err.message });
-  }
-}
-
-async function doOfficeSignup() {
-  const officeName = document.getElementById('officeName').value;
-  const locationName = document.getElementById('locationName').value;
-  const address = document.getElementById('address').value;
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  try {
-    const res = await api('/api/auth/office/signup', { method: 'POST', body: JSON.stringify({ officeName, locationName, address, email, password }) });
-    localStorage.setItem('token', res.token);
-    state.me = res;
-    setState({ screen: 'dashboard', role: 'office' });
-  } catch (err) {
-    setState({ formErr: err.message });
-  }
-}
-
-if (localStorage.getItem('token')) {
-  api('/api/profile/rep').then(me => {
-    state.me = me;
-    state.role = 'rep';
-    state.screen = 'dashboard';
-    render();
-  }).catch(() => {
-    api('/api/bookings/locations/clznrmxov0000o8g8w8wxplk0/ledger').then(() => {
-      state.role = 'office';
-      state.screen = 'dashboard';
-      render();
-    }).catch(() => {
-      localStorage.removeItem('token');
-      render();
+    const endpoint = role === 'office' ? '/api/auth/staff/login' : '/api/auth/rep/login';
+    const res = await fetch(API + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
     });
-  });
-} else {
-  render();
+    
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Login failed');
+    }
+    
+    const data = await res.json();
+    localStorage.setItem('token', data.token);
+    
+    setState({
+      user: data,
+      role: role,
+      screen: role === 'office' ? 'office-dashboard' : 'rep-dashboard',
+      error: null
+    });
+  } catch (err) {
+    setState({ error: err.message });
+  }
 }
+
+function logout() {
+  localStorage.removeItem('token');
+  setState({ screen: 'home', user: null, role: null, error: null });
+}
+
+render();
 </script>
+
 </body>
 </html>
