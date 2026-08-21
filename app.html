@@ -584,10 +584,10 @@ async function loadOfficeLedger() {
           ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>` : `<div class="what">Open slot</div>`}
         </div>
         <span class="chip ${s.status}">${s.status}</span>
-        ${s.status === 'REQUESTED' && s.booking ? `
-          <button class="icon-btn approve" onclick="decide('${s.booking.id}','approve')">✓</button>
-          <button class="icon-btn decline" onclick="decide('${s.booking.id}','decline')">✕</button>
-        ` : ''}
+                ${s.status === 'REQUESTED' && s.booking ? `
+          <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','approve')">✓ Approve</button>
+          <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
+        ` : ''} 
       </div>`).join('');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
