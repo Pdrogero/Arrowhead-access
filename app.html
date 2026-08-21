@@ -8,52 +8,23 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root { --teal: #2D6F5E; --coral: #E8684A; --slate: #6B7280; --line: #E5E7EB; --ink: #1F2937; --paper: #FAFAFA; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--paper); color: var(--ink); }
-    .logo-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--teal); position: relative; }
-    .btn-logout { font-size: 12px; color: var(--slate); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: none; cursor: pointer; }
     .wrap { max-width: 480px; margin: 0 auto; padding: 32px 20px 20px; }
-    .wrap.wide { max-width: 640px; }
     h1 { font-size: 26px; margin-bottom: 6px; }
     p.sub { color: var(--slate); font-size: 14px; margin-bottom: 22px; }
     .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 26px; }
-    input, select { width: 100%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; margin-bottom: 12px; }
+    input { width: 100%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; margin-bottom: 12px; }
     button.primary { width: 100%; background: var(--ink); color: #fff; border: none; border-radius: 8px; padding: 12px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 12px; }
-    button.link { width: 100%; background: none; border: none; color: var(--teal); font-size: 12px; margin-top: 12px; margin-bottom: 10px; cursor: pointer; }
-    .listcard { background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-    .row { display: flex; align-items: center; gap: 12px; padding: 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-    .row:last-child { border-bottom: none; }
-    .time { font-family: monospace; font-size: 13px; color: var(--slate); width: 150px; flex-shrink: 0; }
-    .mid { flex: 1; }
-    .who { font-weight: 600; font-size: 14px; }
-    .what { font-size: 12.5px; color: var(--slate); }
-    .chip { display: inline-block; background: var(--paper); color: var(--slate); border: 1px solid var(--line); border-radius: 20px; padding: 4px 9px; font-size: 11px; font-weight: 600; text-transform: uppercase; white-space: nowrap; }
-    .chip.OPEN { background: #EEF7F1; color: #2D6F5E; }
-    .chip.REQUESTED { background: #FEF3E2; color: #92400E; }
-    .chip.CONFIRMED { background: #DFE7FF; color: #1F3A8A; }
-    .empty { padding: 20px; text-align: center; color: var(--slate); font-size: 14px; }
-    .msg { padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
-    .msg.err { background: #FDEAEA; color: #C23C3C; }
-    .msg.ok { background: #E8F5E9; color: #2D6F5E; }
-    .note { background: #FEF3E2; border: 1px solid #FCD34D; color: #92400E; padding: 12px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
-    header { position: sticky; top: 0; background: #fff; border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; }
+    button.link { width: 100%; background: none; border: none; color: var(--teal); font-size: 12px; margin-bottom: 10px; cursor: pointer; }
+    .msg.err { background: #FDEAEA; color: #C23C3C; padding: 10px; border-radius: 8px; margin-bottom: 12px; }
   </style>
 </head>
 <body>
-<header>
-  <div style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-    <div class="logo-mark"></div> Arrowhead Access
-  </div>
-  <button class="btn-logout" onclick="logout()">Log out</button>
-</header>
-
 <div id="app"></div>
 
 <script>
 const API_BASE = 'https://arrowhead-access-api.onrender.com';
 
 let state = { screen: 'role', role: null, me: null, formErr: null };
-let calendarMonth = new Date();
-let calendarBookings = [];
-let calendarSelectedDay = null;
 
 async function api(path, options = {}) {
   const token = localStorage.getItem('token');
@@ -66,81 +37,42 @@ async function api(path, options = {}) {
   return res.json();
 }
 
-function setState(updates) { Object.assign(state, updates); render(); }
-function logout() { localStorage.removeItem('token'); setState({ screen: 'role', role: null, me: null }); }
-function fmtTime(isoStr) { return new Date(isoStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
-
-function screenRole() {
-  return '<div class="wrap"><h1>Welcome to Arrowhead Access</h1><p class="sub">OpenTable for medical sales visits.</p><button class="primary" onclick="setState({screen:\"login\",role:\"office\"})">Office</button><button class="primary" style="background:var(--coral);" onclick="setState({screen:\"login\",role:\"rep\"})">Sales Rep</button></div>';
+function setState(updates) {
+  Object.assign(state, updates);
+  render();
 }
 
-function screenLogin() {
-  const isOffice = state.role === 'office';
-  const email = isOffice ? 'staff@meridianfamilypractice.com' : '';
-  const pwd = isOffice ? 'demo1234' : '';
-  return '<div class="wrap"><button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:\'role\'})">&larr; Back</button><h1>' + (isOffice ? 'Office Login' : 'Sales Rep Login') + '</h1><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="email" type="email" placeholder="Email" value="' + email + '"><input id="password" type="password" placeholder="Password" value="' + pwd + '"><button class="primary" onclick="doLogin()">Log In</button>' + (!isOffice ? '<button class="link" onclick="setState({screen:\'signup\'})">Create Account</button>' : '') + (isOffice ? '<button class="link" onclick="setState({screen:\'signup\'})">New office? Create account</button>' : '') + '</div></div>';
-}
-
-function screenSignup() {
-  if (state.role === 'office') {
-    return '<div class="wrap"><button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:\'login\'})">&larr; Back</button><h1>Create Office Account</h1><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="officeName" type="text" placeholder="Office name"><input id="locationName" type="text" placeholder="Location name"><input id="address" type="text" placeholder="Address"><input id="email" type="email" placeholder="Email"><input id="password" type="password" placeholder="Password"><button class="primary" onclick="doOfficeSignup()">Create Account</button></div></div>';
+function render() {
+  const app = document.getElementById('app');
+  
+  if (state.screen === 'role') {
+    app.innerHTML = '<div class="wrap"><h1>Welcome to Arrowhead Access</h1><p class="sub">OpenTable for medical sales visits.</p><button class="primary" onclick="goToOfficeLogin()">Office</button><button class="primary" style="background:var(--coral);" onclick="goToRepLogin()">Sales Rep</button></div>';
   }
-  return '<div class="wrap"><button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:\'login\'})">&larr; Back</button><h1>Create Rep Account</h1><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="name" type="text" placeholder="Full name"><input id="companyName" type="text" placeholder="Company name"><input id="email" type="email" placeholder="Email"><input id="password" type="password" placeholder="Password"><button class="primary" onclick="doRepSignup()">Create Account</button></div></div>';
-}
-
-function screenProfile() {
-  return '<div class="wrap"><button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:\'dashboard\'})">&larr; Back</button><h1>Complete your profile</h1><p class="sub">Help offices know who they meet with.</p><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="title" type="text" placeholder="Title"><input id="phone" type="tel" placeholder="Phone"><button class="primary" onclick="saveProfile()">Save</button><button class="link" onclick="setState({screen:\'dashboard\'})">Skip for now</button></div></div>';
-}
-
-function screenOfficeSettings() {
-  return '<div class="wrap"><button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:\'dashboard\'})">&larr; Back</button><h1>Office Settings</h1><p class="sub">Configure your visit policies.</p><div class="card"><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Max visits per rep/month</label><input id="maxVisitsPerRep" type="number" value="1" min="1"><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Max visits per company/month</label><input id="maxVisitsPerCompany" type="number" value="2" min="1"><button class="primary" onclick="saveOfficePolicy()">Save Policy</button></div></div>';
-}
-
-function screenPostSlot() {
-  return '<div class="wrap"><button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:\'dashboard\'})">&larr; Back</button><h1>Post a slot</h1><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="startTime" type="datetime-local"><input id="endTime" type="datetime-local"><button class="primary" id="postSlotBtn" onclick="submitPostSlot()">Post slot</button></div></div>';
-}
-
-function screenBrowseSlots() {
-  return '<div class="wrap wide"><button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:\'dashboard\'})">&larr; Back</button><h1>Available slots</h1><div id="slotsBox" class="listcard"><div class="empty">Loading…</div></div></div>';
-}
-
-function screenCalendar() {
-  const year = calendarMonth.getFullYear();
-  const month = calendarMonth.getMonth();
-  const monthLabel = calendarMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' });
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const bookingsByDay = {};
-  calendarBookings.forEach(b => {
-    const d = new Date(b.slot.startTime);
-    if (d.getFullYear() === year && d.getMonth() === month) {
-      const day = d.getDate();
-      if (!bookingsByDay[day]) bookingsByDay[day] = [];
-      bookingsByDay[day].push(b);
+  else if (state.screen === 'login') {
+    const isOffice = state.role === 'office';
+    const email = isOffice ? 'staff@meridianfamilypractice.com' : '';
+    const pwd = isOffice ? 'demo1234' : '';
+    app.innerHTML = '<div class="wrap"><button class="link" onclick="goHome()" style="text-align:left;margin-bottom:16px;">← Back</button><h1>' + (isOffice ? 'Office Login' : 'Rep Login') + '</h1><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="email" type="email" placeholder="Email" value="' + email + '"><input id="password" type="password" placeholder="Password" value="' + pwd + '"><button class="primary" onclick="doLogin()">Log In</button></div></div>';
+  }
+  else if (state.screen === 'signup') {
+    if (state.role === 'office') {
+      app.innerHTML = '<div class="wrap"><button class="link" onclick="goHome()" style="text-align:left;margin-bottom:16px;">← Back</button><h1>Create Office Account</h1><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="officeName" type="text" placeholder="Office name"><input id="locationName" type="text" placeholder="Location name"><input id="address" type="text" placeholder="Address"><input id="email" type="email" placeholder="Email"><input id="password" type="password" placeholder="Password"><button class="primary" onclick="doOfficeSignup()">Create Account</button></div></div>';
+    } else {
+      app.innerHTML = '<div class="wrap"><button class="link" onclick="goHome()" style="text-align:left;margin-bottom:16px;">← Back</button><h1>Create Rep Account</h1><div class="card">' + (state.formErr ? '<div class="msg err">' + state.formErr + '</div>' : '') + '<input id="name" type="text" placeholder="Full name"><input id="companyName" type="text" placeholder="Company name"><input id="email" type="email" placeholder="Email"><input id="password" type="password" placeholder="Password"><button class="primary" onclick="doRepSignup()">Create Account</button></div></div>';
     }
-  });
-  let cells = '';
-  for (let i = 0; i < firstDay; i++) cells += '<div></div>';
-  for (let day = 1; day <= daysInMonth; day++) {
-    const has = bookingsByDay[day];
-    cells += '<button onclick="selectCalendarDay(' + day + ')" style="aspect-ratio:1;border:1px solid var(--line);border-radius:8px;background:' + (has ? 'rgba(46,111,94,.12)' : '#fff') + ';font-size:13px;cursor:pointer;">' + day + (has ? '<div style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--teal);"></div>' : '') + '</button>';
   }
-  const dayBookings = calendarSelectedDay ? (bookingsByDay[calendarSelectedDay] || []) : [];
-  return '<div class="wrap wide"><button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:\'dashboard\'})">&larr; Back</button><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><button class="link" style="width:auto;margin:0;" onclick="changeCalendarMonth(-1)">‹</button><h1 style="margin:0;">' + monthLabel + '</h1><button class="link" style="width:auto;margin:0;" onclick="changeCalendarMonth(1)">›</button></div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;">S M T W T F S' + cells + '</div>' + (calendarSelectedDay ? '<p style="font-size:13px;font-weight:600;margin-bottom:8px;">' + monthLabel.split(' ')[0] + ' ' + calendarSelectedDay + '</p><div class="listcard">' + (dayBookings.length ? dayBookings.map(b => '<div class="row"><div class="time">' + fmtTime(b.slot.startTime) + '</div><div class="mid"><div class="who">' + b.slot.location.name + '</div></div><span class="chip ' + b.status + '">' + b.status + '</span></div>').join('') : '<div class="empty">Nothing scheduled.</div>') + '</div>' : '') + '</div>';
+  else if (state.screen === 'dashboard' && state.role === 'office') {
+    app.innerHTML = '<div class="wrap"><h1>Office Dashboard</h1><p class="sub">Logged in as ' + (state.me?.email || '') + '</p><button class="link" onclick="logout()">Log Out</button><div style="border:1px solid #E5E7EB;border-radius:14px;padding:20px;text-align:center;color:#6B7280;">Ledger loading...</div></div>';
+  }
+  else if (state.screen === 'dashboard' && state.role === 'rep') {
+    app.innerHTML = '<div class="wrap"><h1>Rep Dashboard</h1><p class="sub">Logged in as ' + (state.me?.email || '') + '</p><button class="link" onclick="logout()">Log Out</button><div style="border:1px solid #E5E7EB;border-radius:14px;padding:20px;text-align:center;color:#6B7280;">Bookings loading...</div></div>';
+  }
 }
 
-function screenTransfers() {
-  return '<div class="wrap wide"><button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:\'dashboard\'})">&larr; Back</button><h1>Transfers</h1><p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Incoming</p><div id="incomingBox" class="listcard"><div class="empty">Loading…</div></div><p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Outgoing</p><div id="outgoingBox" class="listcard"><div class="empty">Loading…</div></div></div>';
-}
-
-function screenDashboardOffice() {
-  return '<div class="wrap wide"><h1>Ledger</h1><button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:\'postSlot\'})">➕ Post slot</button><button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:\'officeSettings\'})">⚙️ Settings</button><div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div></div>';
-}
-
-function screenDashboardRep() {
-  const verified = state.me && state.me.verificationStatus === 'VERIFIED';
-  return '<div class="wrap wide"><h1>Your bookings</h1><p class="sub">Logged in as ' + (state.me ? state.me.name || state.me.email : '') + ' ' + (verified ? '✅' : '⏳') + '</p><div id="billingBox" class="card" style="margin-bottom:24px;"><div class="empty">Loading…</div></div><button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:\'transfers\'})">🔁 Transfers</button><button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:\'calendar\'})">📅 Calendar</button><button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:\'browseSlots\'})">🔍 Browse slots</button><div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>' + (!verified ? '<div class="note">Not verified yet. Sign up with @meridianpharma.com to auto-verify.</div>' : '') + '</div>';
-}
+function goHome() { setState({ screen: 'role', role: null, formErr: null }); }
+function goToOfficeLogin() { setState({ screen: 'login', role: 'office', formErr: null }); }
+function goToRepLogin() { setState({ screen: 'login', role: 'rep', formErr: null }); }
+function logout() { localStorage.removeItem('token'); goHome(); }
 
 async function doLogin() {
   const email = document.getElementById('email').value;
@@ -165,7 +97,7 @@ async function doRepSignup() {
     const res = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ name, companyName, email, password }) });
     localStorage.setItem('token', res.token);
     state.me = res;
-    setState({ screen: 'profile', role: 'rep' });
+    setState({ screen: 'dashboard', role: 'rep' });
   } catch (err) {
     setState({ formErr: err.message });
   }
@@ -185,184 +117,6 @@ async function doOfficeSignup() {
   } catch (err) {
     setState({ formErr: err.message });
   }
-}
-
-async function saveProfile() {
-  const title = document.getElementById('title').value;
-  const phone = document.getElementById('phone').value;
-  try {
-    await api('/api/profile/rep', { method: 'PATCH', body: JSON.stringify({ title, phone }) });
-    setState({ screen: 'dashboard' });
-  } catch (err) {
-    setState({ formErr: err.message });
-  }
-}
-
-window.saveOfficePolicy = async function() {
-  const maxRep = document.getElementById('maxVisitsPerRep').value;
-  const maxCompany = document.getElementById('maxVisitsPerCompany').value;
-  try {
-    await api('/api/policies', { method: 'POST', body: JSON.stringify({ maxVisitsPerRepPerMonth: parseInt(maxRep), maxVisitsPerCompanyPerMonth: parseInt(maxCompany), confirmationDeadlineHours: 48, closedDays: [] }) });
-    alert('Policy saved!');
-  } catch (err) {
-    setState({ formErr: err.message });
-  }
-};
-
-async function submitPostSlot() {
-  const startTime = document.getElementById('startTime').value;
-  const endTime = document.getElementById('endTime').value;
-  const btn = document.getElementById('postSlotBtn');
-  if (!startTime || !endTime) { setState({ formErr: 'Both times required' }); return; }
-  btn.disabled = true; btn.textContent = 'Posting…';
-  try {
-    await api('/api/slots', { method: 'POST', body: JSON.stringify({ startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), eventType: 'REP_VISIT' }) });
-    alert('Slot posted!');
-    setState({ screen: 'dashboard' });
-  } catch (err) {
-    setState({ formErr: err.message });
-  }
-}
-
-async function loadOfficeLedger() {
-  const box = document.getElementById('ledgerBox');
-  try {
-    const slots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
-    if (!slots.length) { box.innerHTML = '<div class="empty">No slots yet.</div>'; return; }
-    box.innerHTML = slots.map(s => '<div class="row"><div class="time">' + fmtTime(s.startTime) + '</div><div class="mid">' + (s.booking && s.booking.rep ? '<div class="who">' + s.booking.rep.name + '</div>' : '<div class="what">Open</div>') + '</div><span class="chip ' + s.status + '">' + s.status + '</span>' + (s.status === 'REQUESTED' && s.booking ? '<button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="decide(\'' + s.booking.id + '\',\'approve\')">✓</button><button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="decide(\'' + s.booking.id + '\',\'decline\')">✕</button>' : '') + '</div>').join('');
-  } catch (err) {
-    box.innerHTML = '<div class="msg err" style="margin:14px;">' + err.message + '</div>';
-  }
-}
-
-async function loadMyBookings() {
-  const box = document.getElementById('bookingsBox');
-  try {
-    const bookings = await api('/api/bookings/mine');
-    if (!bookings.length) { box.innerHTML = '<div class="empty">No bookings yet.</div>'; return; }
-    box.innerHTML = bookings.map(b => '<div class="row"><div class="time">' + fmtTime(b.slot.startTime) + '</div><div class="mid"><div class="who">' + b.slot.location.name + '</div></div><span class="chip ' + b.status + '">' + b.status + '</span>' + (b.status === 'CONFIRMED' ? '<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="offerTransfer(\'' + b.id + '\')">🔁</button>' : '') + '</div>').join('');
-  } catch (err) {
-    box.innerHTML = '<div class="msg err" style="margin:14px;">' + err.message + '</div>';
-  }
-}
-
-async function loadBillingStatus() {
-  const box = document.getElementById('billingBox');
-  try {
-    const res = await api('/api/billing/founding-status');
-    box.innerHTML = '<h2 style="font-size:16px;margin-bottom:12px;">Choose your plan</h2><button class="primary" style="background:var(--ink);" onclick="goToCheckout(\'monthly\')">Monthly — $49.95/mo</button><button class="primary" style="background:var(--coral);" onclick="goToCheckout(\'annual\')">Annual — $379.99/yr</button>';
-  } catch (err) {
-    box.innerHTML = '<div class="msg err">' + err.message + '</div>';
-  }
-}
-
-async function loadOpenSlots() {
-  const box = document.getElementById('slotsBox');
-  try {
-    const slots = await api('/api/slots/open');
-    if (!slots.length) { box.innerHTML = '<div class="empty">No open slots.</div>'; return; }
-    box.innerHTML = slots.map(s => '<div class="row"><div class="time">' + fmtTime(s.startTime) + '</div><div class="mid"><div class="who">' + s.location.name + '</div><div class="what">' + s.location.address + '</div></div><button style="background:rgba(46,111,94,.14);color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="claimSlot(\'' + s.id + '\')">Claim</button></div>').join('');
-  } catch (err) {
-    box.innerHTML = '<div class="msg err" style="margin:14px;">' + err.message + '</div>';
-  }
-}
-
-window.claimSlot = async function(slotId) {
-  try {
-    await api('/api/slots/' + slotId + '/claim', { method: 'POST' });
-    alert('Slot claimed!');
-    setState({ screen: 'dashboard' });
-  } catch (err) {
-    alert(err.message);
-  }
-};
-
-async function loadCalendarBookings() {
-  try {
-    calendarBookings = await api('/api/bookings/mine');
-    render();
-  } catch (err) {}
-}
-
-window.changeCalendarMonth = function(delta) {
-  calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + delta, 1);
-  calendarSelectedDay = null;
-  render();
-};
-
-window.selectCalendarDay = function(day) {
-  calendarSelectedDay = day;
-  render();
-};
-
-async function loadTransfers() {
-  const incomingBox = document.getElementById('incomingBox');
-  const outgoingBox = document.getElementById('outgoingBox');
-  try {
-    const incoming = await api('/api/transfers/incoming');
-    incomingBox.innerHTML = incoming.length ? incoming.map(t => '<div class="row"><div class="time">' + fmtTime(t.booking.slot.startTime) + '</div><div class="mid"><div class="who">' + t.booking.slot.location.name + '</div></div><button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="decideTransfer(\'' + t.id + '\',\'accept\')">✓ Accept</button></div>').join('') : '<div class="empty">No incoming.</div>';
-  } catch (err) {
-    incomingBox.innerHTML = '<div class="msg err" style="margin:14px;">' + err.message + '</div>';
-  }
-  try {
-    const outgoing = await api('/api/transfers/outgoing');
-    outgoingBox.innerHTML = outgoing.length ? outgoing.map(t => '<div class="row"><div class="time">' + fmtTime(t.booking.slot.startTime) + '</div><div class="mid"><div class="who">' + t.booking.slot.location.name + '</div></div><span class="chip ' + t.status + '">' + t.status + '</span></div>').join('') : '<div class="empty">No outgoing.</div>';
-  } catch (err) {
-    outgoingBox.innerHTML = '<div class="msg err" style="margin:14px;">' + err.message + '</div>';
-  }
-}
-
-window.decideTransfer = async function(id, decision) {
-  try {
-    await api('/api/transfers/' + id + '/decide', { method: 'POST', body: JSON.stringify({ decision }) });
-    loadTransfers();
-  } catch (err) {
-    alert(err.message);
-  }
-};
-
-window.offerTransfer = async function(bookingId) {
-  const toRepEmail = prompt('Transfer to which rep email:');
-  if (!toRepEmail) return;
-  try {
-    await api('/api/transfers', { method: 'POST', body: JSON.stringify({ bookingId, toRepEmail }) });
-    alert('Transfer offered!');
-  } catch (err) {
-    alert(err.message);
-  }
-};
-
-window.decide = async function(id, decision) {
-  try {
-    await api('/api/bookings/' + id + '/decide', { method: 'POST', body: JSON.stringify({ decision }) });
-    loadOfficeLedger();
-  } catch (err) {
-    alert(err.message);
-  }
-};
-
-window.goToCheckout = async function(plan) {
-  try {
-    const res = await api('/api/billing/rep/checkout', { method: 'POST', body: JSON.stringify({ plan }) });
-    window.open(res.checkoutUrl, '_blank');
-  } catch (err) {
-    alert(err.message);
-  }
-};
-
-function render() {
-  const app = document.getElementById('app');
-  if (state.screen === 'role') app.innerHTML = screenRole();
-  else if (state.screen === 'login') app.innerHTML = screenLogin();
-  else if (state.screen === 'signup') app.innerHTML = screenSignup();
-  else if (state.screen === 'profile') { app.innerHTML = screenProfile(); }
-  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); }
-  else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); }
-  else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
-  else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }
-  else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); loadCalendarBookings(); }
-  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
-  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
 }
 
 if (localStorage.getItem('token')) {
