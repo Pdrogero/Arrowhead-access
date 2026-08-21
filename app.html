@@ -10,13 +10,20 @@
     .wrap { max-width: 480px; margin: 0 auto; padding: 32px 20px; }
     h1 { font-size: 26px; margin-bottom: 12px; }
     p { color: #6B7280; font-size: 14px; margin-bottom: 20px; }
-    .card { background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px; }
+    .card { background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px; margin-bottom: 12px; }
+    .row { padding: 14px; border-bottom: 1px solid #E5E7EB; display: flex; justify-content: space-between; align-items: center; }
+    .row:last-child { border-bottom: none; }
     input { width: 100%; padding: 12px; border: 1px solid #E5E7EB; border-radius: 8px; margin-bottom: 12px; font-size: 16px; }
     button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 12px; }
     .btn-primary { background: #1F2937; color: white; }
     .btn-secondary { background: #E8684A; color: white; }
     .btn-link { background: none; color: #2D6F5E; text-align: left; }
+    .btn-small { width: auto; padding: 6px 12px; font-size: 12px; margin: 0; }
+    .btn-approve { background: #E8F5E9; color: #2D6F5E; }
+    .btn-decline { background: #FDEAEA; color: #C23C3C; }
+    .chip { display: inline-block; background: #DFE7FF; color: #1F3A8A; padding: 4px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
     .error { background: #FDEAEA; color: #C23C3C; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+    .empty { color: #6B7280; text-align: center; padding: 20px; }
   </style>
 </head>
 <body>
@@ -30,7 +37,8 @@ let state = {
   screen: 'home',
   role: null,
   user: null,
-  error: null
+  error: null,
+  ledger: []
 };
 
 function setState(newState) {
@@ -82,8 +90,17 @@ function render() {
     app.innerHTML = `<div class="wrap">
       <h1>Office Ledger</h1>
       <p>Logged in as: ${state.user.email}</p>
-      <div class="card" id="ledger" style="margin:20px 0;">
-        <div style="color:#6B7280;text-align:center;">Loading bookings...</div>
+      <div class="card">
+        ${state.ledger.length ? state.ledger.map(s => `
+          <div class="row">
+            <div>
+              <div style="font-weight:600;">${s.booking?.rep?.name || 'Open slot'}</div>
+              <div style="color:#6B7280;font-size:12px;">${new Date(s.startTime).toLocaleDateString()}</div>
+            </div>
+            <span class="chip">${s.status}</span>
+            ${s.status === 'REQUESTED' && s.booking ? `<button class="btn-small btn-approve" onclick="approveBooking('${s.booking.id}')">✓</button>` : ''}
+          </div>
+        `).join('') : '<div class="empty">No bookings yet.</div>'}
       </div>
       <div class="card">
         <button class="btn-link" onclick="logout()">Log Out</button>
@@ -97,7 +114,7 @@ function render() {
       <h1>Rep Dashboard</h1>
       <p>Logged in as: ${state.user.email}</p>
       <div class="card">
-        <div style="color: #6B7280; text-align: center;">Dashboard loading...</div>
+        <div style="color:#6B7280;text-align:center;">Dashboard loading...</div>
       </div>
       <div class="card">
         <button class="btn-link" onclick="logout()">Log Out</button>
@@ -142,24 +159,40 @@ async function login(role) {
   }
 }
 
-function logout() {
-  async function loadOfficeLedger() {
+async function loadOfficeLedger() {
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch(API + '/api/bookings/locations/' + state.user.locationId + '/ledger', {
+    const locationId = state.user.locationId;
+    
+    const res = await fetch(API + '/api/bookings/locations/' + locationId + '/ledger', {
       headers: { 'Authorization': 'Bearer ' + token }
     });
+    
     const slots = await res.json();
-    const box = document.getElementById('ledger');
-    if (!slots.length) { box.innerHTML = '<div style="padding:20px;text-align:center;color:#6B7280;">No bookings yet.</div>'; return; }
-    box.innerHTML = slots.map(s => '<div style="padding:14px;border-bottom:1px solid #E5E7EB;"><div style="display:flex;justify-content:space-between;"><strong>' + new Date(s.startTime).toLocaleDateString() + '</strong><span style="background:#DFE7FF;color:#1F3A8A;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:600;">' + s.status + '</span></div><div style="color:#6B7280;margin-top:4px;">' + (s.booking?.rep?.name || 'Open slot') + '</div></div>').join('');
+    setState({ ledger: slots });
   } catch (err) {
-    document.getElementById('ledger').innerHTML = '<div style="color:#C23C3C;">Error loading ledger</div>';
+    console.log('Ledger error:', err);
+    setState({ ledger: [] });
   }
 }
 
+async function approveBooking(id) {
+  try {
+    const token = localStorage.getItem('token');
+    await fetch(API + '/api/bookings/' + id + '/decide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ decision: 'approve' })
+    });
+    loadOfficeLedger();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+function logout() {
   localStorage.removeItem('token');
-  setState({ screen: 'home', user: null, role: null, error: null });
+  setState({ screen: 'home', user: null, role: null, error: null, ledger: [] });
 }
 
 render();
