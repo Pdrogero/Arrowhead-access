@@ -283,8 +283,8 @@ async function loadTransfers() {
           <div class="who">${t.booking.slot.location.name}</div>
           <div class="what">from ${t.fromRep.name} · ${t.fromRep.companyName}</div>
         </div>
-        <button class="icon-btn approve" onclick="decideTransfer('${t.id}','accept')">✓</button>
-        <button class="icon-btn decline" onclick="decideTransfer('${t.id}','decline')">✕</button>
+        <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="decideTransfer('${t.id}','accept')">✓ Accept</button>
+        <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="decideTransfer('${t.id}','decline')">✕ Decline</button>
       </div>`).join('') : '<div class="empty">No incoming transfers.</div>';
   } catch (err) {
     incomingBox.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
