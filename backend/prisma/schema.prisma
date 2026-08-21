@@ -1,5 +1,4 @@
 // schema.prisma — Arrowhead Access core data model
-// Run: npx prisma migrate dev --name init
 
 generator client {
   provider = "prisma-client-js"
@@ -39,6 +38,13 @@ enum SlotStatus {
   CANCELLED
 }
 
+enum SlotEventType {
+  REP_VISIT
+  LUNCH
+  STAFF_TRAINING
+  OFFICE_CLOSED
+}
+
 enum BookingStatus {
   REQUESTED
   CONFIRMED
@@ -71,6 +77,16 @@ enum TransferStatus {
   CANCELLED
 }
 
+enum DayOfWeek {
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
 model Organization {
   id            String   @id @default(cuid())
   name          String
@@ -96,6 +112,35 @@ model Location {
 
   staff  StaffUser[]
   slots  Slot[]
+  policy OfficePolicy?
+}
+
+model OfficePolicy {
+  id                          String   @id @default(cuid())
+  locationId                  String   @unique
+  location                    Location @relation(fields: [locationId], references: [id])
+  maxVisitsPerRepPerMonth     Int      @default(1)
+  maxVisitsPerCompanyPerMonth Int      @default(2)
+  confirmationDeadlineHours   Int      @default(48)
+  closedDays                  DayOfWeek[]
+  closedTimeStart             String?  // HH:MM format, null = no blocked time today
+  closedTimeEnd               String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+}
+
+model RecurringSlotTemplate {
+  id           String     @id @default(cuid())
+  locationId   String
+  location     Location   @relation(fields: [locationId], references: [id])
+  daysOfWeek   DayOfWeek[]
+  startTime    String     // HH:MM format
+  endTime      String     // HH:MM format
+  eventType    SlotEventType
+  endsAt       DateTime?  // null = recurring forever
+  createdAt    DateTime   @default(now())
+
+  @@index([locationId])
 }
 
 model StaffUser {
@@ -188,15 +233,16 @@ model KnownManufacturerDomain {
 }
 
 model Slot {
-  id               String      @id @default(cuid())
+  id               String         @id @default(cuid())
   locationId       String
-  location         Location    @relation(fields: [locationId], references: [id])
+  location         Location       @relation(fields: [locationId], references: [id])
   startTime        DateTime
   endTime          DateTime
-  status           SlotStatus  @default(OPEN)
+  status           SlotStatus     @default(OPEN)
+  eventType        SlotEventType  @default(REP_VISIT)
   createdByStaffId String?
-  createdByStaff   StaffUser?  @relation(fields: [createdByStaffId], references: [id])
-  createdAt        DateTime    @default(now())
+  createdByStaff   StaffUser?     @relation(fields: [createdByStaffId], references: [id])
+  createdAt        DateTime       @default(now())
 
   booking Booking?
 
