@@ -80,15 +80,16 @@ function render() {
   
   else if (state.screen === 'office-dashboard') {
     app.innerHTML = `<div class="wrap">
-      <h1>Office Dashboard</h1>
+      <h1>Office Ledger</h1>
       <p>Logged in as: ${state.user.email}</p>
-      <div class="card">
-        <div style="color: #6B7280; text-align: center;">Dashboard loading...</div>
+      <div class="card" id="ledger" style="margin:20px 0;">
+        <div style="color:#6B7280;text-align:center;">Loading bookings...</div>
       </div>
       <div class="card">
         <button class="btn-link" onclick="logout()">Log Out</button>
       </div>
     </div>`;
+    loadOfficeLedger();
   }
   
   else if (state.screen === 'rep-dashboard') {
