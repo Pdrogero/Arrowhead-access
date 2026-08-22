@@ -89,7 +89,6 @@ let state = {
 };
 
 let catalogData = [];
-let profileSelectedProducts = new Set();
 let calendarMonth = new Date();
 let calendarBookings = [];
 let calendarSelectedDay = null;
@@ -191,9 +190,16 @@ function screenProfile() {
         <input id="title" type="text" placeholder="Title (e.g. Territory Manager)">
         <input id="phone" type="tel" placeholder="Phone number">
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Manufacturer company</label>
-        <select id="companySelect" style="margin-bottom:6px;"><option value="">Select a company…</option></select>
+        <select id="companySelect" onchange="handleCompanyChange()" style="margin-bottom:6px;"><option value="">Select a company…</option></select>
         <p style="font-size:12px;color:var(--slate);margin-bottom:12px;">Select a company to see its products.</p>
         <div id="productsBox" style="margin-bottom:12px;"></div>
+        <div id="addCompanyBox" style="display:none;border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px;">
+          <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Add your company</label>
+          <input id="newCompanyName" type="text" placeholder="Company name">
+          <input id="newCompanyProducts" type="text" placeholder="Products you carry (comma-separated, optional)">
+          <div id="addCompanyErr"></div>
+          <button type="button" class="primary" style="margin-bottom:0;" onclick="createCompany()">Add this company</button>
+        </div>
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Specialties of interest</label>
         <div style="border:1px solid var(--line);border-radius:8px;padding:12px;">
           ${['Wound Care Centers','Podiatry','Vascular Surgery','Plastic Surgery','General Surgery','Home Health','Long-Term Care','Hospital Value Analysis','ASCs','Traveling Physicians','Medical Distributors'].map(s => `
@@ -442,20 +448,73 @@ async function loadCatalog() {
     const sel = document.getElementById('companySelect');
     if (sel) {
       const opts = catalogData.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-      sel.innerHTML = `<option value="">Select a company…</option>${opts}`;
+      sel.innerHTML = `<option value="">Select a company…</option>${opts}<option value="__new__">+ My company isn't listed</option>`;
     }
   } catch (err) {}
 }
 
+function handleCompanyChange() {
+  const companyId = document.getElementById('companySelect').value;
+  const productsBox = document.getElementById('productsBox');
+  const addBox = document.getElementById('addCompanyBox');
+
+  if (companyId === '__new__') {
+    productsBox.innerHTML = '';
+    addBox.style.display = 'block';
+    return;
+  }
+  addBox.style.display = 'none';
+
+  const company = catalogData.find(c => c.id === companyId);
+  if (!company || !company.products.length) {
+    productsBox.innerHTML = '';
+    return;
+  }
+  productsBox.innerHTML = `
+    <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Products you carry</label>
+    <div style="border:1px solid var(--line);border-radius:8px;padding:12px;">
+      ${company.products.map(p => `
+        <label style="display:flex;align-items:center;font-size:13px;margin-bottom:8px;"><input type="checkbox" class="product-checkbox" value="${p.id}" style="margin-right:6px;"> ${p.name}</label>
+      `).join('')}
+    </div>`;
+}
+
+window.createCompany = async function() {
+  const nameInput = document.getElementById('newCompanyName');
+  const productsInput = document.getElementById('newCompanyProducts');
+  const errBox = document.getElementById('addCompanyErr');
+  const name = nameInput.value.trim();
+  const products = productsInput.value.split(',').map(s => s.trim()).filter(Boolean);
+
+  if (!name) {
+    errBox.innerHTML = `<div class="msg err">Company name is required</div>`;
+    return;
+  }
+
+  try {
+    const company = await api('/api/profile/catalog/company', { method: 'POST', body: JSON.stringify({ name, products }) });
+    errBox.innerHTML = '';
+    await loadCatalog();
+    const sel = document.getElementById('companySelect');
+    sel.value = company.id;
+    handleCompanyChange();
+    nameInput.value = '';
+    productsInput.value = '';
+  } catch (err) {
+    errBox.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+};
+
 async function saveProfile() {
   const title = document.getElementById('title').value;
   const phone = document.getElementById('phone').value;
-  const companyId = document.getElementById('companySelect').value;
+  const companySelect = document.getElementById('companySelect').value;
+  const companyId = companySelect === '__new__' ? '' : companySelect;
   const specialties = Array.from(document.querySelectorAll('.specialty:checked')).map(e => e.value);
-  const products = Array.from(profileSelectedProducts);
+  const productIds = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(e => e.value);
 
   try {
-    await api('/api/profile/rep', { method: 'PATCH', body: JSON.stringify({ title, phone, manufacturerCompanyId: companyId || null, specialties, products }) });
+    await api('/api/profile/rep', { method: 'PATCH', body: JSON.stringify({ title, phone, manufacturerCompanyId: companyId || null, specialties, productIds }) });
     setState({ screen: 'dashboard' });
   } catch (err) {
     setState({ formErr: err.message });

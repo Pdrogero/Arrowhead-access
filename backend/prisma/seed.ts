@@ -15,6 +15,11 @@ const CATALOG: Record<string, string[]> = {
   'Medtronic': ['Vascular Closure Devices', 'Endovascular Stents'],
   'Stryker': ['Foot & Ankle Plating Systems', 'Wound Care Solutions'],
   'Boston Scientific': ['Peripheral Vascular Devices', 'Interventional Solutions'],
+  '3M (KCI)': ['V.A.C. Therapy System', 'Prevena Incision Management System', 'Tegaderm'],
+  'ConvaTec': ['AQUACEL Ag Advantage', 'Foam Dressings', 'Duoderm'],
+  'Coloplast': ['Biatain Dressings', 'Comfeel'],
+  'Mölnlycke Health Care': ['Mepilex', 'Exufiber'],
+  'MiMedx Group': ['EpiFix', 'AmnioFix'],
 };
 
 async function main() {

@@ -21,6 +21,45 @@ router.get('/catalog', requireAuth, requireRole('rep'), async (req, res) => {
   res.json(companies);
 });
 
+// --- Rep self-service: add a manufacturer company not yet in the catalog --
+// Reuses an existing company (case-insensitive match on name) instead of
+// creating a duplicate if one already exists.
+router.post('/catalog/company', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Company name is required' });
+
+    const productNames = Array.from(
+      new Set((req.body.products || []).map((p: string) => String(p).trim()).filter(Boolean))
+    ) as string[];
+
+    let company = await prisma.manufacturerCompany.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+    });
+    if (!company) {
+      company = await prisma.manufacturerCompany.create({ data: { name } });
+    }
+
+    for (const productName of productNames) {
+      await prisma.product.upsert({
+        where: { companyId_name: { companyId: company.id, name: productName } },
+        update: {},
+        create: { companyId: company.id, name: productName },
+      });
+    }
+
+    const withProducts = await prisma.manufacturerCompany.findUnique({
+      where: { id: company.id },
+      include: { products: { orderBy: { name: 'asc' } } },
+    });
+
+    res.status(201).json(withProducts);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not add company' });
+  }
+});
+
 // --- Complete / update the logged-in rep's profile ------------------------
 router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
   try {
