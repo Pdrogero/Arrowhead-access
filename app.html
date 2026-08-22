@@ -244,6 +244,23 @@ function screenProfile() {
     </div>`;
 }
 
+function screenAccountSettings() {
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <h1>Account Settings</h1>
+      <p class="sub">Change the password for your account.</p>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        ${state.passwordChanged ? `<div class="msg ok">Password updated successfully.</div>` : ''}
+        <input id="currentPassword" type="password" placeholder="Current password" autocomplete="off">
+        <input id="newPassword" type="password" placeholder="New password" autocomplete="off">
+        <input id="confirmPassword" type="password" placeholder="Confirm new password" autocomplete="off">
+        <button class="primary" onclick="doChangePassword()">Update password</button>
+      </div>
+    </div>`;
+}
+
 function screenOfficeSettings() {
   return `
     <div class="wrap">
@@ -402,6 +419,7 @@ function screenDashboardOffice() {
       <p class="sub">Live from /api/bookings/locations/.../ledger</p>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'postSlot'})">➕ Post an open slot</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'officeSettings'})">⚙️ Office Settings</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
       <div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
@@ -419,6 +437,7 @@ function screenDashboardRep() {
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'profile'})">👤 Edit my profile</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'calendar'})">📅 View calendar</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'browseSlots'})">🔍 Browse open slots</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
 
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
       ${!verified ? `<div class="note">Not verified yet — booking actions are blocked server-side. Sign up with an @meridianpharma.com email to auto-verify in this demo.</div>` : ''}
@@ -474,6 +493,28 @@ async function doResetPassword() {
     alert('Password updated! You can now log in with your new password.');
   } catch (err) {
     setState({ formErr: err.message });
+  }
+}
+
+async function doChangePassword() {
+  const currentPassword = document.getElementById('currentPassword').value;
+  const newPassword = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+
+  if (newPassword !== confirmPassword) {
+    setState({ formErr: "New passwords don't match", passwordChanged: false });
+    return;
+  }
+  if (!newPassword || newPassword.length < 6) {
+    setState({ formErr: 'New password must be at least 6 characters', passwordChanged: false });
+    return;
+  }
+
+  try {
+    await api('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+    setState({ formErr: null, passwordChanged: true });
+  } catch (err) {
+    setState({ formErr: err.message, passwordChanged: false });
   }
 }
 
@@ -911,6 +952,7 @@ function render() {
   else if (state.screen === 'signup') app.innerHTML = screenSignup();
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); loadCatalog(); }
   else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); }
+  else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }
   else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); }
   else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
   else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }

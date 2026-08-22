@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { JwtPayload } from '../auth/auth.types';
 import { sendEmail } from '../email';
+import { requireAuth } from '../auth/auth.guard';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -226,6 +227,40 @@ router.post('/reset-password', async (req, res) => {
       await prisma.rep.update({ where: { id: payload.sub }, data: { passwordHash } });
     } else {
       await prisma.staffUser.update({ where: { id: payload.sub }, data: { passwordHash } });
+    }
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Unexpected server error' });
+  }
+});
+
+// --- Change password (logged-in rep or office staff) ---------------------
+router.post('/change-password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    const isRep = req.user!.role === 'rep';
+    const account = isRep
+      ? await prisma.rep.findUnique({ where: { id: req.user!.sub } })
+      : await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+
+    if (!account || !(await bcrypt.compare(currentPassword, account.passwordHash))) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    if (isRep) {
+      await prisma.rep.update({ where: { id: req.user!.sub }, data: { passwordHash } });
+    } else {
+      await prisma.staffUser.update({ where: { id: req.user!.sub }, data: { passwordHash } });
     }
 
     res.json({ message: 'Password updated successfully' });
