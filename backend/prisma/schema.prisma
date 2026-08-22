@@ -113,6 +113,7 @@ model Location {
   staff  StaffUser[]
   slots  Slot[]
   policy OfficePolicy?
+  recurringSlotTemplates RecurringSlotTemplate[]
 }
 
 model OfficePolicy {

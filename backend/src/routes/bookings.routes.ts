@@ -72,7 +72,11 @@ router.get('/mine', requireAuth, requireRole('rep'), async (req, res) => {
 
 // --- Office staff: view this location's ledger ---------------------------
 router.get('/locations/:locationId/ledger', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
-  assertOwnsLocation(req, req.params.locationId);
+  try {
+    assertOwnsLocation(req, req.params.locationId);
+  } catch (err) {
+    return res.status(403).json({ error: (err as Error).message });
+  }
   const slots = await prisma.slot.findMany({
     where: { locationId: req.params.locationId },
     include: { booking: { include: { rep: true } } },
@@ -83,7 +87,11 @@ router.get('/locations/:locationId/ledger', requireAuth, requireRole('office_adm
 
 // --- Office staff: open a new slot ----------------------------------------
 router.post('/locations/:locationId/slots', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
-  assertOwnsLocation(req, req.params.locationId);
+  try {
+    assertOwnsLocation(req, req.params.locationId);
+  } catch (err) {
+    return res.status(403).json({ error: (err as Error).message });
+  }
   const slot = await prisma.slot.create({
     data: {
       locationId: req.params.locationId,
