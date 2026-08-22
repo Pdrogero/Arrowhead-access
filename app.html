@@ -61,7 +61,7 @@
 <body>
 <header>
   <div class="title"><div class="logo-mark"></div> Arrowhead Access</div>
-  <button class="btn-logout" onclick="logout()">Log out</button>
+  <button id="logoutBtn" class="btn-logout" onclick="logout()">Log out</button>
 </header>
 
 <div id="app"></div>
@@ -729,7 +729,8 @@ window.goToCheckout = async function(plan) {
 // ========== RENDER ==========
 function render() {
   const app = document.getElementById('app');
-  document.getElementById('logoutBtn')?.style.display = state.screen === 'role' ? 'none' : 'block';
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.style.display = state.screen === 'role' ? 'none' : 'block';
 
   if (state.screen === 'role') app.innerHTML = screenRole();
   else if (state.screen === 'login') app.innerHTML = screenLogin();
