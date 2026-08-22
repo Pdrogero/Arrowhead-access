@@ -8,18 +8,18 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 const CATALOG: Record<string, string[]> = {
-  'Smith & Nephew': ['GrafixPL', 'Stravix', 'Oasis'],
-  'Organogenesis': ['Apligraf', 'Dermagraft', 'PuraPly AM'],
-  'Integra LifeSciences': ['Integra Wound Matrix', 'PriMatrix', 'MicroMatrix'],
-  'MTF Biologics': ['DermACELL', 'AmnioClear'],
-  'Medtronic': ['Vascular Closure Devices', 'Endovascular Stents'],
-  'Stryker': ['Foot & Ankle Plating Systems', 'Wound Care Solutions'],
+  'Smith & Nephew': ['GrafixPL', 'Stravix', 'Oasis', 'ALLEVYN Dressings', 'PICO Negative Pressure Wound Therapy'],
+  'Organogenesis': ['Apligraf', 'Dermagraft', 'PuraPly AM', 'Affinity', 'NuShield'],
+  'Integra LifeSciences': ['Integra Wound Matrix', 'PriMatrix', 'MicroMatrix', 'SurgiMend'],
+  'MTF Biologics': ['DermACELL', 'AmnioClear', 'AlloPatch'],
+  'Medtronic': ['Vascular Closure Devices', 'Endovascular Stents', 'Covidien Wound Closure Sutures'],
+  'Stryker': ['Foot & Ankle Plating Systems', 'Wound Care Solutions', 'SurgiCount Safety-Sponge System'],
   'Boston Scientific': ['Peripheral Vascular Devices', 'Interventional Solutions'],
-  '3M (KCI)': ['V.A.C. Therapy System', 'Prevena Incision Management System', 'Tegaderm'],
-  'ConvaTec': ['AQUACEL Ag Advantage', 'Foam Dressings', 'Duoderm'],
-  'Coloplast': ['Biatain Dressings', 'Comfeel'],
-  'Mölnlycke Health Care': ['Mepilex', 'Exufiber'],
-  'MiMedx Group': ['EpiFix', 'AmnioFix'],
+  '3M (KCI)': ['V.A.C. Therapy System', 'Prevena Incision Management System', 'Tegaderm', 'SNaP Wound Care System'],
+  'ConvaTec': ['AQUACEL Ag Advantage', 'Foam Dressings', 'Duoderm', 'Avelle Negative Pressure Wound Therapy'],
+  'Coloplast': ['Biatain Dressings', 'Comfeel', 'Purilon Gel'],
+  'Mölnlycke Health Care': ['Mepilex', 'Exufiber', 'Mepitel'],
+  'MiMedx Group': ['EpiFix', 'AmnioFix', 'EpiCord'],
 };
 
 async function main() {

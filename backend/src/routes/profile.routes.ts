@@ -60,6 +60,29 @@ router.post('/catalog/company', requireAuth, requireRole('rep'), async (req, res
   }
 });
 
+// --- Rep self-service: add a product to an existing manufacturer company --
+router.post('/catalog/company/:companyId/product', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Product name is required' });
+
+    const company = await prisma.manufacturerCompany.findUnique({ where: { id: companyId } });
+    if (!company) return res.status(404).json({ error: 'Unknown manufacturer company' });
+
+    const product = await prisma.product.upsert({
+      where: { companyId_name: { companyId, name } },
+      update: {},
+      create: { companyId, name },
+    });
+
+    res.status(201).json(product);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not add product' });
+  }
+});
+
 // --- Complete / update the logged-in rep's profile ------------------------
 router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
   try {

@@ -448,9 +448,26 @@ async function loadCatalog() {
     const sel = document.getElementById('companySelect');
     if (sel) {
       const opts = catalogData.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-      sel.innerHTML = `<option value="">Select a company…</option>${opts}<option value="__new__">+ My company isn't listed</option>`;
+      sel.innerHTML = `<option value="">Select a company…</option>${opts}<option value="__new__" style="font-weight:700;">+ My company isn't listed</option>`;
     }
   } catch (err) {}
+}
+
+function renderProductsBox(company, checkedIds) {
+  const productsBox = document.getElementById('productsBox');
+  const checklist = (company.products || []).map(p => `
+    <label style="display:flex;align-items:center;font-size:13px;margin-bottom:8px;"><input type="checkbox" class="product-checkbox" value="${p.id}" ${checkedIds.has(p.id) ? 'checked' : ''} style="margin-right:6px;"> ${p.name}</label>
+  `).join('');
+  productsBox.innerHTML = `
+    <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Products you carry</label>
+    <div style="border:1px solid var(--line);border-radius:8px;padding:12px;">
+      ${checklist || `<p style="font-size:12px;color:var(--slate);margin-bottom:8px;">No products listed yet for this company — add yours below.</p>`}
+      <div style="${checklist ? 'margin-top:8px;padding-top:8px;border-top:1px solid var(--line);' : ''}">
+        <input id="newProductName" type="text" placeholder="Product not listed? Add it" style="margin-bottom:6px;">
+        <div id="addProductErr"></div>
+        <button type="button" class="link" style="width:auto;margin:0;" onclick="addProductToCompany('${company.id}')">+ Add product</button>
+      </div>
+    </div>`;
 }
 
 function handleCompanyChange() {
@@ -466,18 +483,37 @@ function handleCompanyChange() {
   addBox.style.display = 'none';
 
   const company = catalogData.find(c => c.id === companyId);
-  if (!company || !company.products.length) {
+  if (!company) {
     productsBox.innerHTML = '';
     return;
   }
-  productsBox.innerHTML = `
-    <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Products you carry</label>
-    <div style="border:1px solid var(--line);border-radius:8px;padding:12px;">
-      ${company.products.map(p => `
-        <label style="display:flex;align-items:center;font-size:13px;margin-bottom:8px;"><input type="checkbox" class="product-checkbox" value="${p.id}" style="margin-right:6px;"> ${p.name}</label>
-      `).join('')}
-    </div>`;
+  renderProductsBox(company, new Set());
 }
+
+window.addProductToCompany = async function(companyId) {
+  const input = document.getElementById('newProductName');
+  const errBox = document.getElementById('addProductErr');
+  const name = input.value.trim();
+  if (!name) {
+    errBox.innerHTML = `<div class="msg err">Product name is required</div>`;
+    return;
+  }
+
+  const checkedIds = new Set(Array.from(document.querySelectorAll('.product-checkbox:checked')).map(e => e.value));
+
+  try {
+    const product = await api(`/api/profile/catalog/company/${companyId}/product`, { method: 'POST', body: JSON.stringify({ name }) });
+    const company = catalogData.find(c => c.id === companyId);
+    if (company && !company.products.some(p => p.id === product.id)) {
+      company.products.push(product);
+      company.products.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    checkedIds.add(product.id);
+    renderProductsBox(company, checkedIds);
+  } catch (err) {
+    errBox.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+};
 
 window.createCompany = async function() {
   const nameInput = document.getElementById('newCompanyName');
