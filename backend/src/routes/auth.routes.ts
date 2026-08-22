@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { JwtPayload } from '../auth/auth.types';
+import { sendEmail } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -163,6 +164,74 @@ router.post('/office/signup', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Unexpected server error during office signup' });
+  }
+});
+
+// --- Forgot / reset password (both rep and office accounts) --------------
+// Uses a short-lived signed JWT as the reset token instead of a DB-backed
+// table — reuses the same JWT_SECRET already configured for login.
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email, role } = req.body; // role: 'rep' | 'office'
+    if (!email || !role) {
+      return res.status(400).json({ error: 'email and role are required' });
+    }
+
+    const account = role === 'rep'
+      ? await prisma.rep.findUnique({ where: { email } })
+      : await prisma.staffUser.findUnique({ where: { email } });
+
+    // Respond identically whether or not the account exists, so this
+    // endpoint can't be used to discover which emails are registered.
+    if (account) {
+      const resetToken = jwt.sign(
+        { sub: account.id, role, type: 'password_reset' },
+        process.env.JWT_SECRET!,
+        { expiresIn: '30m' }
+      );
+      const resetUrl = `${process.env.APP_URL}/app.html?resetToken=${resetToken}`;
+      await sendEmail({
+        to: email,
+        subject: 'Reset your Arrowhead Access password',
+        html: `<p>Someone requested a password reset for this account. Click below to choose a new password — this link expires in 30 minutes.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
+      });
+    }
+
+    res.json({ message: 'If that email is registered, a reset link has been sent.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Unexpected server error' });
+  }
+});
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'token and newPassword are required' });
+    }
+
+    let payload: { sub: string; role: string; type: string };
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET!) as typeof payload;
+    } catch {
+      return res.status(400).json({ error: 'Reset link is invalid or has expired' });
+    }
+    if (payload.type !== 'password_reset') {
+      return res.status(400).json({ error: 'Invalid reset token' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    if (payload.role === 'rep') {
+      await prisma.rep.update({ where: { id: payload.sub }, data: { passwordHash } });
+    } else {
+      await prisma.staffUser.update({ where: { id: payload.sub }, data: { passwordHash } });
+    }
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Unexpected server error' });
   }
 });
 

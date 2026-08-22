@@ -140,8 +140,39 @@ function screenLogin() {
         <input id="email" type="email" placeholder="Email" autocomplete="off" value="${isOffice ? 'staff@meridianfamilypractice.com' : ''}">
         <input id="password" type="password" placeholder="Password" autocomplete="off" value="${isOffice ? 'demo1234' : ''}">
         <button class="primary" onclick="doLogin()">Log In</button>
+        <button class="link" onclick="setState({screen:'forgotPassword',role:state.role})">Forgot password?</button>
         ${!isOffice ? `<button class="link" onclick="setState({screen:'signup'})">Create Account</button>` : ''}
         ${isOffice ? `<button class="link" onclick="setState({screen:'signup'})">New office? Create an account</button>` : ''}
+      </div>
+    </div>`;
+}
+
+function screenForgotPassword() {
+  const isOffice = state.role === 'office';
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'login'})">&larr; Back</button>
+      <h1>Reset your password</h1>
+      <p class="sub">Enter your ${isOffice ? 'office' : 'rep'} account email and we'll send you a link to set a new password.</p>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        ${state.forgotSent ? `<div class="msg ok">If that email is registered, a reset link is on its way.</div>` : `
+          <input id="forgotEmail" type="email" placeholder="Email" autocomplete="off">
+          <button class="primary" onclick="doForgotPassword()">Send reset link</button>
+        `}
+      </div>
+    </div>`;
+}
+
+function screenResetPassword() {
+  return `
+    <div class="wrap">
+      <h1>Choose a new password</h1>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        <input id="newPassword" type="password" placeholder="New password" autocomplete="off">
+        <input id="confirmPassword" type="password" placeholder="Confirm new password" autocomplete="off">
+        <button class="primary" onclick="doResetPassword()">Set new password</button>
       </div>
     </div>`;
 }
@@ -405,6 +436,42 @@ async function doLogin() {
     localStorage.setItem('token', res.token);
     state.me = res;
     setState({ screen: 'dashboard', role: state.role });
+  } catch (err) {
+    setState({ formErr: err.message });
+  }
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('forgotEmail').value;
+  const role = state.role === 'office' ? 'office' : 'rep';
+
+  try {
+    await api('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email, role }) });
+    setState({ forgotSent: true, formErr: null });
+  } catch (err) {
+    setState({ formErr: err.message });
+  }
+}
+
+async function doResetPassword() {
+  const newPassword = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+
+  if (newPassword !== confirmPassword) {
+    setState({ formErr: "Passwords don't match" });
+    return;
+  }
+  if (!newPassword || newPassword.length < 6) {
+    setState({ formErr: 'Password must be at least 6 characters' });
+    return;
+  }
+
+  try {
+    await api('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token: state.resetToken, newPassword }) });
+    state.resetToken = null;
+    window.history.replaceState({}, '', window.location.pathname);
+    setState({ screen: 'role', formErr: null });
+    alert('Password updated! You can now log in with your new password.');
   } catch (err) {
     setState({ formErr: err.message });
   }
@@ -835,10 +902,12 @@ function render() {
   const app = document.getElementById('app');
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.style.display = state.screen === 'role' ? 'none' : 'block';
-  document.body.classList.toggle('medical-bg', state.screen === 'login');
+  document.body.classList.toggle('medical-bg', ['login', 'forgotPassword', 'resetPassword'].includes(state.screen));
 
   if (state.screen === 'role') app.innerHTML = screenRole();
   else if (state.screen === 'login') app.innerHTML = screenLogin();
+  else if (state.screen === 'forgotPassword') app.innerHTML = screenForgotPassword();
+  else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
   else if (state.screen === 'signup') app.innerHTML = screenSignup();
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); loadCatalog(); }
   else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); }
@@ -855,7 +924,12 @@ function render() {
 }
 
 // Init
-if (localStorage.getItem('token')) {
+const resetTokenParam = new URLSearchParams(window.location.search).get('resetToken');
+if (resetTokenParam) {
+  state.resetToken = resetTokenParam;
+  state.screen = 'resetPassword';
+  render();
+} else if (localStorage.getItem('token')) {
   api('/api/profile/rep').then(me => {
     state.me = me;
     state.role = 'rep';
