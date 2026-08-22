@@ -4,7 +4,7 @@
 // Mount with: app.use('/api/policies', policiesRouter)
 
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, SlotStatus } from '@prisma/client';
 import { requireAuth } from '../auth/auth.guard';
 
 const prisma = new PrismaClient();
@@ -125,7 +125,7 @@ async function generateSlotsFromTemplate(locationId: string, template: any) {
         locationId,
         startTime: slotStart,
         endTime: slotEnd,
-        status: 'OPEN',
+        status: SlotStatus.OPEN,
         eventType: template.eventType,
       });
     }
