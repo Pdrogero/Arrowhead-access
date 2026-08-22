@@ -191,6 +191,7 @@ function screenProfile() {
         <input id="phone" type="tel" placeholder="Phone number">
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Manufacturer company</label>
         <select id="companySelect" onchange="handleCompanyChange()" style="margin-bottom:6px;"><option value="">Select a company…</option></select>
+        <button type="button" onclick="showAddCompany()" style="display:block;background:none;border:none;color:var(--teal);font-size:13px;font-weight:700;padding:0;margin-bottom:12px;cursor:pointer;">+ My company isn't listed</button>
         <p style="font-size:12px;color:var(--slate);margin-bottom:12px;">Select a company to see its products.</p>
         <div id="productsBox" style="margin-bottom:12px;"></div>
         <div id="addCompanyBox" style="display:none;border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px;">
@@ -448,7 +449,7 @@ async function loadCatalog() {
     const sel = document.getElementById('companySelect');
     if (sel) {
       const opts = catalogData.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-      sel.innerHTML = `<option value="">Select a company…</option>${opts}<option value="__new__" style="font-weight:700;">+ My company isn't listed</option>`;
+      sel.innerHTML = `<option value="">Select a company…</option>${opts}`;
     }
   } catch (err) {}
 }
@@ -470,23 +471,20 @@ function renderProductsBox(company, checkedIds) {
     </div>`;
 }
 
+function showAddCompany() {
+  document.getElementById('addCompanyBox').style.display = 'block';
+}
+
 function handleCompanyChange() {
   const companyId = document.getElementById('companySelect').value;
   const productsBox = document.getElementById('productsBox');
-  const addBox = document.getElementById('addCompanyBox');
-
-  if (companyId === '__new__') {
-    productsBox.innerHTML = '';
-    addBox.style.display = 'block';
-    return;
-  }
-  addBox.style.display = 'none';
 
   const company = catalogData.find(c => c.id === companyId);
   if (!company) {
     productsBox.innerHTML = '';
     return;
   }
+  document.getElementById('addCompanyBox').style.display = 'none';
   renderProductsBox(company, new Set());
 }
 
@@ -534,6 +532,7 @@ window.createCompany = async function() {
     const sel = document.getElementById('companySelect');
     sel.value = company.id;
     handleCompanyChange();
+    document.getElementById('addCompanyBox').style.display = 'none';
     nameInput.value = '';
     productsInput.value = '';
   } catch (err) {
@@ -544,8 +543,7 @@ window.createCompany = async function() {
 async function saveProfile() {
   const title = document.getElementById('title').value;
   const phone = document.getElementById('phone').value;
-  const companySelect = document.getElementById('companySelect').value;
-  const companyId = companySelect === '__new__' ? '' : companySelect;
+  const companyId = document.getElementById('companySelect').value;
   const specialties = Array.from(document.querySelectorAll('.specialty:checked')).map(e => e.value);
   const productIds = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(e => e.value);
 
