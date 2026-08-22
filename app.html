@@ -742,7 +742,7 @@ function render() {
   const app = document.getElementById('app');
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.style.display = state.screen === 'role' ? 'none' : 'block';
-  document.body.classList.toggle('medical-bg', state.screen === 'login' && state.role === 'rep');
+  document.body.classList.toggle('medical-bg', state.screen === 'login');
 
   if (state.screen === 'role') app.innerHTML = screenRole();
   else if (state.screen === 'login') app.innerHTML = screenLogin();
