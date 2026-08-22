@@ -56,6 +56,17 @@
     header{position:sticky;top:0;z-index:99;background:#fff;border-bottom:1px solid var(--line);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;}
     header .title{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--ink);}
     #app{min-height:100vh;}
+    body.medical-bg{
+      min-height:100vh;
+      background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72'%3E%3Cg fill='none' stroke='%232D6F5E' stroke-width='2.5' stroke-linecap='round' opacity='0.14'%3E%3Cpath d='M36 20v32M20 36h32'/%3E%3C/g%3E%3C/svg%3E"),
+        radial-gradient(circle at 15% 10%, #EAF6F1 0%, transparent 55%),
+        linear-gradient(180deg, #F1FAF6 0%, #FFFFFF 60%);
+      background-repeat:repeat, no-repeat, no-repeat;
+      background-size:72px 72px, cover, cover;
+      background-attachment:fixed, fixed, fixed;
+    }
+    body.medical-bg .card{box-shadow:0 12px 32px rgba(31,74,63,0.14);}
   </style>
 </head>
 <body>
@@ -731,6 +742,7 @@ function render() {
   const app = document.getElementById('app');
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.style.display = state.screen === 'role' ? 'none' : 'block';
+  document.body.classList.toggle('medical-bg', state.screen === 'login' && state.role === 'rep');
 
   if (state.screen === 'role') app.innerHTML = screenRole();
   else if (state.screen === 'login') app.innerHTML = screenLogin();
