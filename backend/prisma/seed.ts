@@ -8,7 +8,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 const CATALOG: Record<string, string[]> = {
-  'Smith & Nephew': ['GrafixPL', 'Stravix', 'Oasis', 'ALLEVYN Dressings', 'PICO Negative Pressure Wound Therapy'],
+  'Smith & Nephew': ['GrafixPL', 'Stravix', 'Oasis', 'ALLEVYN Dressings', 'PICO Negative Pressure Wound Therapy', 'VERSAJET Hydrosurgery System'],
   'Organogenesis': ['Apligraf', 'Dermagraft', 'PuraPly AM', 'Affinity', 'NuShield'],
   'Integra LifeSciences': ['Integra Wound Matrix', 'PriMatrix', 'MicroMatrix', 'SurgiMend'],
   'MTF Biologics': ['DermACELL', 'AmnioClear', 'AlloPatch'],
