@@ -137,8 +137,8 @@ function screenLogin() {
       <h1>${isOffice ? 'Office Login' : 'Sales Rep Login'}</h1>
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
-        <input id="email" type="email" placeholder="Email" value="${isOffice ? 'staff@meridianfamilypractice.com' : ''}">
-        <input id="password" type="password" placeholder="Password" value="${isOffice ? 'demo1234' : ''}">
+        <input id="email" type="email" placeholder="Email" autocomplete="off" value="${isOffice ? 'staff@meridianfamilypractice.com' : ''}">
+        <input id="password" type="password" placeholder="Password" autocomplete="off" value="${isOffice ? 'demo1234' : ''}">
         <button class="primary" onclick="doLogin()">Log In</button>
         ${!isOffice ? `<button class="link" onclick="setState({screen:'signup'})">Create Account</button>` : ''}
         ${isOffice ? `<button class="link" onclick="setState({screen:'signup'})">New office? Create an account</button>` : ''}
