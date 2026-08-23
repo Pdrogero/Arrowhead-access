@@ -276,11 +276,15 @@ function screenProfile() {
           <option>Owner / Independent Rep</option>
           <option>Other</option>
         </select>
+
+        <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Email address</label>
+        <div id="primaryEmailDisplay" style="padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:8px;background:var(--paper);color:var(--slate);"></div>
+        <input id="additionalEmail" type="email" placeholder="Add an additional email (optional)">
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <input id="phone" type="tel" placeholder="Phone number">
           <input id="mobilePhone" type="tel" placeholder="Mobile number">
         </div>
-        <input id="additionalEmail" type="email" placeholder="Additional email (optional)">
         <input id="credentials" type="text" placeholder="Credentials (e.g. RN, CWS)">
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Relationship to company</label>
         <select id="relationshipToCompany" style="margin-bottom:16px;">
@@ -1313,6 +1317,7 @@ async function loadProfile() {
     document.getElementById('lastName').value = rest.join(' ');
     document.getElementById('title').value = profile.title || '';
     document.getElementById('roleFunction').value = profile.roleFunction || '';
+    document.getElementById('primaryEmailDisplay').textContent = profile.email || state.me?.email || '';
     document.getElementById('phone').value = profile.phone || '';
     document.getElementById('mobilePhone').value = profile.mobilePhone || '';
     document.getElementById('additionalEmail').value = profile.additionalEmail || '';

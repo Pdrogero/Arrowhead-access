@@ -111,6 +111,7 @@ router.get('/rep', requireAuth, requireRole('rep'), async (req, res) => {
       where: { id: req.user!.sub },
       select: {
         name: true,
+        email: true,
         title: true,
         roleFunction: true,
         phone: true,
