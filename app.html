@@ -30,6 +30,11 @@
     button.primary{width:100%;background:var(--ink);color:#fff;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:12px;}
     button.primary:disabled{opacity:.4;}
     button.link{width:100%;background:none;border:none;color:var(--teal);font-size:12px;margin-top:12px;margin-bottom:10px;cursor:pointer;}
+    .navgrid{display:flex;justify-content:space-between;gap:4px;margin:20px 0;}
+    .navicon{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:none;cursor:pointer;padding:10px 2px;border-radius:10px;color:var(--ink);}
+    .navicon:hover{background:var(--paper);}
+    .navicon-emoji{font-size:19px;line-height:1;}
+    .navicon-label{font-size:10.5px;font-weight:600;color:var(--slate);text-align:center;line-height:1.2;}
     .listcard{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;}
     .row{display:flex;align-items:center;gap:12px;padding:14px;border-bottom:1px solid var(--line);}
     .row:last-child{border-bottom:none;}
@@ -1128,17 +1133,19 @@ function screenDashboardRep() {
   const firstName = (state.me?.name || '').trim().split(' ')[0] || state.me?.email || 'there';
   return `
     <div class="wrap wide">
-      <h1>Hello, ${firstName} 👋</h1>
+      <h1>Hello, ${firstName}</h1>
       <p class="sub">${verified ? '✅ verified' : '⏳ not verified'}</p>
 
       <div id="billingBox" class="card" style="margin-bottom:24px;"><div class="empty">Loading plan…</div></div>
 
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'transfers'})">🔁 View transfers</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="openCalendar()">📅 View calendar</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'browseSlots'})">🔍 Browse open slots</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'messages'})">💬 Messages</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'literature'})">📄 Literature</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="toggleProfileMenu()">👤 Profile ▾</button>
+      <div class="navgrid">
+        <button class="navicon" onclick="setState({screen:'transfers'})"><span class="navicon-emoji">🔄</span><span class="navicon-label">Transfers</span></button>
+        <button class="navicon" onclick="openCalendar()"><span class="navicon-emoji">📅</span><span class="navicon-label">Calendar</span></button>
+        <button class="navicon" onclick="setState({screen:'browseSlots'})"><span class="navicon-emoji">🔍</span><span class="navicon-label">Open Slots</span></button>
+        <button class="navicon" onclick="setState({screen:'messages'})"><span class="navicon-emoji">💬</span><span class="navicon-label">Messages</span></button>
+        <button class="navicon" onclick="setState({screen:'literature'})"><span class="navicon-emoji">📄</span><span class="navicon-label">Literature</span></button>
+        <button class="navicon" onclick="toggleProfileMenu()"><span class="navicon-emoji">👤</span><span class="navicon-label">Profile ▾</span></button>
+      </div>
       <div id="profileMenuBox"></div>
 
       <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Your bookings</p>
@@ -1644,7 +1651,7 @@ window.toggleProfileMenu = function() {
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="scrollToBilling()">💳 Billing</button>
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="openCalendar()">📅 Calendar Sync</button>
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
-      <button class="link" style="text-align:left;margin-bottom:0;color:#C23C3C;" onclick="logout()">🚪 Logout</button>
+      <button class="link" style="text-align:left;margin-bottom:0;color:#C23C3C;" onclick="logout()">⏻ Logout</button>
     </div>`;
 };
 
