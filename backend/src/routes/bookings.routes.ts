@@ -101,7 +101,25 @@ router.post('/locations/:locationId/slots', requireAuth, requireRole('office_adm
       status: 'OPEN',
       createdByStaffId: req.user!.sub,
     },
+    include: { location: true },
   });
+
+  // Notify reps who've had a confirmed visit at this location before.
+  const pastReps = await prisma.rep.findMany({
+    where: { bookings: { some: { status: 'CONFIRMED', slot: { locationId: req.params.locationId } } } },
+    select: { email: true },
+  });
+  if (pastReps.length) {
+    const dateStr = slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    for (const rep of pastReps) {
+      sendEmail({
+        to: rep.email,
+        subject: `New open slot at ${slot.location.name}`,
+        html: `<p><strong>${slot.location.name}</strong>, a location you've visited before, just posted a new open slot on ${dateStr}. Log in to claim it before someone else does.</p>`,
+      }).catch(() => {});
+    }
+  }
+
   res.status(201).json(slot);
 });
 
