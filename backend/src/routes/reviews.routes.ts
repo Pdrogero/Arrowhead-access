@@ -69,4 +69,34 @@ router.post('/:bookingId', requireAuth, async (req, res) => {
   }
 });
 
+// --- Aggregate rating: how reps have rated a location ----------------------
+router.get('/office-average/:locationId', requireAuth, async (req, res) => {
+  try {
+    const result = await prisma.visitReview.aggregate({
+      where: { authorType: 'REP', booking: { slot: { locationId: req.params.locationId } } },
+      _avg: { rating: true },
+      _count: true,
+    });
+    res.json({ average: result._avg.rating, count: result._count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch rating' });
+  }
+});
+
+// --- Aggregate rating: how offices have rated a rep -------------------------
+router.get('/rep-average/:repId', requireAuth, async (req, res) => {
+  try {
+    const result = await prisma.visitReview.aggregate({
+      where: { authorType: 'OFFICE', booking: { repId: req.params.repId } },
+      _avg: { rating: true },
+      _count: true,
+    });
+    res.json({ average: result._avg.rating, count: result._count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch rating' });
+  }
+});
+
 export default router;

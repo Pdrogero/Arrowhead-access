@@ -94,6 +94,7 @@ let calendarMonth = new Date();
 let calendarBookings = [];
 let calendarSelectedDay = null;
 let openSlotsData = [];
+let browseOfficeRatings = {};
 let browseSearchQuery = '';
 let browseViewMode = 'list'; // 'list' | 'calendar'
 let browseCalendarMonth = new Date();
@@ -418,6 +419,7 @@ function renderBrowseList(slots) {
         <div class="who">${s.location.name}</div>
         <div class="what">${s.location.address}</div>
         <div class="what" style="margin-top:4px;"><strong>${eventTypeLabel(s.eventType)}</strong></div>
+        ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count)}
       </div>
       <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
     </div>`).join('')}</div>`;
@@ -470,6 +472,7 @@ function renderBrowseCalendar(slots) {
             <div class="mid">
               <div class="who">${s.location.name}</div>
               <div class="what">${eventTypeLabel(s.eventType)}</div>
+              ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count)}
             </div>
             <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
           </div>`).join('') : '<div class="empty">No open slots this day.</div>'}
@@ -751,6 +754,24 @@ window.saveReview = async function() {
     setState({ formErr: err.message, reviewSaved: false });
   }
 };
+
+function ratingBadge(average, count) {
+  if (!count) return `<span style="font-size:11px;color:var(--slate);">No ratings yet</span>`;
+  return `<span style="font-size:11px;color:var(--slate);">⭐ ${average.toFixed(1)} (${count})</span>`;
+}
+
+async function fetchRatingAverages(ids, kind) {
+  const unique = [...new Set(ids)].filter(Boolean);
+  const entries = await Promise.all(unique.map(async id => {
+    try {
+      const res = await api(`/api/reviews/${kind}-average/${id}`);
+      return [id, res];
+    } catch (err) {
+      return [id, { average: null, count: 0 }];
+    }
+  }));
+  return Object.fromEntries(entries);
+}
 
 function screenTransfers() {
   return `
@@ -1172,11 +1193,13 @@ async function loadOfficeLedger() {
   try {
     const slots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
     if (!slots.length) { box.innerHTML = '<div class="empty">No slots yet.</div>'; return; }
+    const repIds = slots.filter(s => s.booking?.rep).map(s => s.booking.rep.id);
+    const repRatings = await fetchRatingAverages(repIds, 'rep');
     box.innerHTML = slots.map(s => `
       <div class="row">
         <div class="time">${fmtTime(s.startTime)}</div>
         <div class="mid">
-          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>` : `<div class="what">Open slot</div>`}
+          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count)}` : `<div class="what">Open slot</div>`}
         </div>
         <span class="chip ${s.status}">${s.status}</span>
         ${s.status === 'REQUESTED' && s.booking ? `
@@ -1195,10 +1218,11 @@ async function loadMyBookings() {
   try {
     const bookings = await api('/api/bookings/mine');
     if (!bookings.length) { box.innerHTML = '<div class="empty">No bookings yet.</div>'; return; }
+    const officeRatings = await fetchRatingAverages(bookings.map(b => b.slot.location.id), 'office');
     box.innerHTML = bookings.map(b => `
       <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(b.slot.startTime)}</div>
-        <div class="mid"><div class="who">${b.slot.location.name}</div></div>
+        <div class="mid"><div class="who">${b.slot.location.name}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}</div>
         <span class="chip ${b.status}">${b.status}</span>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
         ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
@@ -1261,6 +1285,7 @@ async function loadOpenSlots() {
   const content = document.getElementById('browseContent');
   try {
     openSlotsData = await api('/api/slots/open');
+    browseOfficeRatings = await fetchRatingAverages(openSlotsData.map(s => s.location.id), 'office');
     renderBrowseContent();
   } catch (err) {
     content.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
