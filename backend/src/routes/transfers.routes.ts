@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
+import { sendEmail } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -37,8 +38,19 @@ router.post('/', requireAuth, requireRole('rep'), async (req, res) => {
 
     const transfer = await prisma.bookingTransfer.create({
       data: { bookingId, fromRepId: req.user!.sub, toRepId: toRep.id },
-      include: { booking: { include: { slot: { include: { location: true } } } }, toRep: true },
+      include: {
+        booking: { include: { slot: { include: { location: true } } } },
+        toRep: true,
+        fromRep: { select: { name: true, companyName: true } },
+      },
     });
+
+    const dateStr = transfer.booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    sendEmail({
+      to: transfer.toRep.email,
+      subject: `${transfer.fromRep.name} wants to transfer a visit to you`,
+      html: `<p><strong>${transfer.fromRep.name}</strong> (${transfer.fromRep.companyName}) wants to transfer their visit at <strong>${transfer.booking.slot.location.name}</strong> on ${dateStr} to you. Log in to accept or decline it.</p>`,
+    }).catch(() => {});
 
     res.status(201).json(transfer);
   } catch (err) {
@@ -92,6 +104,24 @@ router.post('/:id/decide', requireAuth, requireRole('rep'), async (req, res) => 
       ]);
     } else {
       await prisma.bookingTransfer.update({ where: { id: transfer.id }, data: { status: 'DECLINED', decidedAt: new Date() } });
+    }
+
+    const full = await prisma.bookingTransfer.findUnique({
+      where: { id: transfer.id },
+      include: {
+        booking: { include: { slot: { include: { location: true } } } },
+        fromRep: true,
+        toRep: { select: { name: true } },
+      },
+    });
+    if (full) {
+      const dateStr = full.booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const accepted = decision === 'accept';
+      sendEmail({
+        to: full.fromRep.email,
+        subject: accepted ? `${full.toRep.name} accepted your transfer` : `${full.toRep.name} declined your transfer`,
+        html: `<p><strong>${full.toRep.name}</strong> ${accepted ? 'accepted' : 'declined'} the visit transfer for <strong>${full.booking.slot.location.name}</strong> on ${dateStr}.</p>`,
+      }).catch(() => {});
     }
 
     res.json({ status: decision === 'accept' ? 'ACCEPTED' : 'DECLINED' });

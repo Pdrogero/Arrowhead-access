@@ -98,6 +98,10 @@ let browseSearchQuery = '';
 let browseViewMode = 'list'; // 'list' | 'calendar'
 let browseCalendarMonth = new Date();
 let browseCalendarSelectedDay = null;
+let attendanceBookingId = null;
+let attendanceLocationName = '';
+let attendanceDateStr = '';
+let attendeeRows = [];
 
 // ========== UTILITY ==========
 async function api(path, options = {}) {
@@ -521,6 +525,79 @@ function screenCalendar() {
             </div>`).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
         </div>` : ''}
     </div>`;
+}
+
+function screenAttendance() {
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <h1>Visit attendance</h1>
+      <p class="sub">${attendanceLocationName} — ${attendanceDateStr}</p>
+      <p style="font-size:12px;color:var(--slate);margin-bottom:16px;">Log everyone who attended, for your own expense report. NPI is optional.</p>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        <div id="attendeeRowsBox"></div>
+        <button type="button" class="link" style="text-align:left;margin-top:4px;" onclick="addAttendeeRow()">+ Add attendee</button>
+        <button class="primary" style="margin-top:12px;" onclick="saveAttendees()">Save attendance</button>
+      </div>
+    </div>`;
+}
+
+function renderAttendeeRows() {
+  const box = document.getElementById('attendeeRowsBox');
+  if (!attendeeRows.length) {
+    box.innerHTML = `<p style="font-size:13px;color:var(--slate);margin-bottom:12px;">No attendees added yet.</p>`;
+    return;
+  }
+  box.innerHTML = attendeeRows.map((a, i) => `
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+      <input type="text" placeholder="First name" value="${a.firstName || ''}" oninput="updateAttendeeField(${i},'firstName',this.value)" style="margin-bottom:0;flex:1;">
+      <input type="text" placeholder="Last name" value="${a.lastName || ''}" oninput="updateAttendeeField(${i},'lastName',this.value)" style="margin-bottom:0;flex:1;">
+      <input type="text" placeholder="NPI (optional)" value="${a.npi || ''}" oninput="updateAttendeeField(${i},'npi',this.value)" style="margin-bottom:0;flex:1;">
+      <button type="button" onclick="removeAttendeeRow(${i})" title="Remove" style="background:none;border:none;color:#C23C3C;font-size:16px;cursor:pointer;padding:4px 8px;">✕</button>
+    </div>
+  `).join('');
+}
+
+window.updateAttendeeField = function(index, field, value) {
+  attendeeRows[index][field] = value;
+};
+
+window.addAttendeeRow = function() {
+  attendeeRows.push({ firstName: '', lastName: '', npi: '' });
+  renderAttendeeRows();
+};
+
+window.removeAttendeeRow = function(index) {
+  attendeeRows.splice(index, 1);
+  renderAttendeeRows();
+};
+
+window.openAttendance = function(bookingId, locationName, dateStr) {
+  attendanceBookingId = bookingId;
+  attendanceLocationName = locationName;
+  attendanceDateStr = dateStr;
+  setState({ screen: 'attendance' });
+};
+
+async function loadAttendees() {
+  try {
+    const attendees = await api(`/api/bookings/${attendanceBookingId}/attendees`);
+    attendeeRows = attendees.map(a => ({ firstName: a.firstName, lastName: a.lastName, npi: a.npi || '' }));
+  } catch (err) {
+    attendeeRows = [];
+  }
+  renderAttendeeRows();
+}
+
+async function saveAttendees() {
+  const cleaned = attendeeRows.filter(a => a.firstName.trim() && a.lastName.trim());
+  try {
+    await api(`/api/bookings/${attendanceBookingId}/attendees`, { method: 'POST', body: JSON.stringify({ attendees: cleaned }) });
+    setState({ screen: 'dashboard' });
+  } catch (err) {
+    setState({ formErr: err.message });
+  }
 }
 
 function screenTransfers() {
@@ -971,6 +1048,7 @@ async function loadMyBookings() {
         <div class="mid"><div class="who">${b.slot.location.name}</div></div>
         <span class="chip ${b.status}">${b.status}</span>
         ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
+        ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openAttendance('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime)}')">📝 Attendance</button>` : ''}
         ${b.status === 'CONFIRMED' && b.slot.eventType === 'LUNCH' ? `
           <div style="width:100%;display:flex;gap:8px;margin-top:8px;">
             <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🍽️ Order via ezCater</button>
@@ -1154,6 +1232,7 @@ function render() {
   else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); }
   else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
   else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }
+  else if (state.screen === 'attendance') { app.innerHTML = screenAttendance(); loadAttendees(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); loadCalendarBookings(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }

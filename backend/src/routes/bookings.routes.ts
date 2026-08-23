@@ -6,6 +6,7 @@ import { requireAuth, requireRole, requireVerifiedRep } from '../auth/auth.guard
 import { assertOwnsLocation } from '../auth/scoping';
 import { claimOpenSlot, requestNewSlot, decideBooking, BookingError } from '../booking/booking.service';
 import { PrismaClient } from '@prisma/client';
+import { sendEmail } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -109,9 +110,78 @@ router.post('/:bookingId/decide', requireAuth, requireRole('office_admin', 'offi
   try {
     const { decision } = req.body; // 'approve' | 'decline'
     const booking = await decideBooking({ bookingId: req.params.bookingId, decision, staffId: req.user!.sub });
+
+    const full = await prisma.booking.findUnique({
+      where: { id: booking.id },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+    if (full) {
+      const dateStr = full.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const approved = decision === 'approve';
+      sendEmail({
+        to: full.rep.email,
+        subject: approved ? 'Your visit request was approved' : 'Your visit request was declined',
+        html: `<p>Your visit request at <strong>${full.slot.location.name}</strong> on ${dateStr} was ${approved ? 'approved' : 'declined'}.</p>`,
+      }).catch(() => {});
+    }
+
     res.json(booking);
   } catch (err) {
     handleBookingError(err, res);
+  }
+});
+
+// --- Rep: view the attendee list logged for one of their own bookings -----
+router.get('/:bookingId/attendees', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({ where: { id: req.params.bookingId } });
+    if (!booking || booking.repId !== req.user!.sub) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+    const attendees = await prisma.visitAttendee.findMany({
+      where: { bookingId: req.params.bookingId },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(attendees);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch attendees' });
+  }
+});
+
+// --- Rep: log/replace the attendee list for one of their own bookings -----
+// For their own expense-report records. NPI is optional.
+router.post('/:bookingId/attendees', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({ where: { id: req.params.bookingId } });
+    if (!booking || booking.repId !== req.user!.sub) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    const attendees = Array.isArray(req.body.attendees) ? req.body.attendees : [];
+    const cleaned = attendees
+      .map((a: any) => ({
+        firstName: String(a.firstName || '').trim(),
+        lastName: String(a.lastName || '').trim(),
+        npi: a.npi ? String(a.npi).trim() : null,
+      }))
+      .filter((a: any) => a.firstName && a.lastName);
+
+    await prisma.$transaction([
+      prisma.visitAttendee.deleteMany({ where: { bookingId: req.params.bookingId } }),
+      prisma.visitAttendee.createMany({
+        data: cleaned.map((a: any) => ({ ...a, bookingId: req.params.bookingId })),
+      }),
+    ]);
+
+    const saved = await prisma.visitAttendee.findMany({
+      where: { bookingId: req.params.bookingId },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(saved);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not save attendees' });
   }
 });
 

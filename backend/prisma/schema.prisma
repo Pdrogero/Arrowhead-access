@@ -263,8 +263,23 @@ model Booking {
   decidedAt   DateTime?
 
   transfers   BookingTransfer[]
+  attendees   VisitAttendee[]
 
   @@index([repId, status])
+}
+
+// Attendee list a rep logs after a visit — for their own expense-report
+// records. NPI is optional (Concur already offers NPI lookup separately).
+model VisitAttendee {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  firstName String
+  lastName  String
+  npi       String?
+  createdAt DateTime @default(now())
+
+  @@index([bookingId])
 }
 
 model BookingTransfer {
