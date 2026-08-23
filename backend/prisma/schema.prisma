@@ -115,6 +115,8 @@ model Location {
   policy OfficePolicy?
   recurringSlotTemplates RecurringSlotTemplate[]
   employees OfficeEmployee[]
+  conversations Conversation[]
+  literatureItems LiteratureItem[]
 }
 
 // A simple staff directory the office maintains, visible to reps who've
@@ -222,11 +224,17 @@ model Rep {
   billingCycle         BillingCycle?
   subscriptionStatus   SubscriptionStatus  @default(TRIALING)
   trialEndsAt          DateTime?
+  currentPeriodEnd     DateTime?           // next renewal/charge date, synced from Stripe
+  renewalReminder30dSent Boolean           @default(false)
+  renewalReminder7dSent  Boolean           @default(false)
+  renewalReminder1dSent  Boolean           @default(false)
 
   verificationRequests VerificationRequest[]
   bookings             Booking[]
   transfersSent        BookingTransfer[]   @relation("TransfersSent")
   transfersReceived    BookingTransfer[]   @relation("TransfersReceived")
+  conversations        Conversation[]
+  literatureItems      LiteratureItem[]
 }
 
 model VerificationRequest {
@@ -344,4 +352,62 @@ model Subscription {
   status               SubscriptionStatus  @default(TRIALING)
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
+}
+
+// --- In-app messaging: one conversation per (rep, office location) pair ---
+
+model Conversation {
+  id         String    @id @default(cuid())
+  repId      String
+  rep        Rep       @relation(fields: [repId], references: [id])
+  locationId String
+  location   Location  @relation(fields: [locationId], references: [id])
+  createdAt  DateTime  @default(now())
+
+  messages   Message[]
+
+  @@unique([repId, locationId])
+}
+
+enum MessageSenderType {
+  REP
+  OFFICE
+}
+
+model Message {
+  id             String            @id @default(cuid())
+  conversationId String
+  conversation   Conversation      @relation(fields: [conversationId], references: [id])
+  senderType     MessageSenderType
+  senderId       String
+  body           String
+  createdAt      DateTime          @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+// --- Literature & samples a rep sends an office to review ------------------
+
+enum LiteratureStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+model LiteratureItem {
+  id                String           @id @default(cuid())
+  repId             String
+  rep               Rep              @relation(fields: [repId], references: [id])
+  locationId        String
+  location          Location         @relation(fields: [locationId], references: [id])
+  title             String
+  description       String?
+  linkUrl           String?
+  status            LiteratureStatus @default(PENDING)
+  reviewedByStaffId String?
+  reviewedAt        DateTime?
+  createdAt         DateTime         @default(now())
+
+  @@index([locationId, status])
+  @@index([repId])
 }

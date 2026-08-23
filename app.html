@@ -109,6 +109,13 @@ let viewedOfficeStaffName = '';
 let reviewBookingId = null;
 let reviewCounterpartName = '';
 let reviewRating = 0;
+let conversationsData = [];
+let activeConversationId = null;
+let activeConversationCounterpart = '';
+let activeConversationTargetId = null;
+let conversationMessages = [];
+let literatureRows = [];
+let literatureTargetLocationId = '';
 
 // ========== UTILITY ==========
 async function api(path, options = {}) {
@@ -773,6 +780,208 @@ async function fetchRatingAverages(ids, kind) {
   return Object.fromEntries(entries);
 }
 
+function screenMessages() {
+  return `
+    <div class="wrap wide">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <h1>Messages</h1>
+      <div id="conversationsBox" class="listcard"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+
+async function loadConversations() {
+  const box = document.getElementById('conversationsBox');
+  try {
+    conversationsData = await api('/api/messages/conversations');
+    if (!conversationsData.length) { box.innerHTML = '<div class="empty">No conversations yet.</div>'; return; }
+    box.innerHTML = conversationsData.map(c => {
+      const counterpart = state.role === 'rep' ? c.location.name : `${c.rep.name} · ${c.rep.companyName}`;
+      const targetId = state.role === 'rep' ? c.location.id : c.rep.id;
+      const preview = c.messages[0] ? c.messages[0].body : 'No messages yet';
+      return `
+      <div class="row" style="cursor:pointer;" onclick="openConversation('${c.id}', '${counterpart.replace(/'/g, "\\'")}', '${targetId}')">
+        <div class="mid">
+          <div class="who">${counterpart}</div>
+          <div class="what">${preview.replace(/</g, '&lt;')}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+window.openConversation = function(id, counterpart, targetId) {
+  activeConversationId = id;
+  activeConversationCounterpart = counterpart;
+  activeConversationTargetId = targetId;
+  setState({ screen: 'conversation' });
+};
+
+window.startConversation = function(targetId, counterpart) {
+  activeConversationId = null;
+  activeConversationCounterpart = counterpart;
+  activeConversationTargetId = targetId;
+  conversationMessages = [];
+  setState({ screen: 'conversation' });
+};
+
+function screenConversation() {
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'messages'})">&larr; Back to messages</button>
+      <h1>${activeConversationCounterpart}</h1>
+      <div id="messagesBox" class="listcard" style="margin-bottom:12px;max-height:400px;overflow-y:auto;"><div class="empty">Loading…</div></div>
+      <div style="display:flex;gap:8px;">
+        <input id="newMessageBody" type="text" placeholder="Type a message…" style="flex:1;margin-bottom:0;" onkeydown="if(event.key==='Enter')sendMessage()">
+        <button class="primary" style="width:auto;margin-bottom:0;padding:0 20px;" onclick="sendMessage()">Send</button>
+      </div>
+    </div>`;
+}
+
+async function loadConversationMessages() {
+  if (!activeConversationId) { renderMessages(); return; }
+  const box = document.getElementById('messagesBox');
+  try {
+    conversationMessages = await api(`/api/messages/conversations/${activeConversationId}/messages`);
+    renderMessages();
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+function renderMessages() {
+  const box = document.getElementById('messagesBox');
+  if (!conversationMessages.length) { box.innerHTML = '<div class="empty">No messages yet — say hello!</div>'; return; }
+  const myType = state.role === 'rep' ? 'REP' : 'OFFICE';
+  box.innerHTML = conversationMessages.map(m => `
+    <div style="padding:10px 14px;border-bottom:1px solid var(--line);${m.senderType === myType ? 'background:#F7FBF9;' : ''}">
+      <div style="font-size:13px;">${m.body.replace(/</g, '&lt;')}</div>
+      <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}</div>
+    </div>
+  `).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+window.sendMessage = async function() {
+  const input = document.getElementById('newMessageBody');
+  const body = input.value.trim();
+  if (!body) return;
+
+  const payload = { body };
+  if (state.role === 'rep') payload.locationId = activeConversationTargetId;
+  else payload.repId = activeConversationTargetId;
+
+  try {
+    const message = await api('/api/messages', { method: 'POST', body: JSON.stringify(payload) });
+    activeConversationId = message.conversationId;
+    input.value = '';
+    await loadConversationMessages();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+function screenLiterature() {
+  const isOffice = state.role === 'office';
+  return `
+    <div class="wrap wide">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <h1>Literature & Samples</h1>
+      ${!isOffice ? `
+        <p class="sub">Send literature or sample info to an office you've visited before.</p>
+        <div class="card" style="margin-bottom:24px;">
+          ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+          <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Office</label>
+          <select id="literatureLocationSelect" style="margin-bottom:12px;"><option value="">Select an office…</option></select>
+          <input id="literatureTitle" type="text" placeholder="Title (e.g. VERSAJET Product Sheet)">
+          <input id="literatureLink" type="text" placeholder="Link to literature/sample info (optional)">
+          <textarea id="literatureDescription" rows="3" placeholder="Description (optional)" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
+          <button class="primary" onclick="submitLiterature()">Send to office</button>
+        </div>
+        <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">What you've sent</p>
+      ` : `<p class="sub">Literature and samples reps have sent for your review.</p>`}
+      <div id="literatureBox" class="listcard"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+
+async function loadLiterature() {
+  const box = document.getElementById('literatureBox');
+  try {
+    if (state.role === 'rep') {
+      const bookings = await api('/api/bookings/mine');
+      const offices = [];
+      const seen = new Set();
+      bookings.filter(b => b.status === 'CONFIRMED').forEach(b => {
+        if (!seen.has(b.slot.location.id)) {
+          seen.add(b.slot.location.id);
+          offices.push(b.slot.location);
+        }
+      });
+      const sel = document.getElementById('literatureLocationSelect');
+      if (sel) sel.innerHTML = `<option value="">Select an office…</option>${offices.map(o => `<option value="${o.id}">${o.name}</option>`).join('')}`;
+
+      literatureRows = await api('/api/literature/mine');
+      box.innerHTML = literatureRows.length ? literatureRows.map(item => `
+        <div class="row">
+          <div class="mid">
+            <div class="who">${item.title}</div>
+            <div class="what">${item.location.name}</div>
+          </div>
+          <span class="chip ${item.status}">${item.status}</span>
+        </div>`).join('') : '<div class="empty">You have not sent anything yet.</div>';
+    } else {
+      literatureRows = await api('/api/literature/office');
+      box.innerHTML = literatureRows.length ? literatureRows.map(item => `
+        <div class="row" style="flex-wrap:wrap;">
+          <div class="mid">
+            <div class="who">${item.title}</div>
+            <div class="what">${item.rep.name} · ${item.rep.companyName}</div>
+            ${item.description ? `<div class="what" style="margin-top:4px;">${item.description.replace(/</g, '&lt;')}</div>` : ''}
+            ${item.linkUrl ? `<div class="what" style="margin-top:4px;"><a href="${item.linkUrl}" target="_blank" rel="noopener">${item.linkUrl}</a></div>` : ''}
+          </div>
+          <span class="chip ${item.status}">${item.status}</span>
+          ${item.status === 'PENDING' ? `
+            <div style="width:100%;display:flex;gap:8px;margin-top:8px;">
+              <button style="flex:1;background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="decideLiterature('${item.id}','accept')">✓ Accept</button>
+              <button style="flex:1;background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="decideLiterature('${item.id}','decline')">✕ Decline</button>
+            </div>` : ''}
+        </div>`).join('') : '<div class="empty">Nothing submitted yet.</div>';
+    }
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+window.submitLiterature = async function() {
+  const locationId = document.getElementById('literatureLocationSelect').value;
+  const title = document.getElementById('literatureTitle').value.trim();
+  const linkUrl = document.getElementById('literatureLink').value.trim();
+  const description = document.getElementById('literatureDescription').value.trim();
+
+  if (!locationId || !title) {
+    setState({ formErr: 'Office and title are required' });
+    return;
+  }
+
+  try {
+    await api('/api/literature', { method: 'POST', body: JSON.stringify({ locationId, title, description, linkUrl }) });
+    setState({ formErr: null });
+    loadLiterature();
+  } catch (err) {
+    setState({ formErr: err.message });
+  }
+};
+
+window.decideLiterature = async function(id, decision) {
+  try {
+    await api(`/api/literature/${id}/decide`, { method: 'POST', body: JSON.stringify({ decision }) });
+    loadLiterature();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 function screenTransfers() {
   return `
     <div class="wrap wide">
@@ -796,6 +1005,8 @@ function screenDashboardOffice() {
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'postSlot'})">➕ Post an open slot</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'officeSettings'})">⚙️ Office Settings</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'messages'})">💬 Messages</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'literature'})">📄 Literature</button>
       <div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
@@ -814,6 +1025,8 @@ function screenDashboardRep() {
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'calendar'})">📅 View calendar</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'browseSlots'})">🔍 Browse open slots</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'messages'})">💬 Messages</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'literature'})">📄 Literature</button>
 
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
       ${!verified ? `<div class="note">Not verified yet — booking actions are blocked server-side. Sign up with an @meridianpharma.com email to auto-verify in this demo.</div>` : ''}
@@ -1207,6 +1420,7 @@ async function loadOfficeLedger() {
           <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
         ` : ''}
         ${s.status === 'CONFIRMED' && s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">⭐ Rate rep</button>` : ''}
+        ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
       </div>`).join('');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
@@ -1225,6 +1439,7 @@ async function loadMyBookings() {
         <div class="mid"><div class="who">${b.slot.location.name}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}</div>
         <span class="chip ${b.status}">${b.status}</span>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
+        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message</button>
         ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
         ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openAttendance('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime)}')">📝 Attendance</button>` : ''}
         ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>` : ''}
@@ -1414,6 +1629,9 @@ function render() {
   else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); }
   else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
   else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }
+  else if (state.screen === 'messages') { app.innerHTML = screenMessages(); loadConversations(); }
+  else if (state.screen === 'conversation') { app.innerHTML = screenConversation(); loadConversationMessages(); }
+  else if (state.screen === 'literature') { app.innerHTML = screenLiterature(); loadLiterature(); }
   else if (state.screen === 'attendance') { app.innerHTML = screenAttendance(); loadAttendees(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); loadCalendarBookings(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }

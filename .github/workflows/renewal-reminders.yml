@@ -1,0 +1,15 @@
+name: Renewal Reminders
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check-renewals:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger renewal check
+        run: |
+          curl -sS -f -X POST "https://arrowhead-access-api.onrender.com/api/billing/check-renewals" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"

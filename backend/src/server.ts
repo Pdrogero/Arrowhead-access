@@ -11,6 +11,8 @@ import slotsRouter from './routes/slots.routes';
 import policiesRouter from './routes/policies.routes';
 import employeesRouter from './routes/employees.routes';
 import reviewsRouter from './routes/reviews.routes';
+import messagesRouter from './routes/messages.routes';
+import literatureRouter from './routes/literature.routes';
 
 const app = express();
 app.use(cors());
@@ -29,6 +31,8 @@ app.use('/api/slots', slotsRouter);
 app.use('/api/policies', policiesRouter);
 app.use('/api/employees', employeesRouter);
 app.use('/api/reviews', reviewsRouter);
+app.use('/api/messages', messagesRouter);
+app.use('/api/literature', literatureRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

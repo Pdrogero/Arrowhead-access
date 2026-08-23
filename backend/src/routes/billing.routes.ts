@@ -10,11 +10,13 @@
 //   STRIPE_PRICE_ANNUAL      (Price ID for $479.40/yr, i.e. $39.95/mo billed annually)
 //   STRIPE_PRICE_FOUNDING    (Price ID for the $379.99/yr founding-rep rate)
 //   APP_URL                  (e.g. https://arrowheadaccess.com — used for redirect URLs)
+//   CRON_SECRET              (shared secret the daily renewal-reminder trigger must send)
 
 import { Router } from 'express';
 import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
+import { sendEmail } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -86,12 +88,17 @@ router.post('/webhook', async (req, res) => {
       const repId = session.metadata?.repId;
       const billingCycle = session.metadata?.billingCycle as 'MONTHLY' | 'ANNUAL' | undefined;
       if (repId && session.subscription) {
+        const sub = await stripe.subscriptions.retrieve(session.subscription as string);
         await prisma.rep.update({
           where: { id: repId },
           data: {
             stripeSubscriptionId: session.subscription as string,
             billingCycle,
             subscriptionStatus: 'TRIALING',
+            currentPeriodEnd: new Date(sub.current_period_end * 1000),
+            renewalReminder30dSent: false,
+            renewalReminder7dSent: false,
+            renewalReminder1dSent: false,
           },
         });
       }
@@ -103,7 +110,16 @@ router.post('/webhook', async (req, res) => {
           : sub.status === 'active' ? 'ACTIVE'
           : sub.status === 'past_due' ? 'PAST_DUE'
           : 'CANCELED';
-        await prisma.rep.update({ where: { id: rep.id }, data: { subscriptionStatus: status } });
+        const newPeriodEnd = new Date(sub.current_period_end * 1000);
+        const renewed = !rep.currentPeriodEnd || newPeriodEnd.getTime() > rep.currentPeriodEnd.getTime();
+        await prisma.rep.update({
+          where: { id: rep.id },
+          data: {
+            subscriptionStatus: status,
+            currentPeriodEnd: newPeriodEnd,
+            ...(renewed ? { renewalReminder30dSent: false, renewalReminder7dSent: false, renewalReminder1dSent: false } : {}),
+          },
+        });
       }
     } else if (event.type === 'customer.subscription.deleted') {
       const sub = event.data.object as Stripe.Subscription;
@@ -116,6 +132,53 @@ router.post('/webhook', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Webhook handler failed' });
+  }
+});
+
+// --- Daily renewal-reminder check, called by an external scheduled trigger -
+// Not behind requireAuth (there's no logged-in user calling this) — instead
+// guarded by a shared secret the trigger must send.
+router.post('/check-renewals', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const reps = await prisma.rep.findMany({
+      where: { subscriptionStatus: { in: ['TRIALING', 'ACTIVE'] }, currentPeriodEnd: { not: null } },
+    });
+
+    const now = new Date();
+    let remindersSent = 0;
+
+    for (const rep of reps) {
+      const daysUntil = Math.ceil((rep.currentPeriodEnd!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const cycleLabel = rep.billingCycle === 'ANNUAL' ? 'annual' : 'monthly';
+      const dateStr = rep.currentPeriodEnd!.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+      const reminders: Array<{ threshold: number; field: 'renewalReminder30dSent' | 'renewalReminder7dSent' | 'renewalReminder1dSent'; label: string }> = [
+        { threshold: 30, field: 'renewalReminder30dSent', label: 'in about a month' },
+        { threshold: 7, field: 'renewalReminder7dSent', label: 'in about a week' },
+        { threshold: 1, field: 'renewalReminder1dSent', label: 'tomorrow' },
+      ];
+
+      for (const r of reminders) {
+        if (daysUntil <= r.threshold && !rep[r.field]) {
+          await sendEmail({
+            to: rep.email,
+            subject: `Your ${cycleLabel} subscription renews ${r.label}`,
+            html: `<p>Your Arrowhead Access ${cycleLabel} subscription is set to renew on <strong>${dateStr}</strong>.</p>`,
+          });
+          await prisma.rep.update({ where: { id: rep.id }, data: { [r.field]: true } });
+          remindersSent++;
+        }
+      }
+    }
+
+    res.json({ checked: reps.length, remindersSent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check renewals' });
   }
 });
 
