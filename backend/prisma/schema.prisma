@@ -277,8 +277,30 @@ model Booking {
 
   transfers   BookingTransfer[]
   attendees   VisitAttendee[]
+  reviews     VisitReview[]
 
   @@index([repId, status])
+}
+
+enum ReviewAuthorType {
+  REP
+  OFFICE
+}
+
+// Mutual 1-5 rating + optional comment, one per side per confirmed visit.
+model VisitReview {
+  id         String           @id @default(cuid())
+  bookingId  String
+  booking    Booking          @relation(fields: [bookingId], references: [id])
+  authorType ReviewAuthorType
+  authorId   String
+  rating     Int
+  comment    String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([bookingId, authorType])
+  @@index([bookingId])
 }
 
 // Attendee list a rep logs after a visit — for their own expense-report

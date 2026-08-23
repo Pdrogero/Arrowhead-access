@@ -105,6 +105,9 @@ let attendeeRows = [];
 let employeeRows = [];
 let viewedOfficeStaff = null;
 let viewedOfficeStaffName = '';
+let reviewBookingId = null;
+let reviewCounterpartName = '';
+let reviewRating = 0;
 
 // ========== UTILITY ==========
 async function api(path, options = {}) {
@@ -685,6 +688,70 @@ window.viewOfficeStaff = async function(locationId, locationName) {
   } catch (err) {}
 };
 
+function screenReviewVisit() {
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <h1>Rate this visit</h1>
+      <p class="sub">${reviewCounterpartName}</p>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        ${state.reviewSaved ? `<div class="msg ok">Your feedback was saved.</div>` : ''}
+        <label style="font-size:13px;font-weight:600;margin-bottom:8px;display:block;">Rating</label>
+        <div id="ratingStars" style="margin-bottom:16px;"></div>
+        <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Comments (optional)</label>
+        <textarea id="reviewComment" rows="4" placeholder="How did it go?" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
+        <button class="primary" onclick="saveReview()">Save feedback</button>
+      </div>
+    </div>`;
+}
+
+function renderStarRating() {
+  const box = document.getElementById('ratingStars');
+  if (!box) return;
+  box.innerHTML = [1, 2, 3, 4, 5].map(n => `
+    <button type="button" onclick="setReviewRating(${n})" style="background:none;border:none;font-size:28px;cursor:pointer;padding:2px;line-height:1;">${n <= reviewRating ? '⭐' : '☆'}</button>
+  `).join('');
+}
+
+window.setReviewRating = function(n) {
+  reviewRating = n;
+  renderStarRating();
+};
+
+window.openReviewVisit = async function(bookingId, counterpartName) {
+  reviewBookingId = bookingId;
+  reviewCounterpartName = counterpartName;
+  reviewRating = 0;
+  state.reviewSaved = false;
+  setState({ screen: 'reviewVisit', formErr: null });
+  renderStarRating();
+  try {
+    const existing = await api(`/api/reviews/${bookingId}/mine`);
+    if (existing) {
+      reviewRating = existing.rating;
+      document.getElementById('reviewComment').value = existing.comment || '';
+      renderStarRating();
+    }
+  } catch (err) {}
+};
+
+window.saveReview = async function() {
+  if (!reviewRating) {
+    setState({ formErr: 'Please select a rating', reviewSaved: false });
+    return;
+  }
+  const comment = document.getElementById('reviewComment').value;
+  try {
+    await api(`/api/reviews/${reviewBookingId}`, { method: 'POST', body: JSON.stringify({ rating: reviewRating, comment }) });
+    setState({ formErr: null, reviewSaved: true });
+    renderStarRating();
+    document.getElementById('reviewComment').value = comment;
+  } catch (err) {
+    setState({ formErr: err.message, reviewSaved: false });
+  }
+};
+
 function screenTransfers() {
   return `
     <div class="wrap wide">
@@ -1116,6 +1183,7 @@ async function loadOfficeLedger() {
           <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','approve')">✓ Approve</button>
           <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
         ` : ''}
+        ${s.status === 'CONFIRMED' && s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">⭐ Rate rep</button>` : ''}
       </div>`).join('');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
@@ -1135,6 +1203,7 @@ async function loadMyBookings() {
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
         ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
         ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openAttendance('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime)}')">📝 Attendance</button>` : ''}
+        ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>` : ''}
         ${b.status === 'CONFIRMED' && b.slot.eventType === 'LUNCH' ? `
           <div style="width:100%;display:flex;gap:8px;margin-top:8px;">
             <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🍽️ Order via ezCater</button>
@@ -1315,6 +1384,7 @@ function render() {
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
   else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); }
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
+  else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }
   else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); }
   else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
