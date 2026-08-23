@@ -244,6 +244,21 @@ model Rep {
   transfersReceived    BookingTransfer[]   @relation("TransfersReceived")
   conversations        Conversation[]
   literatureItems      LiteratureItem[]
+  marketingMaterials   RepMarketingMaterial[]
+}
+
+// A rep's saved library of marketing files (brochures, case studies, etc.)
+// uploaded once and then picked from when sending literature to an office,
+// instead of re-uploading the same file every time.
+model RepMarketingMaterial {
+  id        String   @id @default(cuid())
+  repId     String
+  rep       Rep      @relation(fields: [repId], references: [id], onDelete: Cascade)
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+
+  @@index([repId])
 }
 
 model VerificationRequest {

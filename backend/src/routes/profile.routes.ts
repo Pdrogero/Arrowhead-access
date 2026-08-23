@@ -191,4 +191,52 @@ router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
   }
 });
 
+// --- Rep's saved marketing materials library --------------------------------
+// The actual file upload reuses POST /api/literature/upload (same Vercel
+// Blob storage) — these endpoints just save/list/remove the resulting URL
+// against the rep, so it can be reused across multiple literature sends.
+
+router.get('/materials', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const materials = await prisma.repMarketingMaterial.findMany({
+      where: { repId: req.user!.sub },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(materials);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch marketing materials' });
+  }
+});
+
+router.post('/materials', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const title = String(req.body.title || '').trim();
+    const url = String(req.body.url || '').trim();
+    if (!title || !url) return res.status(400).json({ error: 'title and url are required' });
+
+    const material = await prisma.repMarketingMaterial.create({
+      data: { repId: req.user!.sub, title, url },
+    });
+    res.status(201).json(material);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not save marketing material' });
+  }
+});
+
+router.delete('/materials/:id', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const material = await prisma.repMarketingMaterial.findUnique({ where: { id: req.params.id } });
+    if (!material || material.repId !== req.user!.sub) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+    await prisma.repMarketingMaterial.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Removed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not remove marketing material' });
+  }
+});
+
 export default router;

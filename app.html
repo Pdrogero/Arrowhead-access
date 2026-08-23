@@ -121,6 +121,7 @@ let activeConversationCounterpart = '';
 let activeConversationTargetId = null;
 let conversationMessages = [];
 let literatureRows = [];
+let materialsData = [];
 let literatureTargetLocationId = '';
 
 // ========== UTILITY ==========
@@ -953,6 +954,9 @@ function screenLiterature() {
           <div id="literatureUploadStatus" style="font-size:12px;color:var(--slate);margin-bottom:8px;"></div>
           <div id="literatureAttachmentsList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
           <p style="font-size:12px;color:var(--slate);margin:0 0 6px;">— or —</p>
+          <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Select from your saved materials</label>
+          <div id="savedMaterialsPicker" style="border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px;max-height:200px;overflow-y:auto;"><div class="empty" style="padding:8px;">Loading…</div></div>
+          <p style="font-size:12px;color:var(--slate);margin:0 0 6px;">— or —</p>
           <input id="literatureLink" type="text" placeholder="Paste a link instead (optional)">
           <textarea id="literatureDescription" rows="3" placeholder="Description (optional)" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
           <button class="primary" onclick="submitLiterature()">Send to office</button>
@@ -960,6 +964,22 @@ function screenLiterature() {
         <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">What you've sent</p>
       ` : `<p class="sub">Literature and samples reps have sent for your review.</p>`}
       <div id="literatureBox" class="listcard"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+
+function screenMaterials() {
+  return `
+    <div class="wrap wide">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <h1>Marketing Materials</h1>
+      <p class="sub">Upload brochures, case studies, and product sheets once — then pick from them anytime you send literature to an office.</p>
+      <div class="card" style="margin-bottom:24px;">
+        <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Upload files</label>
+        <input id="materialFileInput" type="file" multiple accept=".pdf,.doc,.docx,image/*" onchange="handleMaterialFileChange(event)" style="margin-bottom:6px;">
+        <div id="materialUploadStatus" style="font-size:12px;color:var(--slate);"></div>
+      </div>
+      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Your saved materials</p>
+      <div id="materialsBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
 
@@ -1004,6 +1024,7 @@ async function loadLiterature() {
       });
       const sel = document.getElementById('literatureLocationSelect');
       if (sel) sel.innerHTML = `<option value="">Select an office…</option>${offices.map(o => `<option value="${o.id}">${o.name}</option>`).join('')}`;
+      loadSavedMaterialsPicker();
 
       literatureRows = await api('/api/literature/mine');
       box.innerHTML = literatureRows.length ? literatureRows.map(item => `
@@ -1053,6 +1074,56 @@ async function uploadLiteratureFile(file) {
   return res.json();
 }
 
+async function loadMaterials() {
+  const box = document.getElementById('materialsBox');
+  try {
+    materialsData = await api('/api/profile/materials');
+    box.innerHTML = materialsData.length ? materialsData.map(m => `
+      <div class="row" style="flex-wrap:wrap;">
+        <div class="mid">
+          ${renderAttachmentThumb(m.url)}
+          <div class="who" style="margin-top:6px;">${m.title}</div>
+        </div>
+        <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="deleteMaterial('${m.id}')">Remove</button>
+      </div>`).join('') : '<div class="empty">No saved materials yet.</div>';
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+window.handleMaterialFileChange = async function(event) {
+  const files = Array.from(event.target.files || []);
+  event.target.value = '';
+  if (!files.length) return;
+
+  const statusEl = document.getElementById('materialUploadStatus');
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    statusEl.textContent = `Uploading ${i + 1} of ${files.length}…`;
+    try {
+      const { url } = await uploadLiteratureFile(file);
+      const title = file.name.replace(/\.[^.]+$/, '');
+      await api('/api/profile/materials', { method: 'POST', body: JSON.stringify({ title, url }) });
+    } catch (err) {
+      statusEl.textContent = '';
+      alert(err.message);
+      return;
+    }
+  }
+  statusEl.textContent = `${files.length} file(s) added`;
+  loadMaterials();
+};
+
+window.deleteMaterial = async function(id) {
+  if (!confirm('Remove this saved material? This does not affect anything already sent to an office.')) return;
+  try {
+    await api(`/api/profile/materials/${id}`, { method: 'DELETE' });
+    loadMaterials();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 function renderPendingLiteratureAttachments() {
   const list = document.getElementById('literatureAttachmentsList');
   if (!list) return;
@@ -1069,11 +1140,48 @@ function resetLiteratureUploadUI() {
   const list = document.getElementById('literatureAttachmentsList');
   if (status) status.textContent = '';
   if (list) list.innerHTML = '';
+  loadSavedMaterialsPicker();
 }
 
-window.removePendingLiteratureAttachment = function(index) {
-  pendingLiteratureAttachments.splice(index, 1);
+async function loadSavedMaterialsPicker() {
+  const box = document.getElementById('savedMaterialsPicker');
+  if (!box) return;
+  try {
+    const materials = await api('/api/profile/materials');
+    box.innerHTML = materials.length ? materials.map(m => `
+      <label style="display:flex;align-items:center;font-size:13px;margin-bottom:8px;">
+        <input type="checkbox" style="margin-right:8px;" onchange="toggleSavedMaterial(this, '${m.url}', '${m.title.replace(/'/g, "\\'")}')"> ${m.title}
+      </label>`).join('') : '<div class="empty" style="padding:8px;">No saved materials yet — add some under Profile → Marketing Materials.</div>';
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+}
+
+window.toggleSavedMaterial = function(checkbox, url, title) {
+  if (checkbox.checked) {
+    if (pendingLiteratureAttachments.length >= MAX_LITERATURE_ATTACHMENTS) {
+      checkbox.checked = false;
+      alert(`You can attach up to ${MAX_LITERATURE_ATTACHMENTS} files.`);
+      return;
+    }
+    pendingLiteratureAttachments.push({ url, name: title });
+  } else {
+    const idx = pendingLiteratureAttachments.findIndex(a => a.url === url);
+    if (idx !== -1) pendingLiteratureAttachments.splice(idx, 1);
+  }
   renderPendingLiteratureAttachments();
+};
+
+window.removePendingLiteratureAttachment = function(index) {
+  const [removed] = pendingLiteratureAttachments.splice(index, 1);
+  renderPendingLiteratureAttachments();
+  // If this attachment came from the saved-materials picker, uncheck it there too.
+  if (removed) {
+    const picker = document.getElementById('savedMaterialsPicker');
+    picker?.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      if (cb.getAttribute('onchange')?.includes(`'${removed.url}'`)) cb.checked = false;
+    });
+  }
 };
 
 window.handleLiteratureFileChange = async function(event) {
@@ -1749,6 +1857,7 @@ window.toggleProfileMenu = function() {
   box.innerHTML = `
     <div class="card" style="margin-bottom:16px;padding:14px;">
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'profile'})">✏️ Edit Profile</button>
+      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'materials'})">📚 Marketing Materials</button>
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="scrollToBilling()">💳 Billing</button>
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="openCalendar()">📅 Calendar Sync</button>
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
@@ -1922,6 +2031,7 @@ function render() {
   else if (state.screen === 'messages') { app.innerHTML = screenMessages(); loadConversations(); }
   else if (state.screen === 'conversation') { app.innerHTML = screenConversation(); loadConversationMessages(); }
   else if (state.screen === 'literature') { app.innerHTML = screenLiterature(); loadLiterature(); }
+  else if (state.screen === 'materials') { app.innerHTML = screenMaterials(); loadMaterials(); }
   else if (state.screen === 'attendance') { app.innerHTML = screenAttendance(); loadAttendees(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
