@@ -882,6 +882,9 @@ window.sendMessage = async function() {
   }
 };
 
+const MAX_LITERATURE_ATTACHMENTS = 10;
+let pendingLiteratureAttachments = [];
+
 function screenLiterature() {
   const isOffice = state.role === 'office';
   return `
@@ -895,9 +898,10 @@ function screenLiterature() {
           <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Office</label>
           <select id="literatureLocationSelect" style="margin-bottom:12px;"><option value="">Select an office…</option></select>
           <input id="literatureTitle" type="text" placeholder="Title (e.g. VERSAJET Product Sheet)">
-          <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Upload a file</label>
-          <input id="literatureFileInput" type="file" accept=".pdf,.doc,.docx,image/*" onchange="handleLiteratureFileChange(event)" style="margin-bottom:6px;">
-          <div id="literatureUploadStatus" style="font-size:12px;color:var(--slate);margin-bottom:12px;"></div>
+          <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Upload files (up to ${MAX_LITERATURE_ATTACHMENTS} — case studies, brochures, etc.)</label>
+          <input id="literatureFileInput" type="file" multiple accept=".pdf,.doc,.docx,image/*" onchange="handleLiteratureFileChange(event)" style="margin-bottom:6px;">
+          <div id="literatureUploadStatus" style="font-size:12px;color:var(--slate);margin-bottom:8px;"></div>
+          <div id="literatureAttachmentsList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
           <p style="font-size:12px;color:var(--slate);margin:0 0 6px;">— or —</p>
           <input id="literatureLink" type="text" placeholder="Paste a link instead (optional)">
           <textarea id="literatureDescription" rows="3" placeholder="Description (optional)" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
@@ -909,16 +913,30 @@ function screenLiterature() {
     </div>`;
 }
 
-function renderLiteratureAttachment(url) {
-  if (!url) return '';
+function attachmentFilename(url) {
+  return decodeURIComponent(url.split('/').pop().replace(/^\d+-/, ''));
+}
+
+function renderAttachmentThumb(url) {
   const isImage = /\.(jpe?g|png|gif|webp|heic)(\?.*)?$/i.test(url);
   if (isImage) {
-    return `<a href="${url}" target="_blank" rel="noopener" style="display:block;margin-top:8px;">
-      <img src="${url}" alt="Attached image" style="max-width:220px;max-height:160px;border-radius:8px;border:1px solid var(--line);display:block;object-fit:cover;">
+    return `<a href="${url}" target="_blank" rel="noopener" style="flex:0 0 auto;">
+      <img src="${url}" alt="Attached image" style="width:140px;height:110px;border-radius:8px;border:1px solid var(--line);display:block;object-fit:cover;">
     </a>`;
   }
-  const filename = decodeURIComponent(url.split('/').pop().replace(/^\d+-/, ''));
-  return `<div style="margin-top:4px;"><a href="${url}" target="_blank" rel="noopener">📄 ${filename}</a></div>`;
+  return `<a href="${url}" target="_blank" rel="noopener" style="flex:0 0 auto;width:140px;height:110px;border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:8px;font-size:12px;">
+    <span style="font-size:24px;">📄</span>
+    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;">${attachmentFilename(url)}</span>
+  </a>`;
+}
+
+// Renders every file attached to a literature item as a horizontally
+// scrollable strip, so an office can flip through a multi-file brochure
+// or a set of case studies without leaving the list.
+function renderLiteratureAttachments(item) {
+  const urls = [...(item.attachments || []).map(a => a.url), ...(item.linkUrl ? [item.linkUrl] : [])];
+  if (!urls.length) return '';
+  return `<div style="display:flex;gap:8px;overflow-x:auto;margin-top:8px;padding-bottom:4px;">${urls.map(renderAttachmentThumb).join('')}</div>`;
 }
 
 async function loadLiterature() {
@@ -954,7 +972,7 @@ async function loadLiterature() {
             <div class="who">${item.title}</div>
             <div class="what">${item.rep.name} · ${item.rep.companyName}</div>
             ${item.description ? `<div class="what" style="margin-top:4px;">${item.description.replace(/</g, '&lt;')}</div>` : ''}
-            ${renderLiteratureAttachment(item.linkUrl)}
+            ${renderLiteratureAttachments(item)}
           </div>
           <span class="chip ${item.status}">${item.status}</span>
           ${item.status === 'PENDING' ? `
@@ -985,19 +1003,59 @@ async function uploadLiteratureFile(file) {
   return res.json();
 }
 
+function renderPendingLiteratureAttachments() {
+  const list = document.getElementById('literatureAttachmentsList');
+  if (!list) return;
+  list.innerHTML = pendingLiteratureAttachments.map((a, i) => `
+    <span style="display:flex;align-items:center;gap:6px;background:var(--cream);border:1px solid var(--line);border-radius:20px;padding:4px 6px 4px 12px;font-size:12.5px;">
+      ${a.name}
+      <button type="button" onclick="removePendingLiteratureAttachment(${i})" style="background:none;border:none;cursor:pointer;color:var(--slate);font-size:14px;line-height:1;padding:2px;" aria-label="Remove ${a.name}">✕</button>
+    </span>`).join('');
+}
+
+function resetLiteratureUploadUI() {
+  pendingLiteratureAttachments = [];
+  const status = document.getElementById('literatureUploadStatus');
+  const list = document.getElementById('literatureAttachmentsList');
+  if (status) status.textContent = '';
+  if (list) list.innerHTML = '';
+}
+
+window.removePendingLiteratureAttachment = function(index) {
+  pendingLiteratureAttachments.splice(index, 1);
+  renderPendingLiteratureAttachments();
+};
+
 window.handleLiteratureFileChange = async function(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+  const files = Array.from(event.target.files || []);
+  event.target.value = '';
+  if (!files.length) return;
+
   const statusEl = document.getElementById('literatureUploadStatus');
-  statusEl.textContent = 'Uploading…';
-  try {
-    const result = await uploadLiteratureFile(file);
-    document.getElementById('literatureLink').value = result.url;
-    statusEl.textContent = `Uploaded: ${file.name}`;
-  } catch (err) {
-    statusEl.textContent = '';
-    alert(err.message);
+  const room = MAX_LITERATURE_ATTACHMENTS - pendingLiteratureAttachments.length;
+  if (room <= 0) {
+    statusEl.textContent = `You can attach up to ${MAX_LITERATURE_ATTACHMENTS} files.`;
+    return;
   }
+  const toUpload = files.slice(0, room);
+  if (files.length > toUpload.length) {
+    statusEl.textContent = `Only attaching ${toUpload.length} — max ${MAX_LITERATURE_ATTACHMENTS} files per submission.`;
+  }
+
+  for (let i = 0; i < toUpload.length; i++) {
+    const file = toUpload[i];
+    statusEl.textContent = `Uploading ${i + 1} of ${toUpload.length}…`;
+    try {
+      const result = await uploadLiteratureFile(file);
+      pendingLiteratureAttachments.push({ url: result.url, name: file.name });
+      renderPendingLiteratureAttachments();
+    } catch (err) {
+      statusEl.textContent = '';
+      alert(err.message);
+      return;
+    }
+  }
+  statusEl.textContent = pendingLiteratureAttachments.length ? `${pendingLiteratureAttachments.length} file(s) attached` : '';
 };
 
 window.submitLiterature = async function() {
@@ -1012,8 +1070,13 @@ window.submitLiterature = async function() {
   }
 
   try {
-    await api('/api/literature', { method: 'POST', body: JSON.stringify({ locationId, title, description, linkUrl }) });
+    const attachmentUrls = pendingLiteratureAttachments.map(a => a.url);
+    await api('/api/literature', { method: 'POST', body: JSON.stringify({ locationId, title, description, linkUrl, attachmentUrls }) });
     setState({ formErr: null });
+    document.getElementById('literatureTitle').value = '';
+    document.getElementById('literatureLink').value = '';
+    document.getElementById('literatureDescription').value = '';
+    resetLiteratureUploadUI();
     loadLiterature();
   } catch (err) {
     setState({ formErr: err.message });

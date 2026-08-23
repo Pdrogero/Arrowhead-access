@@ -395,19 +395,33 @@ enum LiteratureStatus {
 }
 
 model LiteratureItem {
-  id                String           @id @default(cuid())
+  id                String                 @id @default(cuid())
   repId             String
-  rep               Rep              @relation(fields: [repId], references: [id])
+  rep               Rep                    @relation(fields: [repId], references: [id])
   locationId        String
-  location          Location         @relation(fields: [locationId], references: [id])
+  location          Location               @relation(fields: [locationId], references: [id])
   title             String
   description       String?
   linkUrl           String?
-  status            LiteratureStatus @default(PENDING)
+  attachments       LiteratureAttachment[]
+  status            LiteratureStatus       @default(PENDING)
   reviewedByStaffId String?
   reviewedAt        DateTime?
-  createdAt         DateTime         @default(now())
+  createdAt         DateTime               @default(now())
 
   @@index([locationId, status])
   @@index([repId])
+}
+
+// A single uploaded file (case study, brochure page, etc.) attached to a
+// LiteratureItem. An item can have several of these, letting a rep send a
+// small set of documents/images in one submission.
+model LiteratureAttachment {
+  id               String         @id @default(cuid())
+  literatureItemId String
+  literatureItem   LiteratureItem @relation(fields: [literatureItemId], references: [id], onDelete: Cascade)
+  url              String
+  createdAt        DateTime       @default(now())
+
+  @@index([literatureItemId])
 }

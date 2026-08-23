@@ -17,6 +17,8 @@ const prisma = new PrismaClient();
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
+const MAX_ATTACHMENTS = 10;
+
 // --- Rep: upload a literature/sample file (PDF, image, etc.) --------------
 // Returns a public URL to use as the linkUrl when creating the item.
 router.post('/upload', requireAuth, requireRole('rep'), upload.single('file'), async (req, res) => {
@@ -43,6 +45,9 @@ router.post('/', requireAuth, requireRole('rep'), async (req, res) => {
     const title = String(req.body.title || '').trim();
     const description = req.body.description ? String(req.body.description).trim() : null;
     const linkUrl = req.body.linkUrl ? String(req.body.linkUrl).trim() : null;
+    const attachmentUrls = Array.isArray(req.body.attachmentUrls)
+      ? req.body.attachmentUrls.filter((u: unknown): u is string => typeof u === 'string' && u.trim().length > 0).slice(0, MAX_ATTACHMENTS)
+      : [];
 
     if (!locationId || !title) {
       return res.status(400).json({ error: 'locationId and title are required' });
@@ -56,8 +61,15 @@ router.post('/', requireAuth, requireRole('rep'), async (req, res) => {
     }
 
     const item = await prisma.literatureItem.create({
-      data: { repId: req.user!.sub, locationId, title, description, linkUrl },
-      include: { rep: true, location: { include: { staff: true } } },
+      data: {
+        repId: req.user!.sub,
+        locationId,
+        title,
+        description,
+        linkUrl,
+        attachments: { create: attachmentUrls.map((url: string) => ({ url })) },
+      },
+      include: { rep: true, location: { include: { staff: true } }, attachments: true },
     });
 
     item.location.staff.forEach(staff => {
@@ -80,7 +92,7 @@ router.get('/mine', requireAuth, requireRole('rep'), async (req, res) => {
   try {
     const items = await prisma.literatureItem.findMany({
       where: { repId: req.user!.sub },
-      include: { location: { select: { name: true } } },
+      include: { location: { select: { name: true } }, attachments: true },
       orderBy: { createdAt: 'desc' },
     });
     res.json(items);
@@ -98,7 +110,7 @@ router.get('/office', requireAuth, requireRole('office_admin', 'office_staff'), 
 
     const items = await prisma.literatureItem.findMany({
       where: { locationId: staff.locationId },
-      include: { rep: { select: { name: true, companyName: true } } },
+      include: { rep: { select: { name: true, companyName: true } }, attachments: true },
       orderBy: { createdAt: 'desc' },
     });
     res.json(items);
