@@ -208,7 +208,12 @@ model Rep {
 
   // Profile (RxVantage-style personal info)
   title                String?
+  roleFunction         String?
   phone                String?
+  mobilePhone          String?
+  additionalEmail      String?
+  credentials          String?
+  relationshipToCompany String?
   profileImageUrl      String?             // data: URL, resized/compressed client-side
   specialties          String[]            @default([])
 

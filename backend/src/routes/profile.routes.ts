@@ -110,8 +110,15 @@ router.get('/rep', requireAuth, requireRole('rep'), async (req, res) => {
     const rep = await prisma.rep.findUnique({
       where: { id: req.user!.sub },
       select: {
+        name: true,
         title: true,
+        roleFunction: true,
         phone: true,
+        mobilePhone: true,
+        additionalEmail: true,
+        credentials: true,
+        relationshipToCompany: true,
+        companyName: true,
         specialties: true,
         manufacturerCompanyId: true,
         profileImageUrl: true,
@@ -131,7 +138,11 @@ const MAX_PROFILE_IMAGE_LENGTH = 700_000; // ~500KB of actual image data once ba
 // --- Complete / update the logged-in rep's profile ------------------------
 router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
   try {
-    const { title, phone, specialties, manufacturerCompanyId, productIds, profileImageUrl } = req.body;
+    const {
+      firstName, lastName, title, roleFunction, phone, mobilePhone,
+      additionalEmail, credentials, relationshipToCompany,
+      specialties, manufacturerCompanyId, productIds, profileImageUrl,
+    } = req.body;
 
     if (manufacturerCompanyId) {
       const company = await prisma.manufacturerCompany.findUnique({ where: { id: manufacturerCompanyId } });
@@ -151,11 +162,19 @@ router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
       return res.status(400).json({ error: 'Profile photo is too large' });
     }
 
+    const name = firstName?.trim() && lastName?.trim() ? `${firstName.trim()} ${lastName.trim()}` : undefined;
+
     const rep = await prisma.rep.update({
       where: { id: req.user!.sub },
       data: {
+        name,
         title,
+        roleFunction,
         phone,
+        mobilePhone,
+        additionalEmail,
+        credentials,
+        relationshipToCompany,
         specialties: specialties ?? undefined,
         manufacturerCompanyId: manufacturerCompanyId ?? undefined,
         ...(productIds ? { products: { set: productIds.map((id: string) => ({ id })) } } : {}),

@@ -257,8 +257,41 @@ function screenProfile() {
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Profile photo</label>
         <div id="profileImagePreview" style="margin-bottom:8px;"></div>
         <input id="profileImageInput" type="file" accept="image/*" onchange="handleProfileImageChange(event)" style="margin-bottom:16px;">
+
+        <p style="font-size:14px;font-weight:700;margin:4px 0 12px;">Personal Information</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <input id="firstName" type="text" placeholder="First name">
+          <input id="lastName" type="text" placeholder="Last name">
+        </div>
         <input id="title" type="text" placeholder="Title (e.g. Territory Manager)">
-        <input id="phone" type="tel" placeholder="Phone number">
+        <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Role &amp; function</label>
+        <select id="roleFunction" style="margin-bottom:12px;">
+          <option value="">Select…</option>
+          <option>Field Sales Representative</option>
+          <option>Territory Manager</option>
+          <option>Clinical Specialist</option>
+          <option>District Manager</option>
+          <option>Regional Sales Manager</option>
+          <option>Key Account Manager</option>
+          <option>Owner / Independent Rep</option>
+          <option>Other</option>
+        </select>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <input id="phone" type="tel" placeholder="Phone number">
+          <input id="mobilePhone" type="tel" placeholder="Mobile number">
+        </div>
+        <input id="additionalEmail" type="email" placeholder="Additional email (optional)">
+        <input id="credentials" type="text" placeholder="Credentials (e.g. RN, CWS)">
+        <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Relationship to company</label>
+        <select id="relationshipToCompany" style="margin-bottom:16px;">
+          <option value="">Select…</option>
+          <option>Employee</option>
+          <option>Independent Contractor</option>
+          <option>Distributor Rep</option>
+          <option>Owner / Partner</option>
+          <option>Other</option>
+        </select>
+
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Manufacturer company</label>
         <select id="companySelect" onchange="handleCompanyChange()" style="margin-bottom:6px;"><option value="">Select a company…</option></select>
         <button type="button" onclick="showAddCompany()" style="display:block;background:none;border:none;color:var(--teal);font-size:13px;font-weight:700;padding:0;margin-bottom:12px;cursor:pointer;">+ My company isn't listed</button>
@@ -1275,8 +1308,16 @@ async function loadCatalog() {
 async function loadProfile() {
   try {
     const profile = await api('/api/profile/rep');
+    const [firstName, ...rest] = (profile.name || '').trim().split(' ');
+    document.getElementById('firstName').value = firstName || '';
+    document.getElementById('lastName').value = rest.join(' ');
     document.getElementById('title').value = profile.title || '';
+    document.getElementById('roleFunction').value = profile.roleFunction || '';
     document.getElementById('phone').value = profile.phone || '';
+    document.getElementById('mobilePhone').value = profile.mobilePhone || '';
+    document.getElementById('additionalEmail').value = profile.additionalEmail || '';
+    document.getElementById('credentials').value = profile.credentials || '';
+    document.getElementById('relationshipToCompany').value = profile.relationshipToCompany || '';
     (profile.specialties || []).forEach(s => {
       document.querySelectorAll('.specialty').forEach(cb => { if (cb.value === s) cb.checked = true; });
     });
@@ -1437,17 +1478,29 @@ window.createCompany = async function() {
 };
 
 async function saveProfile() {
+  const firstName = document.getElementById('firstName').value;
+  const lastName = document.getElementById('lastName').value;
   const title = document.getElementById('title').value;
+  const roleFunction = document.getElementById('roleFunction').value;
   const phone = document.getElementById('phone').value;
+  const mobilePhone = document.getElementById('mobilePhone').value;
+  const additionalEmail = document.getElementById('additionalEmail').value;
+  const credentials = document.getElementById('credentials').value;
+  const relationshipToCompany = document.getElementById('relationshipToCompany').value;
   const companyId = document.getElementById('companySelect').value;
   const specialties = Array.from(document.querySelectorAll('.specialty:checked')).map(e => e.value);
   const productIds = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(e => e.value);
 
-  const payload = { title, phone, manufacturerCompanyId: companyId || null, specialties, productIds };
+  const payload = {
+    firstName, lastName, title, roleFunction, phone, mobilePhone,
+    additionalEmail, credentials, relationshipToCompany,
+    manufacturerCompanyId: companyId || null, specialties, productIds,
+  };
   if (selectedProfileImage !== undefined) payload.profileImageUrl = selectedProfileImage;
 
   try {
-    await api('/api/profile/rep', { method: 'PATCH', body: JSON.stringify(payload) });
+    const { rep } = await api('/api/profile/rep', { method: 'PATCH', body: JSON.stringify(payload) });
+    if (rep?.name && state.me) state.me.name = rep.name;
     setState({ screen: 'dashboard' });
   } catch (err) {
     setState({ formErr: err.message });
