@@ -895,7 +895,11 @@ function screenLiterature() {
           <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Office</label>
           <select id="literatureLocationSelect" style="margin-bottom:12px;"><option value="">Select an office…</option></select>
           <input id="literatureTitle" type="text" placeholder="Title (e.g. VERSAJET Product Sheet)">
-          <input id="literatureLink" type="text" placeholder="Link to literature/sample info (optional)">
+          <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Upload a file</label>
+          <input id="literatureFileInput" type="file" accept=".pdf,.doc,.docx,image/*" onchange="handleLiteratureFileChange(event)" style="margin-bottom:6px;">
+          <div id="literatureUploadStatus" style="font-size:12px;color:var(--slate);margin-bottom:12px;"></div>
+          <p style="font-size:12px;color:var(--slate);margin:0 0 6px;">— or —</p>
+          <input id="literatureLink" type="text" placeholder="Paste a link instead (optional)">
           <textarea id="literatureDescription" rows="3" placeholder="Description (optional)" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
           <button class="primary" onclick="submitLiterature()">Send to office</button>
         </div>
@@ -952,6 +956,37 @@ async function loadLiterature() {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
 }
+
+async function uploadLiteratureFile(file) {
+  const token = localStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(API_BASE + '/api/literature/upload', {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(error.error || error.message || 'Upload failed');
+  }
+  return res.json();
+}
+
+window.handleLiteratureFileChange = async function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('literatureUploadStatus');
+  statusEl.textContent = 'Uploading…';
+  try {
+    const result = await uploadLiteratureFile(file);
+    document.getElementById('literatureLink').value = result.url;
+    statusEl.textContent = `Uploaded: ${file.name}`;
+  } catch (err) {
+    statusEl.textContent = '';
+    alert(err.message);
+  }
+};
 
 window.submitLiterature = async function() {
   const locationId = document.getElementById('literatureLocationSelect').value;

@@ -2,14 +2,39 @@
 // Lets a rep send literature/sample info to an office they've visited
 // before, for the office to accept or decline.
 // Mount with: app.use('/api/literature', literatureRouter)
+//
+// Requires this env var on Render:
+//   BLOB_READ_WRITE_TOKEN   (from Vercel Blob — used to upload literature files)
 
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
 import { sendEmail } from '../email';
+import { put } from '@vercel/blob';
+import multer from 'multer';
 
 const prisma = new PrismaClient();
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+
+// --- Rep: upload a literature/sample file (PDF, image, etc.) --------------
+// Returns a public URL to use as the linkUrl when creating the item.
+router.post('/upload', requireAuth, requireRole('rep'), upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    const blob = await put(`literature/${Date.now()}-${req.file.originalname}`, req.file.buffer, {
+      access: 'public',
+      contentType: req.file.mimetype,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+
+    res.json({ url: blob.url });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not upload file' });
+  }
+});
 
 // --- Rep: send literature/samples to an office they've visited before -----
 router.post('/', requireAuth, requireRole('rep'), async (req, res) => {
