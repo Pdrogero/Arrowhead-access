@@ -71,7 +71,7 @@
 </head>
 <body>
 <header>
-  <div class="title"><div class="logo-mark"></div> Arrowhead Access</div>
+  <div class="title" onclick="goHome()" style="cursor:pointer;"><div class="logo-mark"></div> Arrowhead Access</div>
   <button id="logoutBtn" class="btn-logout" onclick="logout()">Log out</button>
 </header>
 
@@ -116,6 +116,13 @@ async function api(path, options = {}) {
 
 function setState(updates) { Object.assign(state, updates); render(); }
 function logout() { localStorage.removeItem('token'); setState({ screen: 'role', role: null, me: null }); }
+function goHome() {
+  if (localStorage.getItem('token') && state.me) {
+    setState({ screen: 'dashboard' });
+  } else {
+    setState({ screen: 'role', role: null, me: null });
+  }
+}
 function fmtTime(isoStr) { return new Date(isoStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 
 // ========== SCREENS ==========
