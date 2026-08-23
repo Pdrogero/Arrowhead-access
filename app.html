@@ -95,6 +95,7 @@ let state = {
 
 let catalogData = [];
 let selectedProfileImage; // undefined = unchanged, null = remove, string = new data URL
+const SPECIALTY_OPTIONS = ['Wound Care Centers','Podiatry','Vascular Surgery','Plastic Surgery','General Surgery','Home Health','Long-Term Care','Hospital Value Analysis','ASCs','Traveling Physicians','Medical Distributors'];
 let calendarMonth = new Date();
 let calendarBookings = [];
 let calendarSelectedDay = null;
@@ -309,10 +310,15 @@ function screenProfile() {
           <button type="button" class="primary" style="margin-bottom:0;" onclick="createCompany()">Add this company</button>
         </div>
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Specialties of interest</label>
-        <div style="border:1px solid var(--line);border-radius:8px;padding:12px;">
-          ${['Wound Care Centers','Podiatry','Vascular Surgery','Plastic Surgery','General Surgery','Home Health','Long-Term Care','Hospital Value Analysis','ASCs','Traveling Physicians','Medical Distributors'].map(s => `
+        <div id="specialtiesBox" style="border:1px solid var(--line);border-radius:8px;padding:12px;">
+          ${SPECIALTY_OPTIONS.map(s => `
             <label style="display:flex;align-items:center;font-size:13px;margin-bottom:8px;"><input type="checkbox" class="specialty" value="${s}" style="margin-right:6px;"> ${s}</label>
           `).join('')}
+        </div>
+        <button type="button" onclick="showAddSpecialty()" style="display:block;background:none;border:none;color:var(--teal);font-size:13px;font-weight:700;padding:0;margin:8px 0 0;cursor:pointer;">+ Specialty not listed?</button>
+        <div id="addSpecialtyBox" style="display:none;margin-top:8px;">
+          <input id="newSpecialtyName" type="text" placeholder="e.g. Orthopedic Surgery" style="margin-bottom:8px;">
+          <button type="button" class="primary" style="margin-bottom:0;" onclick="addCustomSpecialty()">Add specialty</button>
         </div>
         <button class="primary" style="margin-top:12px;" onclick="saveProfile()">Save and continue</button>
         <button class="link" onclick="setState({screen:'dashboard'})">Skip for now</button>
@@ -1324,7 +1330,9 @@ async function loadProfile() {
     document.getElementById('credentials').value = profile.credentials || '';
     document.getElementById('relationshipToCompany').value = profile.relationshipToCompany || '';
     (profile.specialties || []).forEach(s => {
-      document.querySelectorAll('.specialty').forEach(cb => { if (cb.value === s) cb.checked = true; });
+      const existing = Array.from(document.querySelectorAll('.specialty')).find(cb => cb.value === s);
+      if (existing) existing.checked = true;
+      else addSpecialtyCheckbox(s, true);
     });
     if (profile.profileImageUrl) showProfileImagePreview(profile.profileImageUrl);
     if (profile.manufacturerCompanyId) {
@@ -1402,6 +1410,41 @@ function renderProductsBox(company, checkedIds) {
 function showAddCompany() {
   document.getElementById('addCompanyBox').style.display = 'block';
 }
+
+function addSpecialtyCheckbox(name, checked) {
+  const box = document.getElementById('specialtiesBox');
+  const label = document.createElement('label');
+  label.style.cssText = 'display:flex;align-items:center;font-size:13px;margin-bottom:8px;';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.className = 'specialty';
+  input.value = name;
+  input.checked = !!checked;
+  input.style.marginRight = '6px';
+  label.appendChild(input);
+  label.appendChild(document.createTextNode(' ' + name));
+  box.appendChild(label);
+}
+
+window.showAddSpecialty = function() {
+  document.getElementById('addSpecialtyBox').style.display = 'block';
+  document.getElementById('newSpecialtyName').focus();
+};
+
+window.addCustomSpecialty = function() {
+  const input = document.getElementById('newSpecialtyName');
+  const name = input.value.trim();
+  if (!name) return;
+
+  const existing = Array.from(document.querySelectorAll('.specialty')).find(cb => cb.value.toLowerCase() === name.toLowerCase());
+  if (existing) {
+    existing.checked = true;
+  } else {
+    addSpecialtyCheckbox(name, true);
+  }
+  input.value = '';
+  document.getElementById('addSpecialtyBox').style.display = 'none';
+};
 
 window.removeProductFromCompany = async function(companyId, productId) {
   if (!confirm('Remove this product from the catalog? This removes it for every rep, not just you.')) return;
