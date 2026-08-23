@@ -121,9 +121,9 @@
   <div class="audience-tag">For sales reps</div>
 
   <div class="toggle-row">
-    <span class="toggle-label active" id="label-monthly">Monthly</span>
+    <span class="toggle-label active" id="label-monthly" onclick="setBilling(false)">Monthly</span>
     <div class="switch" id="switch" onclick="toggleBilling()"><div class="knob"></div></div>
-    <span class="toggle-label" id="label-annual">Annual <span class="save-chip">save 20%</span></span>
+    <span class="toggle-label" id="label-annual" onclick="setBilling(true)">Annual <span class="save-chip">save 20%</span></span>
   </div>
 
   <div class="rep-card">
@@ -177,8 +177,7 @@
 
 <script>
   let annual = false;
-  function toggleBilling(){
-    annual = !annual;
+  function applyBilling(){
     document.getElementById('switch').classList.toggle('annual', annual);
     document.getElementById('label-monthly').classList.toggle('active', !annual);
     document.getElementById('label-annual').classList.toggle('active', annual);
@@ -187,3 +186,14 @@
       ? 'Billed $479.40 annually · cancel anytime'
       : 'Billed monthly · cancel anytime';
   }
+  function toggleBilling(){
+    annual = !annual;
+    applyBilling();
+  }
+  function setBilling(isAnnual){
+    annual = isAnnual;
+    applyBilling();
+  }
+</script>
+</body>
+</html>
