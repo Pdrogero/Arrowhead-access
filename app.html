@@ -1125,10 +1125,11 @@ function screenDashboardOffice() {
 
 function screenDashboardRep() {
   const verified = state.me?.verificationStatus === 'VERIFIED';
+  const firstName = (state.me?.name || '').trim().split(' ')[0] || state.me?.email || 'there';
   return `
     <div class="wrap wide">
-      <h1>Your bookings</h1>
-      <p class="sub">Logged in as ${state.me?.name || state.me?.email} ${verified ? '✅ verified' : '⏳ not verified'}</p>
+      <h1>Hello, ${firstName} 👋</h1>
+      <p class="sub">${verified ? '✅ verified' : '⏳ not verified'}</p>
 
       <div id="billingBox" class="card" style="margin-bottom:24px;"><div class="empty">Loading plan…</div></div>
 
@@ -1140,6 +1141,7 @@ function screenDashboardRep() {
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'messages'})">💬 Messages</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'literature'})">📄 Literature</button>
 
+      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Your bookings</p>
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
       ${!verified ? `<div class="note">Not verified yet — booking actions are blocked server-side. Sign up with an @meridianpharma.com email to auto-verify in this demo.</div>` : ''}
     </div>`;
