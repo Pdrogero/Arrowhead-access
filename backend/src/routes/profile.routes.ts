@@ -83,10 +83,55 @@ router.post('/catalog/company/:companyId/product', requireAuth, requireRole('rep
   }
 });
 
+// --- Rep self-service: remove a product from the shared catalog -----------
+// Note: this is a shared resource — removing it here removes it for every
+// rep, not just the caller. Any product that gets removed is also silently
+// unselected from every rep who had it checked (implicit many-to-many).
+router.delete('/catalog/company/:companyId/product/:productId', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const { companyId, productId } = req.params;
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product || product.companyId !== companyId) {
+      return res.status(404).json({ error: 'Product not found for this company' });
+    }
+    await prisma.product.delete({ where: { id: productId } });
+    res.json({ message: 'Product removed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not remove product' });
+  }
+});
+
+// --- Get the logged-in rep's own profile ----------------------------------
+// Used to pre-fill the "Complete your profile" screen with previously saved
+// values, so it also works as a review screen.
+router.get('/rep', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const rep = await prisma.rep.findUnique({
+      where: { id: req.user!.sub },
+      select: {
+        title: true,
+        phone: true,
+        specialties: true,
+        manufacturerCompanyId: true,
+        profileImageUrl: true,
+        products: { select: { id: true, name: true } },
+      },
+    });
+    if (!rep) return res.status(404).json({ error: 'Rep not found' });
+    res.json(rep);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch profile' });
+  }
+});
+
+const MAX_PROFILE_IMAGE_LENGTH = 700_000; // ~500KB of actual image data once base64-decoded
+
 // --- Complete / update the logged-in rep's profile ------------------------
 router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
   try {
-    const { title, phone, specialties, manufacturerCompanyId, productIds } = req.body;
+    const { title, phone, specialties, manufacturerCompanyId, productIds, profileImageUrl } = req.body;
 
     if (manufacturerCompanyId) {
       const company = await prisma.manufacturerCompany.findUnique({ where: { id: manufacturerCompanyId } });
@@ -102,6 +147,10 @@ router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
       }
     }
 
+    if (typeof profileImageUrl === 'string' && profileImageUrl.length > MAX_PROFILE_IMAGE_LENGTH) {
+      return res.status(400).json({ error: 'Profile photo is too large' });
+    }
+
     const rep = await prisma.rep.update({
       where: { id: req.user!.sub },
       data: {
@@ -110,6 +159,7 @@ router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
         specialties: specialties ?? undefined,
         manufacturerCompanyId: manufacturerCompanyId ?? undefined,
         ...(productIds ? { products: { set: productIds.map((id: string) => ({ id })) } } : {}),
+        ...('profileImageUrl' in req.body ? { profileImageUrl } : {}),
       },
       include: { manufacturerCompany: true, products: true },
     });

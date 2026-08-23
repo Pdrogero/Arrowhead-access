@@ -194,6 +194,7 @@ model Rep {
   // Profile (RxVantage-style personal info)
   title                String?
   phone                String?
+  profileImageUrl      String?             // data: URL, resized/compressed client-side
   specialties          String[]            @default([])
 
   // Manufacturer catalog selection

@@ -89,6 +89,7 @@ let state = {
 };
 
 let catalogData = [];
+let selectedProfileImage; // undefined = unchanged, null = remove, string = new data URL
 let calendarMonth = new Date();
 let calendarBookings = [];
 let calendarSelectedDay = null;
@@ -225,6 +226,9 @@ function screenProfile() {
       <p class="sub">Help offices know who they're meeting with. You can skip this and fill it in later.</p>
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Profile photo</label>
+        <div id="profileImagePreview" style="margin-bottom:8px;"></div>
+        <input id="profileImageInput" type="file" accept="image/*" onchange="handleProfileImageChange(event)" style="margin-bottom:16px;">
         <input id="title" type="text" placeholder="Title (e.g. Territory Manager)">
         <input id="phone" type="tel" placeholder="Phone number">
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Manufacturer company</label>
@@ -569,10 +573,74 @@ async function loadCatalog() {
   } catch (err) {}
 }
 
+async function loadProfile() {
+  try {
+    const profile = await api('/api/profile/rep');
+    document.getElementById('title').value = profile.title || '';
+    document.getElementById('phone').value = profile.phone || '';
+    (profile.specialties || []).forEach(s => {
+      document.querySelectorAll('.specialty').forEach(cb => { if (cb.value === s) cb.checked = true; });
+    });
+    if (profile.profileImageUrl) showProfileImagePreview(profile.profileImageUrl);
+    if (profile.manufacturerCompanyId) {
+      const sel = document.getElementById('companySelect');
+      sel.value = profile.manufacturerCompanyId;
+      const company = catalogData.find(c => c.id === profile.manufacturerCompanyId);
+      if (company) {
+        const checkedIds = new Set((profile.products || []).map(p => p.id));
+        renderProductsBox(company, checkedIds);
+      }
+    }
+  } catch (err) {}
+}
+
+async function initProfileScreen() {
+  selectedProfileImage = undefined;
+  await loadCatalog();
+  await loadProfile();
+}
+
+function handleProfileImageChange(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 300;
+      let width = img.width, height = img.height;
+      if (width > height && width > MAX) { height = Math.round(height * (MAX / width)); width = MAX; }
+      else if (height > MAX) { width = Math.round(width * (MAX / height)); height = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      selectedProfileImage = canvas.toDataURL('image/jpeg', 0.8);
+      showProfileImagePreview(selectedProfileImage);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function showProfileImagePreview(dataUrl) {
+  document.getElementById('profileImagePreview').innerHTML = `
+    <img src="${dataUrl}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;vertical-align:middle;">
+    <button type="button" class="link" style="width:auto;display:inline;margin-left:10px;" onclick="removeProfileImage()">Remove photo</button>`;
+}
+
+window.removeProfileImage = function() {
+  selectedProfileImage = null;
+  document.getElementById('profileImagePreview').innerHTML = '';
+  document.getElementById('profileImageInput').value = '';
+};
+
 function renderProductsBox(company, checkedIds) {
   const productsBox = document.getElementById('productsBox');
   const checklist = (company.products || []).map(p => `
-    <label style="display:flex;align-items:center;font-size:13px;margin-bottom:8px;"><input type="checkbox" class="product-checkbox" value="${p.id}" ${checkedIds.has(p.id) ? 'checked' : ''} style="margin-right:6px;"> ${p.name}</label>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <label style="display:flex;align-items:center;font-size:13px;"><input type="checkbox" class="product-checkbox" value="${p.id}" ${checkedIds.has(p.id) ? 'checked' : ''} style="margin-right:6px;"> ${p.name}</label>
+      <button type="button" onclick="removeProductFromCompany('${company.id}','${p.id}')" title="Remove this product from the catalog" style="background:none;border:none;color:#C23C3C;font-size:13px;cursor:pointer;padding:2px 6px;line-height:1;">✕</button>
+    </div>
   `).join('');
   productsBox.innerHTML = `
     <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Products you carry</label>
@@ -589,6 +657,20 @@ function renderProductsBox(company, checkedIds) {
 function showAddCompany() {
   document.getElementById('addCompanyBox').style.display = 'block';
 }
+
+window.removeProductFromCompany = async function(companyId, productId) {
+  if (!confirm('Remove this product from the catalog? This removes it for every rep, not just you.')) return;
+  try {
+    await api(`/api/profile/catalog/company/${companyId}/product/${productId}`, { method: 'DELETE' });
+    const company = catalogData.find(c => c.id === companyId);
+    if (company) company.products = company.products.filter(p => p.id !== productId);
+    const checkedIds = new Set(Array.from(document.querySelectorAll('.product-checkbox:checked')).map(e => e.value));
+    checkedIds.delete(productId);
+    renderProductsBox(company, checkedIds);
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 function handleCompanyChange() {
   const companyId = document.getElementById('companySelect').value;
@@ -662,8 +744,11 @@ async function saveProfile() {
   const specialties = Array.from(document.querySelectorAll('.specialty:checked')).map(e => e.value);
   const productIds = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(e => e.value);
 
+  const payload = { title, phone, manufacturerCompanyId: companyId || null, specialties, productIds };
+  if (selectedProfileImage !== undefined) payload.profileImageUrl = selectedProfileImage;
+
   try {
-    await api('/api/profile/rep', { method: 'PATCH', body: JSON.stringify({ title, phone, manufacturerCompanyId: companyId || null, specialties, productIds }) });
+    await api('/api/profile/rep', { method: 'PATCH', body: JSON.stringify(payload) });
     setState({ screen: 'dashboard' });
   } catch (err) {
     setState({ formErr: err.message });
@@ -958,7 +1043,7 @@ function render() {
   else if (state.screen === 'forgotPassword') app.innerHTML = screenForgotPassword();
   else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
   else if (state.screen === 'signup') app.innerHTML = screenSignup();
-  else if (state.screen === 'profile') { app.innerHTML = screenProfile(); loadCatalog(); }
+  else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
   else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }
   else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); }
