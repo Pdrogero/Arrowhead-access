@@ -938,8 +938,9 @@ window.decide = async function(id, decision) {
 
 window.goToCheckout = async function(plan) {
   try {
-    const res = await api('/api/billing/rep/checkout', { method: 'POST', body: JSON.stringify({ plan }) });
-    window.open(res.checkoutUrl, '_blank');
+    const billingCycle = plan === 'annual' ? 'ANNUAL' : 'MONTHLY';
+    const res = await api('/api/billing/rep/checkout', { method: 'POST', body: JSON.stringify({ billingCycle }) });
+    window.open(res.url, '_blank');
   } catch (err) {
     alert(err.message);
   }
