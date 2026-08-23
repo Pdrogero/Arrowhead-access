@@ -1134,12 +1134,12 @@ function screenDashboardRep() {
       <div id="billingBox" class="card" style="margin-bottom:24px;"><div class="empty">Loading plan…</div></div>
 
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'transfers'})">🔁 View transfers</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'profile'})">👤 Edit my profile</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="openCalendar()">📅 View calendar</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'browseSlots'})">🔍 Browse open slots</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'messages'})">💬 Messages</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'literature'})">📄 Literature</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="toggleProfileMenu()">👤 Profile ▾</button>
+      <div id="profileMenuBox"></div>
 
       <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Your bookings</p>
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
@@ -1629,6 +1629,27 @@ window.claimSlot = async function(slotId) {
   } catch (err) {
     alert(err.message);
   }
+};
+
+window.toggleProfileMenu = function() {
+  const box = document.getElementById('profileMenuBox');
+  if (!box) return;
+  if (box.innerHTML.trim()) {
+    box.innerHTML = '';
+    return;
+  }
+  box.innerHTML = `
+    <div class="card" style="margin-bottom:16px;padding:14px;">
+      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'profile'})">✏️ Edit Profile</button>
+      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="scrollToBilling()">💳 Billing</button>
+      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="openCalendar()">📅 Calendar Sync</button>
+      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
+      <button class="link" style="text-align:left;margin-bottom:0;color:#C23C3C;" onclick="logout()">🚪 Logout</button>
+    </div>`;
+};
+
+window.scrollToBilling = function() {
+  document.getElementById('billingBox')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
 window.openCalendar = function() {
