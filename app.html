@@ -93,6 +93,11 @@ let selectedProfileImage; // undefined = unchanged, null = remove, string = new 
 let calendarMonth = new Date();
 let calendarBookings = [];
 let calendarSelectedDay = null;
+let openSlotsData = [];
+let browseSearchQuery = '';
+let browseViewMode = 'list'; // 'list' | 'calendar'
+let browseCalendarMonth = new Date();
+let browseCalendarSelectedDay = null;
 
 // ========== UTILITY ==========
 async function api(path, options = {}) {
@@ -351,9 +356,119 @@ function screenBrowseSlots() {
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
       <h1>Available slots</h1>
       <p class="sub">Browse and claim open visits across all offices.</p>
-      <div id="slotsBox" class="listcard"><div class="empty">Loading…</div></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <input id="browseSearch" type="text" placeholder="Search by office name…" oninput="filterBrowseSlots()" value="${browseSearchQuery}" style="flex:1;margin-bottom:0;">
+        <button type="button" id="browseViewToggleBtn" onclick="toggleBrowseView()" style="white-space:nowrap;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">${browseViewMode === 'list' ? '📅 Calendar view' : '📋 List view'}</button>
+      </div>
+      <div id="browseContent"><div class="listcard"><div class="empty">Loading…</div></div></div>
     </div>`;
 }
+
+function eventTypeLabel(t) {
+  return t === 'REP_VISIT' ? 'Rep visit' : t === 'LUNCH' ? 'Lunch' : t === 'STAFF_TRAINING' ? 'Staff training' : 'Office closed';
+}
+
+function filterBrowseSlots() {
+  browseSearchQuery = document.getElementById('browseSearch').value;
+  renderBrowseContent();
+}
+
+function toggleBrowseView() {
+  browseViewMode = browseViewMode === 'list' ? 'calendar' : 'list';
+  browseCalendarSelectedDay = null;
+  document.getElementById('browseViewToggleBtn').textContent = browseViewMode === 'list' ? '📅 Calendar view' : '📋 List view';
+  renderBrowseContent();
+}
+
+function renderBrowseContent() {
+  const query = browseSearchQuery.trim().toLowerCase();
+  const filtered = query
+    ? openSlotsData.filter(s => s.location.name.toLowerCase().includes(query))
+    : openSlotsData;
+
+  if (browseViewMode === 'calendar') renderBrowseCalendar(filtered);
+  else renderBrowseList(filtered);
+}
+
+function renderBrowseList(slots) {
+  const content = document.getElementById('browseContent');
+  if (!slots.length) { content.innerHTML = '<div class="listcard"><div class="empty">No open slots found.</div></div>'; return; }
+  content.innerHTML = `<div class="listcard">${slots.map(s => `
+    <div class="row">
+      <div class="time">${fmtTime(s.startTime)}</div>
+      <div class="mid">
+        <div class="who">${s.location.name}</div>
+        <div class="what">${s.location.address}</div>
+        <div class="what" style="margin-top:4px;"><strong>${eventTypeLabel(s.eventType)}</strong></div>
+      </div>
+      <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
+    </div>`).join('')}</div>`;
+}
+
+function renderBrowseCalendar(slots) {
+  const content = document.getElementById('browseContent');
+  const year = browseCalendarMonth.getFullYear();
+  const month = browseCalendarMonth.getMonth();
+  const monthLabel = browseCalendarMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const slotsByDay = {};
+  slots.forEach(s => {
+    const d = new Date(s.startTime);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      const day = d.getDate();
+      (slotsByDay[day] = slotsByDay[day] || []).push(s);
+    }
+  });
+
+  let cells = '';
+  for (let i = 0; i < firstDay; i++) cells += `<div></div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const has = slotsByDay[day];
+    cells += `<button onclick="selectBrowseCalendarDay(${day})" style="aspect-ratio:1;border:1px solid var(--line);border-radius:8px;background:${has ? 'rgba(46,111,94,.12)' : '#fff'};font-size:13px;position:relative;cursor:pointer;">
+      ${day}${has ? `<div style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--teal);"></div>` : ''}
+    </button>`;
+  }
+
+  const daySlots = browseCalendarSelectedDay ? (slotsByDay[browseCalendarSelectedDay] || []) : [];
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <button class="link" style="width:auto;margin:0;" onclick="changeBrowseCalendarMonth(-1)">‹</button>
+      <div style="font-family:'Instrument Serif',serif;font-size:20px;">${monthLabel}</div>
+      <button class="link" style="width:auto;margin:0;" onclick="changeBrowseCalendarMonth(1)">›</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;">
+      ${['S','M','T','W','T','F','S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
+      ${cells}
+    </div>
+    ${browseCalendarSelectedDay ? `
+      <p style="font-size:13px;font-weight:600;margin-bottom:8px;">${monthLabel.split(' ')[0]} ${browseCalendarSelectedDay}</p>
+      <div class="listcard">
+        ${daySlots.length ? daySlots.map(s => `
+          <div class="row">
+            <div class="time">${fmtTime(s.startTime)}</div>
+            <div class="mid">
+              <div class="who">${s.location.name}</div>
+              <div class="what">${eventTypeLabel(s.eventType)}</div>
+            </div>
+            <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
+          </div>`).join('') : '<div class="empty">No open slots this day.</div>'}
+      </div>` : ''}
+  `;
+}
+
+window.changeBrowseCalendarMonth = function(delta) {
+  browseCalendarMonth = new Date(browseCalendarMonth.getFullYear(), browseCalendarMonth.getMonth() + delta, 1);
+  browseCalendarSelectedDay = null;
+  renderBrowseContent();
+};
+
+window.selectBrowseCalendarDay = function(day) {
+  browseCalendarSelectedDay = day;
+  renderBrowseContent();
+};
 
 function screenCalendar() {
   const year = calendarMonth.getFullYear();
@@ -910,22 +1025,12 @@ async function loadBillingStatus() {
 }
 
 async function loadOpenSlots() {
-  const box = document.getElementById('slotsBox');
+  const content = document.getElementById('browseContent');
   try {
-    const slots = await api('/api/slots/open');
-    if (!slots.length) { box.innerHTML = '<div class="empty">No open slots available.</div>'; return; }
-    box.innerHTML = slots.map(s => `
-      <div class="row">
-        <div class="time">${fmtTime(s.startTime)}</div>
-        <div class="mid">
-          <div class="who">${s.location.name}</div>
-          <div class="what">${s.location.address}</div>
-          <div class="what" style="margin-top:4px;"><strong>${s.eventType === 'REP_VISIT' ? 'Rep visit' : s.eventType === 'LUNCH' ? 'Lunch' : s.eventType === 'STAFF_TRAINING' ? 'Staff training' : 'Office closed'}</strong></div>
-        </div>
-        <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
-      </div>`).join('');
+    openSlotsData = await api('/api/slots/open');
+    renderBrowseContent();
   } catch (err) {
-    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+    content.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
 }
 
