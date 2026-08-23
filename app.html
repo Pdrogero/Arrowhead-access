@@ -909,6 +909,18 @@ function screenLiterature() {
     </div>`;
 }
 
+function renderLiteratureAttachment(url) {
+  if (!url) return '';
+  const isImage = /\.(jpe?g|png|gif|webp|heic)(\?.*)?$/i.test(url);
+  if (isImage) {
+    return `<a href="${url}" target="_blank" rel="noopener" style="display:block;margin-top:8px;">
+      <img src="${url}" alt="Attached image" style="max-width:220px;max-height:160px;border-radius:8px;border:1px solid var(--line);display:block;object-fit:cover;">
+    </a>`;
+  }
+  const filename = decodeURIComponent(url.split('/').pop().replace(/^\d+-/, ''));
+  return `<div style="margin-top:4px;"><a href="${url}" target="_blank" rel="noopener">📄 ${filename}</a></div>`;
+}
+
 async function loadLiterature() {
   const box = document.getElementById('literatureBox');
   try {
@@ -942,7 +954,7 @@ async function loadLiterature() {
             <div class="who">${item.title}</div>
             <div class="what">${item.rep.name} · ${item.rep.companyName}</div>
             ${item.description ? `<div class="what" style="margin-top:4px;">${item.description.replace(/</g, '&lt;')}</div>` : ''}
-            ${item.linkUrl ? `<div class="what" style="margin-top:4px;"><a href="${item.linkUrl}" target="_blank" rel="noopener">${item.linkUrl}</a></div>` : ''}
+            ${renderLiteratureAttachment(item.linkUrl)}
           </div>
           <span class="chip ${item.status}">${item.status}</span>
           ${item.status === 'PENDING' ? `
