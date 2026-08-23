@@ -9,6 +9,7 @@ import profileRouter from './routes/profile.routes';
 import transfersRouter from './routes/transfers.routes';
 import slotsRouter from './routes/slots.routes';
 import policiesRouter from './routes/policies.routes';
+import employeesRouter from './routes/employees.routes';
 
 const app = express();
 app.use(cors());
@@ -25,6 +26,7 @@ app.use('/api/profile', profileRouter);
 app.use('/api/transfers', transfersRouter);
 app.use('/api/slots', slotsRouter);
 app.use('/api/policies', policiesRouter);
+app.use('/api/employees', employeesRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

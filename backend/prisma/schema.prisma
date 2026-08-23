@@ -114,6 +114,19 @@ model Location {
   slots  Slot[]
   policy OfficePolicy?
   recurringSlotTemplates RecurringSlotTemplate[]
+  employees OfficeEmployee[]
+}
+
+// A simple staff directory the office maintains, visible to reps who've
+// booked a visit there — so they know who works at the office.
+model OfficeEmployee {
+  id         String   @id @default(cuid())
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+  name       String
+  createdAt  DateTime @default(now())
+
+  @@index([locationId])
 }
 
 model OfficePolicy {

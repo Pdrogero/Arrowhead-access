@@ -102,6 +102,9 @@ let attendanceBookingId = null;
 let attendanceLocationName = '';
 let attendanceDateStr = '';
 let attendeeRows = [];
+let employeeRows = [];
+let viewedOfficeStaff = null;
+let viewedOfficeStaffName = '';
 
 // ========== UTILITY ==========
 async function api(path, options = {}) {
@@ -327,6 +330,14 @@ function screenOfficeSettings() {
         </select>
 
         <button class="primary" onclick="createRecurringSlot()">Create Recurring Slots</button>
+      </div>
+
+      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Our Team</p>
+      <div class="card">
+        <p style="font-size:12px;color:var(--slate);margin-bottom:12px;">List your staff so reps know who they're meeting with when they visit.</p>
+        <div id="employeeRowsBox"></div>
+        <button type="button" class="link" style="text-align:left;margin-top:4px;" onclick="addEmployeeRow()">+ Add team member</button>
+        <button class="primary" style="margin-top:12px;" onclick="saveEmployees()">Save team list</button>
       </div>
     </div>`;
 }
@@ -599,6 +610,80 @@ async function saveAttendees() {
     setState({ formErr: err.message });
   }
 }
+
+function renderEmployeeRows() {
+  const box = document.getElementById('employeeRowsBox');
+  if (!employeeRows.length) {
+    box.innerHTML = `<p style="font-size:13px;color:var(--slate);margin-bottom:12px;">No team members added yet.</p>`;
+    return;
+  }
+  box.innerHTML = employeeRows.map((e, i) => `
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+      <input type="text" placeholder="Full name" value="${e.name || ''}" oninput="updateEmployeeField(${i}, this.value)" style="margin-bottom:0;flex:1;">
+      <button type="button" onclick="removeEmployeeRow(${i})" title="Remove" style="background:none;border:none;color:#C23C3C;font-size:16px;cursor:pointer;padding:4px 8px;">✕</button>
+    </div>
+  `).join('');
+}
+
+window.updateEmployeeField = function(index, value) {
+  employeeRows[index].name = value;
+};
+
+window.addEmployeeRow = function() {
+  employeeRows.push({ name: '' });
+  renderEmployeeRows();
+};
+
+window.removeEmployeeRow = function(index) {
+  employeeRows.splice(index, 1);
+  renderEmployeeRows();
+};
+
+async function loadEmployees() {
+  try {
+    const employees = await api('/api/employees/mine');
+    employeeRows = employees.map(e => ({ name: e.name }));
+  } catch (err) {
+    employeeRows = [];
+  }
+  renderEmployeeRows();
+}
+
+window.saveEmployees = async function() {
+  const cleaned = employeeRows.filter(e => e.name.trim());
+  try {
+    await api('/api/employees/mine', { method: 'POST', body: JSON.stringify({ employees: cleaned }) });
+    alert('Team list saved!');
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+function screenOfficeStaff() {
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <h1>${viewedOfficeStaffName}</h1>
+      <p class="sub">Team members this office has listed.</p>
+      <div class="listcard">
+        ${viewedOfficeStaff === null
+          ? '<div class="empty">Loading…</div>'
+          : viewedOfficeStaff.length
+            ? viewedOfficeStaff.map(e => `<div class="row"><div class="mid"><div class="who">${e.name}</div></div></div>`).join('')
+            : '<div class="empty">This office has not listed their team yet.</div>'}
+      </div>
+    </div>`;
+}
+
+window.viewOfficeStaff = async function(locationId, locationName) {
+  viewedOfficeStaffName = locationName;
+  viewedOfficeStaff = null;
+  setState({ screen: 'officeStaff' });
+  try {
+    viewedOfficeStaff = await api(`/api/employees/location/${locationId}`);
+    render();
+  } catch (err) {}
+};
 
 function screenTransfers() {
   return `
@@ -1047,6 +1132,7 @@ async function loadMyBookings() {
         <div class="time">${fmtTime(b.slot.startTime)}</div>
         <div class="mid"><div class="who">${b.slot.location.name}</div></div>
         <span class="chip ${b.status}">${b.status}</span>
+        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
         ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
         ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openAttendance('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime)}')">📝 Attendance</button>` : ''}
         ${b.status === 'CONFIRMED' && b.slot.eventType === 'LUNCH' ? `
@@ -1227,7 +1313,8 @@ function render() {
   else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
   else if (state.screen === 'signup') app.innerHTML = screenSignup();
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
-  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); }
+  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); }
+  else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }
   else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); }
   else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
