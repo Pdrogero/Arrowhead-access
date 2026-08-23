@@ -229,6 +229,10 @@ model Rep {
   renewalReminder7dSent  Boolean           @default(false)
   renewalReminder1dSent  Boolean           @default(false)
 
+  // Private token embedded in this rep's calendar subscription URL, so
+  // Google/Apple Calendar can fetch their bookings.ics feed without logging in.
+  calendarToken        String?             @unique
+
   verificationRequests VerificationRequest[]
   bookings             Booking[]
   transfersSent        BookingTransfer[]   @relation("TransfersSent")

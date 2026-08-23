@@ -534,6 +534,8 @@ function screenCalendar() {
         <button class="link" style="width:auto;margin:0;" onclick="changeCalendarMonth(1)">›</button>
       </div>
       <p class="sub">Tap a day to see what's scheduled.</p>
+      <button class="link" style="text-align:left;margin-bottom:14px;" onclick="toggleCalendarSync()">🔗 Sync with Apple/Google Calendar</button>
+      <div id="calendarSyncBox"></div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;">
         ${['S','M','T','W','T','F','S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
         ${cells}
@@ -1132,7 +1134,7 @@ function screenDashboardRep() {
 
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'transfers'})">🔁 View transfers</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'profile'})">👤 Edit my profile</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'calendar'})">📅 View calendar</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="openCalendar()">📅 View calendar</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'browseSlots'})">🔍 Browse open slots</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'messages'})">💬 Messages</button>
@@ -1627,6 +1629,18 @@ window.claimSlot = async function(slotId) {
   }
 };
 
+window.openCalendar = function() {
+  calendarMonth = new Date();
+  calendarSelectedDay = null;
+  setState({ screen: 'calendar' });
+  loadCalendarBookings();
+};
+
+// Fetches once when the calendar screen is opened. Deliberately does NOT
+// live in the render() dispatch table — render() itself is called at the
+// end of this function, and every other screen calls render() too, so
+// wiring the fetch into the dispatch caused it to refetch (and re-render,
+// and refetch again...) in an infinite loop every time this screen redrew.
 async function loadCalendarBookings() {
   try {
     calendarBookings = await api('/api/bookings/mine');
@@ -1643,6 +1657,41 @@ window.changeCalendarMonth = function(delta) {
 window.selectCalendarDay = function(day) {
   calendarSelectedDay = day;
   render();
+};
+
+window.toggleCalendarSync = async function() {
+  const box = document.getElementById('calendarSyncBox');
+  if (!box) return;
+  if (box.innerHTML.trim()) {
+    box.innerHTML = '';
+    return;
+  }
+  box.innerHTML = '<p style="font-size:13px;color:var(--slate);margin-bottom:16px;">Loading your link…</p>';
+  try {
+    const { url, webcalUrl } = await api('/api/bookings/calendar-link');
+    box.innerHTML = `
+      <div class="card" style="margin-bottom:20px;">
+        <p style="font-size:13px;font-weight:600;margin-bottom:6px;">Your private calendar link</p>
+        <p style="font-size:12.5px;color:var(--slate);margin-bottom:10px;">Add this once and your confirmed visits will keep showing up automatically — no need to re-add it.</p>
+        <input type="text" readonly value="${url}" onclick="this.select()" style="margin-bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:12px;">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
+          <button type="button" class="link" style="width:auto;margin:0;" onclick="copyCalendarLink('${url}')">📋 Copy link</button>
+          <a href="${webcalUrl}" style="font-size:13px;color:var(--teal);text-decoration:underline;">📱 Open in Apple Calendar</a>
+        </div>
+        <p style="font-size:12px;color:var(--slate);line-height:1.6;">
+          <strong>Apple Calendar (iPhone/Mac):</strong> tap "Open in Apple Calendar" above, or in the Calendar app go to Settings → Add Account → Other → Add Subscribed Calendar, and paste the link.<br><br>
+          <strong>Google Calendar:</strong> on Google Calendar's website, click the "+" next to "Other calendars" → "From URL", and paste the link.
+        </p>
+      </div>`;
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+};
+
+window.copyCalendarLink = function(url) {
+  navigator.clipboard.writeText(url)
+    .then(() => alert('Link copied'))
+    .catch(() => alert('Could not copy automatically — tap the link field above and select the text instead.'));
 };
 
 async function loadTransfers() {
@@ -1743,7 +1792,7 @@ function render() {
   else if (state.screen === 'conversation') { app.innerHTML = screenConversation(); loadConversationMessages(); }
   else if (state.screen === 'literature') { app.innerHTML = screenLiterature(); loadLiterature(); }
   else if (state.screen === 'attendance') { app.innerHTML = screenAttendance(); loadAttendees(); }
-  else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); loadCalendarBookings(); }
+  else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
 

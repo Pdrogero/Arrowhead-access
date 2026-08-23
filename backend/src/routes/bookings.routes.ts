@@ -2,6 +2,7 @@
 // Mount with: app.use('/api/bookings', bookingsRouter)
 
 import { Router } from 'express';
+import crypto from 'crypto';
 import { requireAuth, requireRole, requireVerifiedRep } from '../auth/auth.guard';
 import { assertOwnsLocation } from '../auth/scoping';
 import { claimOpenSlot, requestNewSlot, decideBooking, BookingError } from '../booking/booking.service';
@@ -10,6 +11,19 @@ import { sendEmail } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
+
+// The backend's own public URL — used to build each rep's calendar feed
+// link. Render sets RENDER_EXTERNAL_URL automatically; the literal fallback
+// matches the API_BASE hardcoded in app.html.
+const API_URL = process.env.RENDER_EXTERNAL_URL || 'https://arrowhead-access-api.onrender.com';
+
+function icsEscape(text: string): string {
+  return text.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
+}
+
+function toIcsDate(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+}
 
 function handleBookingError(err: unknown, res: any) {
   if (err instanceof BookingError) {
@@ -69,6 +83,66 @@ router.get('/mine', requireAuth, requireRole('rep'), async (req, res) => {
     orderBy: { requestedAt: 'desc' },
   });
   res.json(bookings);
+});
+
+// --- Rep: get (or create) their private calendar subscription link -------
+router.get('/calendar-link', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    let rep = await prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } });
+    if (!rep.calendarToken) {
+      rep = await prisma.rep.update({
+        where: { id: rep.id },
+        data: { calendarToken: crypto.randomBytes(24).toString('hex') },
+      });
+    }
+    const url = `${API_URL}/api/bookings/calendar/${rep.calendarToken}.ics`;
+    res.json({ url, webcalUrl: url.replace(/^https?:\/\//, 'webcal://') });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not get calendar link' });
+  }
+});
+
+// --- Public: the actual .ics feed Google/Apple Calendar subscribes to ----
+// No login here — the random token in the URL is the credential, same
+// pattern most calendar apps use for "secret address" subscription links.
+router.get('/calendar/:token', async (req, res) => {
+  const token = req.params.token.replace(/\.ics$/i, '');
+  const rep = await prisma.rep.findUnique({ where: { calendarToken: token } });
+  if (!rep) return res.status(404).send('Calendar not found');
+
+  const bookings = await prisma.booking.findMany({
+    where: { repId: rep.id, status: { in: ['CONFIRMED', 'COMPLETED'] } },
+    include: { slot: { include: { location: true } } },
+    orderBy: { slot: { startTime: 'asc' } },
+  });
+
+  const events = bookings.map(b => [
+    'BEGIN:VEVENT',
+    `UID:booking-${b.id}@arrowheadaccess.com`,
+    `DTSTAMP:${toIcsDate(new Date())}`,
+    `DTSTART:${toIcsDate(b.slot.startTime)}`,
+    `DTEND:${toIcsDate(b.slot.endTime)}`,
+    `SUMMARY:${icsEscape('Visit: ' + b.slot.location.name)}`,
+    `LOCATION:${icsEscape(b.slot.location.address)}`,
+    b.topic ? `DESCRIPTION:${icsEscape(b.topic)}` : null,
+    'END:VEVENT',
+  ].filter(Boolean).join('\r\n')).join('\r\n');
+
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Arrowhead Access//Rep Calendar//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:Arrowhead Access Visits',
+    events,
+    'END:VCALENDAR',
+  ].filter(Boolean).join('\r\n');
+
+  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Content-Disposition', 'inline; filename="arrowhead-visits.ics"');
+  res.send(ics);
 });
 
 // --- Office staff: view this location's ledger ---------------------------
