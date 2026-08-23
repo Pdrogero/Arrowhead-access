@@ -58,6 +58,12 @@ router.post('/rep/signup', async (req, res) => {
       verified: rep.verificationStatus === 'VERIFIED',
     });
 
+    sendEmail({
+      to: rep.email,
+      subject: 'Welcome to Arrowhead Access',
+      html: `<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p><p>— Arrowhead Access</p>`,
+    }).catch(() => {});
+
     res.status(201).json({
       token,
       rep: { id: rep.id, name: rep.name, email: rep.email, verificationStatus: rep.verificationStatus },
@@ -152,6 +158,12 @@ router.post('/office/signup', async (req, res) => {
       organizationId: result.org.id,
       locationId: result.location.id,
     });
+
+    sendEmail({
+      to: result.staff.email,
+      subject: 'Welcome to Arrowhead Access',
+      html: `<p>Hi,</p><p>Your Arrowhead Access office account for <strong>${result.location.name}</strong> is set up. You can now post open slots, review visit requests, and manage your office's availability for sales reps.</p><p>— Arrowhead Access</p>`,
+    }).catch(() => {});
 
     res.status(201).json({
       token,
