@@ -298,6 +298,16 @@ model Slot {
   createdByStaff   StaffUser?     @relation(fields: [createdByStaffId], references: [id])
   createdAt        DateTime       @default(now())
 
+  // Lunch order details — only meaningful when eventType is LUNCH. The
+  // office fills these in (at posting time or later); if repHandlesOrder
+  // is true the office is asking the rep to place the order themselves,
+  // and headCount/allergyNotes are still useful for the rep to know what
+  // to order for.
+  headCount        Int?
+  allergyNotes     String?
+  foodOrderNotes   String?
+  repHandlesOrder  Boolean        @default(false)
+
   booking Booking?
 
   @@index([locationId, startTime])

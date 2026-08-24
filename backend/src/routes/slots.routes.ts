@@ -15,7 +15,7 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Only office staff can post slots' });
   }
   try {
-    const { startTime, endTime } = req.body;
+    const { startTime, endTime, eventType, headCount, allergyNotes, foodOrderNotes, repHandlesOrder } = req.body;
     if (!startTime || !endTime) {
       return res.status(400).json({ error: 'startTime and endTime are required' });
     }
@@ -29,7 +29,14 @@ router.post('/', requireAuth, async (req, res) => {
         startTime: new Date(startTime),
         endTime: new Date(endTime),
         status: 'OPEN',
+        eventType: eventType || 'REP_VISIT',
         createdByStaffId: staff.id,
+        ...(eventType === 'LUNCH' ? {
+          headCount: headCount != null && headCount !== '' ? parseInt(headCount, 10) : null,
+          allergyNotes: allergyNotes || null,
+          foodOrderNotes: foodOrderNotes || null,
+          repHandlesOrder: !!repHandlesOrder,
+        } : {}),
       },
     });
 
@@ -37,6 +44,41 @@ router.post('/', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not create slot' });
+  }
+});
+
+// --- Office staff: add or update lunch order details on one of their slots -
+router.patch('/:id/lunch-details', requireAuth, async (req, res) => {
+  if (!['office_admin', 'office_staff'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only office staff can edit lunch order details' });
+  }
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff account not found' });
+
+    const slot = await prisma.slot.findUnique({ where: { id: req.params.id } });
+    if (!slot || slot.locationId !== staff.locationId) {
+      return res.status(404).json({ error: 'Slot not found' });
+    }
+    if (slot.eventType !== 'LUNCH') {
+      return res.status(400).json({ error: 'Only lunch slots can have order details' });
+    }
+
+    const { headCount, allergyNotes, foodOrderNotes, repHandlesOrder } = req.body;
+    const updated = await prisma.slot.update({
+      where: { id: slot.id },
+      data: {
+        headCount: headCount != null && headCount !== '' ? parseInt(headCount, 10) : null,
+        allergyNotes: allergyNotes || null,
+        foodOrderNotes: foodOrderNotes || null,
+        repHandlesOrder: !!repHandlesOrder,
+      },
+    });
+
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not update lunch order details' });
   }
 });
 

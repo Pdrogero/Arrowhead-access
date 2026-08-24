@@ -428,12 +428,13 @@ function screenPostSlot() {
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Event type</label>
-        <select id="eventType" style="margin-bottom:12px;">
+        <select id="eventType" style="margin-bottom:12px;" onchange="togglePostSlotLunchFields()">
           <option value="REP_VISIT">Rep visit</option>
           <option value="LUNCH">Lunch</option>
           <option value="STAFF_TRAINING">Staff training</option>
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
+        <div id="postSlotLunchFields" style="display:none;">${lunchDetailsFieldsHtml('postSlot')}</div>
         <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Date & time</label>
         <input id="startTime" type="datetime-local" placeholder="Start date & time">
         <input id="endTime" type="datetime-local" placeholder="End date & time">
@@ -458,6 +459,63 @@ function screenBrowseSlots() {
 
 function eventTypeLabel(t) {
   return t === 'REP_VISIT' ? 'Rep visit' : t === 'LUNCH' ? 'Lunch' : t === 'STAFF_TRAINING' ? 'Staff training' : 'Office closed';
+}
+
+// Shared lunch-order fields, used both when posting a new lunch slot and
+// when an office edits an existing one's details from the ledger. `prefix`
+// namespaces the element ids so more than one instance can exist at once.
+function lunchDetailsFieldsHtml(prefix, values = {}) {
+  const repHandles = !!values.repHandlesOrder;
+  return `
+    <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Number of people</label>
+    <input id="${prefix}HeadCount" type="number" min="1" value="${values.headCount ?? ''}" placeholder="e.g. 8">
+    <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Allergies / dietary notes</label>
+    <textarea id="${prefix}AllergyNotes" rows="2" placeholder="e.g. 2 vegetarian, 1 gluten-free" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;">${values.allergyNotes || ''}</textarea>
+    <label style="display:flex;align-items:center;font-size:13px;margin-bottom:10px;">
+      <input type="checkbox" id="${prefix}RepHandles" style="margin-right:8px;" ${repHandles ? 'checked' : ''} onchange="toggleLunchOrderNotes('${prefix}')">
+      Let the rep place the order instead
+    </label>
+    <div id="${prefix}OrderNotesWrap" style="${repHandles ? 'display:none;' : ''}">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">What to order</label>
+      <textarea id="${prefix}OrderNotes" rows="3" placeholder="e.g. 3 turkey club sandwiches, 2 chicken caesar salads, assorted drinks" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;">${values.foodOrderNotes || ''}</textarea>
+    </div>`;
+}
+
+window.toggleLunchOrderNotes = function(prefix) {
+  const checked = document.getElementById(prefix + 'RepHandles').checked;
+  document.getElementById(prefix + 'OrderNotesWrap').style.display = checked ? 'none' : '';
+};
+
+function readLunchDetailsFields(prefix) {
+  return {
+    headCount: document.getElementById(prefix + 'HeadCount').value,
+    allergyNotes: document.getElementById(prefix + 'AllergyNotes').value.trim(),
+    repHandlesOrder: document.getElementById(prefix + 'RepHandles').checked,
+    foodOrderNotes: document.getElementById(prefix + 'OrderNotes').value.trim(),
+  };
+}
+
+window.togglePostSlotLunchFields = function() {
+  const isLunch = document.getElementById('eventType').value === 'LUNCH';
+  document.getElementById('postSlotLunchFields').style.display = isLunch ? '' : 'none';
+};
+
+// Renders a read-only summary of a lunch's order details, for reps looking
+// at an open slot or their own booking. Returns '' for non-lunch slots or
+// lunches with nothing filled in yet.
+function lunchDetailsSummaryHtml(slot) {
+  if (slot.eventType !== 'LUNCH') return '';
+  const hasAnything = slot.headCount || slot.allergyNotes || slot.foodOrderNotes || slot.repHandlesOrder;
+  if (!hasAnything) return '';
+  return `
+    <div style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:12px;color:var(--ink);">
+      🍽 <strong>Lunch order</strong>
+      ${slot.headCount ? `<div>${slot.headCount} people</div>` : ''}
+      ${slot.allergyNotes ? `<div>Allergies: ${slot.allergyNotes.replace(/</g, '&lt;')}</div>` : ''}
+      ${slot.repHandlesOrder
+        ? `<div style="font-weight:600;color:var(--coral);">Office asked rep to place the order</div>`
+        : (slot.foodOrderNotes ? `<div>Order: ${slot.foodOrderNotes.replace(/</g, '&lt;')}</div>` : '')}
+    </div>`;
 }
 
 function filterBrowseSlots() {
@@ -493,6 +551,7 @@ function renderBrowseList(slots) {
         <div class="what">${s.location.address}</div>
         <div class="what" style="margin-top:4px;"><strong>${eventTypeLabel(s.eventType)}</strong></div>
         ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count)}
+        ${lunchDetailsSummaryHtml(s)}
       </div>
       <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
     </div>`).join('')}</div>`;
@@ -1817,18 +1876,18 @@ async function submitPostSlot() {
   const endTime = document.getElementById('endTime').value;
   const eventType = document.getElementById('eventType').value;
   const btn = document.getElementById('postSlotBtn');
-  
+
   if (!startTime || !endTime) {
     setState({ formErr: 'Both start and end times are required' });
     return;
   }
-  
+
+  const payload = { startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), eventType };
+  if (eventType === 'LUNCH') Object.assign(payload, readLunchDetailsFields('postSlot'));
+
   btn.disabled = true; btn.textContent = 'Posting…';
   try {
-    await api('/api/slots', {
-      method: 'POST',
-      body: JSON.stringify({ startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), eventType })
-    });
+    await api('/api/slots', { method: 'POST', body: JSON.stringify(payload) });
     alert('Slot posted!');
     setState({ screen: 'dashboard' });
   } catch (err) {
@@ -1863,6 +1922,23 @@ window.switchLocation = async function(locationId) {
   }
 };
 
+window.toggleLunchEdit = function(slotId) {
+  const box = document.getElementById('lunchEditBox-' + slotId);
+  if (box) box.style.display = box.style.display === 'none' ? '' : 'none';
+};
+
+window.saveLunchDetails = async function(slotId) {
+  try {
+    await api('/api/slots/' + slotId + '/lunch-details', {
+      method: 'PATCH',
+      body: JSON.stringify(readLunchDetailsFields('lunchEdit' + slotId)),
+    });
+    loadOfficeLedger();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 async function loadOfficeLedger() {
   const box = document.getElementById('ledgerBox');
   try {
@@ -1871,10 +1947,11 @@ async function loadOfficeLedger() {
     const repIds = slots.filter(s => s.booking?.rep).map(s => s.booking.rep.id);
     const repRatings = await fetchRatingAverages(repIds, 'rep');
     box.innerHTML = slots.map(s => `
-      <div class="row">
+      <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(s.startTime)}</div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count)}` : `<div class="what">Open slot</div>`}
+          ${lunchDetailsSummaryHtml(s)}
         </div>
         <span class="chip ${s.status}">${s.status}</span>
         ${s.status === 'REQUESTED' && s.booking ? `
@@ -1883,6 +1960,12 @@ async function loadOfficeLedger() {
         ` : ''}
         ${s.status === 'CONFIRMED' && s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">⭐ Rate rep</button>` : ''}
         ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
+        ${s.eventType === 'LUNCH' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="toggleLunchEdit('${s.id}')">🍽 Edit lunch order</button>` : ''}
+        ${s.eventType === 'LUNCH' ? `
+          <div id="lunchEditBox-${s.id}" class="card" style="display:none;width:100%;margin-top:10px;padding:14px;">
+            ${lunchDetailsFieldsHtml('lunchEdit' + s.id, s)}
+            <button class="primary" style="margin-top:0;margin-bottom:0;" onclick="saveLunchDetails('${s.id}')">Save order details</button>
+          </div>` : ''}
       </div>`).join('');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
@@ -1898,7 +1981,7 @@ async function loadMyBookings() {
     box.innerHTML = bookings.map(b => `
       <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(b.slot.startTime)}</div>
-        <div class="mid"><div class="who">${b.slot.location.name}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}</div>
+        <div class="mid"><div class="who">${b.slot.location.name}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}${lunchDetailsSummaryHtml(b.slot)}</div>
         <span class="chip ${b.status}">${b.status}</span>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message</button>
