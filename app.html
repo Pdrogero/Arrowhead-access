@@ -365,7 +365,10 @@ function screenOfficeSettings() {
         
         <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Confirmation deadline (hours before visit)</label>
         <input id="confirmationDeadline" type="number" value="48" min="0">
-        
+
+        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Allergies / dietary notes for reps to know about</label>
+        <textarea id="generalAllergyNotes" rows="3" placeholder="e.g. Please avoid peanuts — a staff member has a severe allergy." style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
+
         <button class="primary" onclick="saveOfficePolicy()">Save Policy</button>
       </div>
 
@@ -416,6 +419,9 @@ function screenOfficeSettings() {
           <button type="button" class="primary" style="margin-bottom:0;" onclick="createLocation()">Add this location</button>
         </div>
       </div>
+
+      <div id="saveAllErr"></div>
+      <button class="primary" id="saveAllBtn" style="margin-top:8px;" onclick="saveAllOfficeSettings()">Save All</button>
     </div>`;
 }
 
@@ -835,13 +841,15 @@ window.createLocation = async function() {
   }
 };
 
-window.saveEmployees = async function() {
+window.saveEmployees = async function(silent) {
   const cleaned = employeeRows.filter(e => e.name.trim());
   try {
     await api('/api/employees/mine', { method: 'POST', body: JSON.stringify({ employees: cleaned }) });
-    alert('Team list saved!');
+    if (!silent) alert('Team list saved!');
+    return true;
   } catch (err) {
-    alert(err.message);
+    if (!silent) alert(err.message);
+    return false;
   }
 };
 
@@ -1827,10 +1835,11 @@ async function saveProfile() {
   }
 }
 
-window.saveOfficePolicy = async function() {
+window.saveOfficePolicy = async function(silent) {
   const maxRep = document.getElementById('maxVisitsPerRep').value;
   const maxCompany = document.getElementById('maxVisitsPerCompany').value;
   const deadline = document.getElementById('confirmationDeadline').value;
+  const generalAllergyNotes = document.getElementById('generalAllergyNotes').value.trim();
 
   try {
     await api('/api/policies', {
@@ -1839,12 +1848,55 @@ window.saveOfficePolicy = async function() {
         maxVisitsPerRepPerMonth: parseInt(maxRep),
         maxVisitsPerCompanyPerMonth: parseInt(maxCompany),
         confirmationDeadlineHours: parseInt(deadline),
-        closedDays: []
+        closedDays: [],
+        generalAllergyNotes,
       })
     });
-    alert('Policy saved!');
+    if (!silent) alert('Policy saved!');
+    return true;
   } catch (err) {
+    if (silent) return false;
     setState({ formErr: err.message });
+    return false;
+  }
+};
+
+async function loadOfficePolicy() {
+  try {
+    const policy = await api('/api/policies');
+    document.getElementById('maxVisitsPerRep').value = policy.maxVisitsPerRepPerMonth ?? 1;
+    document.getElementById('maxVisitsPerCompany').value = policy.maxVisitsPerCompanyPerMonth ?? 2;
+    document.getElementById('confirmationDeadline').value = policy.confirmationDeadlineHours ?? 48;
+    document.getElementById('generalAllergyNotes').value = policy.generalAllergyNotes || '';
+  } catch (err) {}
+}
+
+// Saves the Visit Policies (incl. allergy notes) and the team list together
+// with one button — doesn't touch Recurring Slots or Locations, since those
+// are one-off actions rather than settings with a persistent draft state.
+window.saveAllOfficeSettings = async function() {
+  const btn = document.getElementById('saveAllBtn');
+  const errBox = document.getElementById('saveAllErr');
+  errBox.innerHTML = '';
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Saving…';
+
+  try {
+    const [policyOk, employeesOk] = await Promise.all([
+      saveOfficePolicy(true),
+      saveEmployees(true),
+    ]);
+
+    if (policyOk && employeesOk) {
+      alert('All settings saved!');
+    } else {
+      const failed = [!policyOk && 'Visit Policies', !employeesOk && 'Our Team'].filter(Boolean).join(' and ');
+      errBox.innerHTML = `<div class="msg err">Could not save: ${failed}. Please try again.</div>`;
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
   }
 };
 
@@ -2236,7 +2288,7 @@ function render() {
   else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
   else if (state.screen === 'signup') app.innerHTML = screenSignup();
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
-  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); }
+  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); loadOfficePolicy(); }
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
   else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }

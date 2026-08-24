@@ -142,6 +142,9 @@ model OfficePolicy {
   closedDays                  DayOfWeek[]
   closedTimeStart             String?  // HH:MM format, null = no blocked time today
   closedTimeEnd               String?
+  // Standing allergy/dietary notes for the office, shown to reps as
+  // general context (separate from the per-lunch allergy notes on Slot).
+  generalAllergyNotes         String?
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }
