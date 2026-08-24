@@ -7,6 +7,7 @@
 //   BLOB_READ_WRITE_TOKEN   (from Vercel Blob — used to upload literature files)
 
 import { Router } from 'express';
+import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
 import { sendEmail } from '../email';
@@ -19,13 +20,37 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 
 const MAX_ATTACHMENTS = 10;
 
+// Mobile photo pickers (iOS Safari in particular) sometimes hand over a
+// file whose name has no extension at all — the frontend's image-vs-file
+// icon and thumbnail rendering rely on the stored URL ending in a real
+// extension, so this fills one in from the actual content type whenever
+// the original filename doesn't already have one.
+const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'image/heic': '.heic',
+  'image/heif': '.heif',
+  'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+};
+
+function blobKeyFor(file: Express.Multer.File): string {
+  const originalExt = path.extname(file.originalname);
+  const ext = originalExt || EXTENSION_BY_MIME_TYPE[file.mimetype] || '';
+  const baseName = path.basename(file.originalname, originalExt) || 'file';
+  return `literature/${Date.now()}-${baseName}${ext}`;
+}
+
 // --- Rep: upload a literature/sample file (PDF, image, etc.) --------------
 // Returns a public URL to use as the linkUrl when creating the item.
 router.post('/upload', requireAuth, requireRole('rep'), upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-    const blob = await put(`literature/${Date.now()}-${req.file.originalname}`, req.file.buffer, {
+    const blob = await put(blobKeyFor(req.file), req.file.buffer, {
       access: 'public',
       contentType: req.file.mimetype,
       token: process.env.BLOB_READ_WRITE_TOKEN,

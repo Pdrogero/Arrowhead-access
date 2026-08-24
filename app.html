@@ -1050,16 +1050,28 @@ function attachmentFilename(url) {
   return decodeURIComponent(url.split('/').pop().replace(/^\d+-/, ''));
 }
 
-function renderAttachmentThumb(url) {
-  const isImage = /\.(jpe?g|png|gif|webp|heic)(\?.*)?$/i.test(url);
-  if (isImage) {
-    return `<a href="${url}" target="_blank" rel="noopener" style="flex:0 0 auto;">
-      <img src="${url}" alt="Attached image" style="width:140px;height:110px;border-radius:8px;border:1px solid var(--line);display:block;object-fit:cover;">
-    </a>`;
-  }
+function renderFileCard(url) {
   return `<a href="${url}" target="_blank" rel="noopener" style="flex:0 0 auto;width:140px;height:110px;border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:8px;font-size:12px;">
     <span style="font-size:24px;">📄</span>
     <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;">${attachmentFilename(url)}</span>
+  </a>`;
+}
+
+window.handleThumbError = function(img) {
+  const anchor = img.closest('a');
+  if (anchor) anchor.outerHTML = renderFileCard(img.getAttribute('data-fallback-url'));
+};
+
+// Files picked from a phone/tablet photo library sometimes come through
+// with no extension on the filename at all, so a URL-extension check alone
+// can't reliably tell images apart from documents. Instead this always
+// tries loading the URL as an image first, and only falls back to the
+// generic file-card look if that actually fails to load.
+function renderAttachmentThumb(url) {
+  const knownNonImage = /\.(pdf|docx?|xlsx?|pptx?|csv|txt)(\?.*)?$/i.test(url);
+  if (knownNonImage) return renderFileCard(url);
+  return `<a href="${url}" target="_blank" rel="noopener" style="flex:0 0 auto;">
+    <img src="${url}" alt="Attachment" data-fallback-url="${url}" style="width:140px;height:110px;border-radius:8px;border:1px solid var(--line);display:block;object-fit:cover;" onerror="handleThumbError(this)">
   </a>`;
 }
 
