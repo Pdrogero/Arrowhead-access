@@ -18,12 +18,13 @@ function signToken(payload: JwtPayload): string {
 
 router.post('/rep/signup', async (req, res) => {
   try {
-    const { email, password, name, companyName } = req.body;
+    const { password, name, companyName } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
     if (!email || !password || !name || !companyName) {
       return res.status(400).json({ error: 'email, password, name, and companyName are required' });
     }
 
-    const existing = await prisma.rep.findUnique({ where: { email } });
+    const existing = await prisma.rep.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
     if (existing) {
       return res.status(409).json({ error: 'An account with this email already exists' });
     }
@@ -76,8 +77,12 @@ router.post('/rep/signup', async (req, res) => {
 
 router.post('/rep/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const rep = await prisma.rep.findUnique({ where: { email } });
+    const { password } = req.body;
+    const email = String(req.body.email || '').trim();
+    // Case-insensitive lookup — mobile keyboards (iPad in particular) can
+    // auto-capitalize the first letter of an email field, which would
+    // otherwise fail an exact-match lookup even with the right password.
+    const rep = await prisma.rep.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
     if (!rep || !(await bcrypt.compare(password, rep.passwordHash))) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -101,8 +106,9 @@ router.post('/rep/login', async (req, res) => {
 
 router.post('/staff/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const staff = await prisma.staffUser.findUnique({ where: { email } });
+    const { password } = req.body;
+    const email = String(req.body.email || '').trim();
+    const staff = await prisma.staffUser.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
     if (!staff || !(await bcrypt.compare(password, staff.passwordHash))) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -122,12 +128,13 @@ router.post('/staff/login', async (req, res) => {
 });
 router.post('/office/signup', async (req, res) => {
   try {
-    const { officeName, locationName, address, timezone, email, password } = req.body;
+    const { officeName, locationName, address, timezone, password } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
     if (!officeName || !locationName || !address || !email || !password) {
       return res.status(400).json({ error: 'officeName, locationName, address, email, and password are required' });
     }
 
-    const existing = await prisma.staffUser.findUnique({ where: { email } });
+    const existing = await prisma.staffUser.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
     if (existing) {
       return res.status(409).json({ error: 'An account with this email already exists' });
     }
@@ -185,14 +192,15 @@ router.post('/office/signup', async (req, res) => {
 // table — reuses the same JWT_SECRET already configured for login.
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { email, role } = req.body; // role: 'rep' | 'office'
+    const { role } = req.body; // role: 'rep' | 'office'
+    const email = String(req.body.email || '').trim();
     if (!email || !role) {
       return res.status(400).json({ error: 'email and role are required' });
     }
 
     const account = role === 'rep'
-      ? await prisma.rep.findUnique({ where: { email } })
-      : await prisma.staffUser.findUnique({ where: { email } });
+      ? await prisma.rep.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } })
+      : await prisma.staffUser.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
 
     // Respond identically whether or not the account exists, so this
     // endpoint can't be used to discover which emails are registered.

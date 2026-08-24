@@ -178,7 +178,7 @@ function screenLogin() {
       <h1>${isOffice ? 'Office Login' : 'Sales Rep Login'}</h1>
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
-        <input id="email" type="email" placeholder="Email" autocomplete="off" value="${isOffice ? 'staff@meridianfamilypractice.com' : ''}">
+        <input id="email" type="email" placeholder="Email" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" value="${isOffice ? 'staff@meridianfamilypractice.com' : ''}">
         <input id="password" type="password" placeholder="Password" autocomplete="off" value="${isOffice ? 'demo1234' : ''}">
         <button class="primary" onclick="doLogin()">Log In</button>
         <button class="link" onclick="setState({screen:'forgotPassword',role:state.role})">Forgot password?</button>
@@ -198,7 +198,7 @@ function screenForgotPassword() {
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         ${state.forgotSent ? `<div class="msg ok">If that email is registered, a reset link is on its way.</div>` : `
-          <input id="forgotEmail" type="email" placeholder="Email" autocomplete="off">
+          <input id="forgotEmail" type="email" placeholder="Email" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
           <button class="primary" onclick="doForgotPassword()">Send reset link</button>
         `}
       </div>
@@ -229,7 +229,7 @@ function screenSignup() {
           <input id="officeName" type="text" placeholder="Office name">
           <input id="locationName" type="text" placeholder="Location name">
           <input id="address" type="text" placeholder="Address">
-          <input id="email" type="email" placeholder="Email">
+          <input id="email" type="email" placeholder="Email" autocapitalize="none" autocorrect="off" spellcheck="false">
           <input id="password" type="password" placeholder="Password">
           <button class="primary" onclick="doOfficeSignup()">Create Account</button>
         </div>
@@ -243,7 +243,7 @@ function screenSignup() {
           ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
           <input id="name" type="text" placeholder="Full name">
           <input id="companyName" type="text" placeholder="Company name">
-          <input id="email" type="email" placeholder="Email">
+          <input id="email" type="email" placeholder="Email" autocapitalize="none" autocorrect="off" spellcheck="false">
           <input id="password" type="password" placeholder="Password">
           <button class="primary" onclick="doRepSignup()">Create Account</button>
         </div>
@@ -1339,7 +1339,7 @@ function screenDashboardRep() {
 
 // ========== LOAD DATA ==========
 async function doLogin() {
-  const email = document.getElementById('email').value;
+  const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
   const endpoint = state.role === 'office' ? '/api/auth/staff/login' : '/api/auth/rep/login';
   
@@ -1354,7 +1354,7 @@ async function doLogin() {
 }
 
 async function doForgotPassword() {
-  const email = document.getElementById('forgotEmail').value;
+  const email = document.getElementById('forgotEmail').value.trim().toLowerCase();
   const role = state.role === 'office' ? 'office' : 'rep';
 
   try {
@@ -1414,7 +1414,7 @@ async function doChangePassword() {
 async function doRepSignup() {
   const name = document.getElementById('name').value;
   const companyName = document.getElementById('companyName').value;
-  const email = document.getElementById('email').value;
+  const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
   
   try {
@@ -1431,7 +1431,7 @@ async function doOfficeSignup() {
   const officeName = document.getElementById('officeName').value;
   const locationName = document.getElementById('locationName').value;
   const address = document.getElementById('address').value;
-  const email = document.getElementById('email').value;
+  const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
 
   try {
