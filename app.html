@@ -110,6 +110,7 @@ let attendanceLocationName = '';
 let attendanceDateStr = '';
 let attendeeRows = [];
 let employeeRows = [];
+let recurringTemplates = [];
 let viewedOfficeStaff = null;
 let viewedOfficeStaffName = '';
 let reviewBookingId = null;
@@ -374,6 +375,14 @@ function screenOfficeSettings() {
 
       <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Create Recurring Slots</p>
       <div class="card">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Event type</label>
+        <select id="recurringEventType" style="margin-bottom:12px;" onchange="prefillRecurringFieldsForEventType()">
+          <option value="REP_VISIT">Rep visit</option>
+          <option value="LUNCH">Lunch</option>
+          <option value="STAFF_TRAINING">Staff training</option>
+          <option value="OFFICE_CLOSED">Office closed</option>
+        </select>
+
         <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Days (select all that apply)</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
           ${['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'].map(day => `
@@ -383,17 +392,11 @@ function screenOfficeSettings() {
 
         <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Start time</label>
         <input id="recurringStart" type="time" value="09:00">
-        
+
         <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">End time</label>
         <input id="recurringEnd" type="time" value="17:00">
-        
-        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Event type</label>
-        <select id="recurringEventType" style="margin-bottom:12px;">
-          <option value="REP_VISIT">Rep visit</option>
-          <option value="LUNCH">Lunch</option>
-          <option value="STAFF_TRAINING">Staff training</option>
-          <option value="OFFICE_CLOSED">Office closed</option>
-        </select>
+
+        <div id="recurringCurrentScheduleNote" style="font-size:12px;color:var(--slate);margin-bottom:12px;"></div>
 
         <button class="primary" onclick="createRecurringSlot()">Create Recurring Slots</button>
       </div>
@@ -1918,8 +1921,43 @@ window.createRecurringSlot = async function() {
       body: JSON.stringify({ daysOfWeek: days, startTime, endTime, eventType })
     });
     alert('Recurring slots created for the next 12 weeks!');
+    await loadRecurringTemplates();
   } catch (err) {
     alert(err.message);
+  }
+};
+
+async function loadRecurringTemplates() {
+  try {
+    recurringTemplates = await api('/api/policies/recurring');
+  } catch (err) {
+    recurringTemplates = [];
+  }
+  prefillRecurringFieldsForEventType();
+}
+
+// Finds the most recently created recurring template matching whichever
+// event type is currently selected, and checks the matching days/times so
+// the office can see (and keep seeing after logging back in) what's
+// already scheduled instead of the form always looking blank.
+window.prefillRecurringFieldsForEventType = function() {
+  const eventType = document.getElementById('recurringEventType')?.value;
+  const note = document.getElementById('recurringCurrentScheduleNote');
+  const days = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+  const template = recurringTemplates.find(t => t.eventType === eventType);
+
+  days.forEach(day => {
+    const cb = document.getElementById('day-' + day);
+    if (cb) cb.checked = !!template?.daysOfWeek.includes(day);
+  });
+
+  if (document.getElementById('recurringStart')) document.getElementById('recurringStart').value = template?.startTime || '09:00';
+  if (document.getElementById('recurringEnd')) document.getElementById('recurringEnd').value = template?.endTime || '17:00';
+
+  if (note) {
+    note.textContent = template
+      ? `Currently scheduled: ${template.daysOfWeek.map(d => d.slice(0, 3)).join(', ')}, ${template.startTime}–${template.endTime}`
+      : '';
   }
 };
 
@@ -2288,7 +2326,7 @@ function render() {
   else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
   else if (state.screen === 'signup') app.innerHTML = screenSignup();
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
-  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); loadOfficePolicy(); }
+  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); loadOfficePolicy(); loadRecurringTemplates(); }
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
   else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }

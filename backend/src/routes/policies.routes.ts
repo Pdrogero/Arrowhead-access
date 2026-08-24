@@ -67,6 +67,23 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
+// --- List existing recurring slot templates for this office's location ----
+router.get('/recurring', requireAuth, async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const templates = await prisma.recurringSlotTemplate.findMany({
+      where: { locationId: staff.locationId },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(templates);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch recurring slots' });
+  }
+});
+
 // --- Create recurring slot template (expands into actual slots) --------
 router.post('/recurring', requireAuth, async (req, res) => {
   try {
