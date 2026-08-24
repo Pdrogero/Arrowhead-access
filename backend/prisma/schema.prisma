@@ -307,6 +307,11 @@ model Booking {
   requestedAt DateTime      @default(now())
   decidedAt   DateTime?
 
+  // Only meaningful for lunch-type slots — tracks the 1-day-out and
+  // day-of reminder emails so the daily cron doesn't resend them.
+  lunchReminder1dSent  Boolean @default(false)
+  lunchReminderDaySent Boolean @default(false)
+
   transfers   BookingTransfer[]
   attendees   VisitAttendee[]
   reviews     VisitReview[]

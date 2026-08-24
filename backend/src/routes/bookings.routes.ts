@@ -277,4 +277,60 @@ router.post('/:bookingId/attendees', requireAuth, requireRole('rep'), async (req
   }
 });
 
+// --- Daily lunch-reminder check, called by a scheduled trigger --------------
+// Not behind requireAuth — guarded by the same shared cron secret used for
+// the renewal-reminder check. Sends a rep one email the calendar day before
+// a confirmed lunch, and one on the day of.
+router.post('/check-lunch-reminders', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const bookings = await prisma.booking.findMany({
+      where: {
+        status: 'CONFIRMED',
+        slot: { eventType: 'LUNCH' },
+        OR: [{ lunchReminder1dSent: false }, { lunchReminderDaySent: false }],
+      },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+
+    const now = new Date();
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const todayStart = startOfDay(now).getTime();
+
+    let remindersSent = 0;
+
+    for (const booking of bookings) {
+      const lunchDayStart = startOfDay(booking.slot.startTime).getTime();
+      const dayDiff = Math.round((lunchDayStart - todayStart) / (1000 * 60 * 60 * 24));
+      const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+      if (dayDiff === 1 && !booking.lunchReminder1dSent) {
+        await sendEmail({
+          to: booking.rep.email,
+          subject: `Reminder: lunch at ${booking.slot.location.name} tomorrow`,
+          html: `<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> tomorrow, ${dateStr}.</p>`,
+        });
+        await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminder1dSent: true } });
+        remindersSent++;
+      } else if (dayDiff === 0 && !booking.lunchReminderDaySent) {
+        await sendEmail({
+          to: booking.rep.email,
+          subject: `Reminder: lunch at ${booking.slot.location.name} today`,
+          html: `<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> today, ${dateStr}.</p>`,
+        });
+        await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminderDaySent: true } });
+        remindersSent++;
+      }
+    }
+
+    res.json({ checked: bookings.length, remindersSent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check lunch reminders' });
+  }
+});
+
 export default router;

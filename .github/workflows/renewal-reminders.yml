@@ -13,3 +13,7 @@ jobs:
         run: |
           curl -sS -f -X POST "https://arrowhead-access-api.onrender.com/api/billing/check-renewals" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+      - name: Trigger lunch reminder check
+        run: |
+          curl -sS -f -X POST "https://arrowhead-access-api.onrender.com/api/bookings/check-lunch-reminders" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
