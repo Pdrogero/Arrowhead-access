@@ -60,6 +60,26 @@ router.post('/', requireAuth, requireRole('rep'), async (req, res) => {
       return res.status(403).json({ error: 'You can only send literature to offices you have visited before' });
     }
 
+    // Flag (but don't block) a likely duplicate — same title already sent to
+    // this same office and not yet declined. The rep can confirm and resend
+    // anyway by passing force: true.
+    if (!req.body.force) {
+      const duplicate = await prisma.literatureItem.findFirst({
+        where: {
+          repId: req.user!.sub,
+          locationId,
+          title: { equals: title, mode: 'insensitive' },
+          status: { in: ['PENDING', 'ACCEPTED'] },
+        },
+      });
+      if (duplicate) {
+        return res.status(409).json({
+          code: 'DUPLICATE',
+          error: `You already sent "${title}" to this office (currently ${duplicate.status.toLowerCase()}). Send it again anyway?`,
+        });
+      }
+    }
+
     const item = await prisma.literatureItem.create({
       data: {
         repId: req.user!.sub,
@@ -150,6 +170,35 @@ router.post('/:id/decide', requireAuth, requireRole('office_admin', 'office_staf
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not decide item' });
+  }
+});
+
+// --- Rep or office: delete a literature item -------------------------------
+// A rep can delete anything they sent; office staff can delete anything
+// sent to their own location. Removing the row cascades to its attachments.
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const item = await prisma.literatureItem.findUnique({ where: { id: req.params.id } });
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    const role = req.user!.role;
+
+    if (role === 'rep') {
+      if (item.repId !== req.user!.sub) return res.status(403).json({ error: 'You can only delete literature you sent' });
+    } else if (role === 'office_admin' || role === 'office_staff') {
+      const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+      if (!staff || staff.locationId !== item.locationId) {
+        return res.status(403).json({ error: 'You can only delete literature sent to your own office' });
+      }
+    } else {
+      return res.status(403).json({ error: 'Not permitted for this role' });
+    }
+
+    await prisma.literatureItem.delete({ where: { id: item.id } });
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not delete item' });
   }
 });
 

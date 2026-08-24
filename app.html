@@ -139,7 +139,10 @@ async function api(path, options = {}) {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(error.error || error.message || 'API error');
+    const err = new Error(error.error || error.message || 'API error');
+    err.status = res.status;
+    err.code = error.code;
+    throw err;
   }
 
   return res.json();
@@ -1034,6 +1037,7 @@ async function loadLiterature() {
             <div class="what">${item.location.name}</div>
           </div>
           <span class="chip ${item.status}">${item.status}</span>
+          <button style="background:none;border:none;color:var(--slate);font-size:12.5px;font-weight:600;cursor:pointer;padding:6px 4px;" onclick="deleteLiteratureItem('${item.id}')">🗑 Delete</button>
         </div>`).join('') : '<div class="empty">You have not sent anything yet.</div>';
     } else {
       literatureRows = await api('/api/literature/office');
@@ -1051,6 +1055,7 @@ async function loadLiterature() {
               <button style="flex:1;background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="decideLiterature('${item.id}','accept')">✓ Accept</button>
               <button style="flex:1;background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="decideLiterature('${item.id}','decline')">✕ Decline</button>
             </div>` : ''}
+          <button style="width:100%;background:none;border:none;color:var(--slate);font-size:12px;font-weight:600;cursor:pointer;padding:6px 4px;margin-top:4px;text-align:left;" onclick="deleteLiteratureItem('${item.id}')">🗑 Delete</button>
         </div>`).join('') : '<div class="empty">Nothing submitted yet.</div>';
     }
   } catch (err) {
@@ -1216,6 +1221,15 @@ window.handleLiteratureFileChange = async function(event) {
   statusEl.textContent = pendingLiteratureAttachments.length ? `${pendingLiteratureAttachments.length} file(s) attached` : '';
 };
 
+function onLiteratureSent() {
+  setState({ formErr: null });
+  document.getElementById('literatureTitle').value = '';
+  document.getElementById('literatureLink').value = '';
+  document.getElementById('literatureDescription').value = '';
+  resetLiteratureUploadUI();
+  loadLiterature();
+}
+
 window.submitLiterature = async function() {
   const locationId = document.getElementById('literatureLocationSelect').value;
   const title = document.getElementById('literatureTitle').value.trim();
@@ -1227,16 +1241,24 @@ window.submitLiterature = async function() {
     return;
   }
 
+  const attachmentUrls = pendingLiteratureAttachments.map(a => a.url);
+  const payload = { locationId, title, description, linkUrl, attachmentUrls };
+
   try {
-    const attachmentUrls = pendingLiteratureAttachments.map(a => a.url);
-    await api('/api/literature', { method: 'POST', body: JSON.stringify({ locationId, title, description, linkUrl, attachmentUrls }) });
-    setState({ formErr: null });
-    document.getElementById('literatureTitle').value = '';
-    document.getElementById('literatureLink').value = '';
-    document.getElementById('literatureDescription').value = '';
-    resetLiteratureUploadUI();
-    loadLiterature();
+    await api('/api/literature', { method: 'POST', body: JSON.stringify(payload) });
+    onLiteratureSent();
   } catch (err) {
+    if (err.status === 409 && err.code === 'DUPLICATE') {
+      if (confirm(err.message)) {
+        try {
+          await api('/api/literature', { method: 'POST', body: JSON.stringify({ ...payload, force: true }) });
+          onLiteratureSent();
+        } catch (err2) {
+          setState({ formErr: err2.message });
+        }
+      }
+      return;
+    }
     setState({ formErr: err.message });
   }
 };
@@ -1244,6 +1266,16 @@ window.submitLiterature = async function() {
 window.decideLiterature = async function(id, decision) {
   try {
     await api(`/api/literature/${id}/decide`, { method: 'POST', body: JSON.stringify({ decision }) });
+    loadLiterature();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.deleteLiteratureItem = async function(id) {
+  if (!confirm('Delete this literature item? This cannot be undone.')) return;
+  try {
+    await api(`/api/literature/${id}`, { method: 'DELETE' });
     loadLiterature();
   } catch (err) {
     alert(err.message);
