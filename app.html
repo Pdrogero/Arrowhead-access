@@ -402,6 +402,20 @@ function screenOfficeSettings() {
         <button type="button" class="link" style="text-align:left;margin-top:4px;" onclick="addEmployeeRow()">+ Add team member</button>
         <button class="primary" style="margin-top:12px;" onclick="saveEmployees()">Save team list</button>
       </div>
+
+      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Locations</p>
+      <div class="card">
+        <p style="font-size:12px;color:var(--slate);margin-bottom:12px;">Managing more than one office? Add each location here, then use the switcher on your dashboard to jump between them — no separate login needed.</p>
+        <div id="locationsListBox" style="margin-bottom:12px;"><div class="empty">Loading…</div></div>
+        <button type="button" onclick="showAddLocation()" style="display:block;background:none;border:none;color:var(--teal);font-size:13px;font-weight:700;padding:0;margin-bottom:12px;cursor:pointer;">+ Add another location</button>
+        <div id="addLocationBox" style="display:none;border:1px solid var(--line);border-radius:8px;padding:12px;">
+          <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">New location</label>
+          <input id="newLocationName" type="text" placeholder="Location name (e.g. Downtown Office)">
+          <input id="newLocationAddress" type="text" placeholder="Address">
+          <div id="addLocationErr"></div>
+          <button type="button" class="primary" style="margin-bottom:0;" onclick="createLocation()">Add this location</button>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -715,6 +729,52 @@ async function loadEmployees() {
   }
   renderEmployeeRows();
 }
+
+async function loadLocationsSettings() {
+  const box = document.getElementById('locationsListBox');
+  if (!box) return;
+  const isAdmin = state.me?.role === 'ADMIN';
+  const addBtn = document.querySelector('[onclick="showAddLocation()"]');
+  if (addBtn) addBtn.style.display = isAdmin ? 'block' : 'none';
+  try {
+    const locations = await api('/api/locations/mine');
+    box.innerHTML = locations.map(l => `
+      <div class="row">
+        <div class="mid">
+          <div class="who">${l.name}${l.id === state.me.locationId ? ' <span style="color:var(--teal);font-weight:600;">(current)</span>' : ''}</div>
+          <div class="what">${l.address}</div>
+        </div>
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+}
+
+window.showAddLocation = function() {
+  document.getElementById('addLocationBox').style.display = 'block';
+};
+
+window.createLocation = async function() {
+  const name = document.getElementById('newLocationName').value.trim();
+  const address = document.getElementById('newLocationAddress').value.trim();
+  const errBox = document.getElementById('addLocationErr');
+
+  if (!name || !address) {
+    errBox.innerHTML = `<div class="msg err">Location name and address are required</div>`;
+    return;
+  }
+
+  try {
+    await api('/api/locations', { method: 'POST', body: JSON.stringify({ name, address }) });
+    errBox.innerHTML = '';
+    document.getElementById('newLocationName').value = '';
+    document.getElementById('newLocationAddress').value = '';
+    document.getElementById('addLocationBox').style.display = 'none';
+    loadLocationsSettings();
+  } catch (err) {
+    errBox.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+};
 
 window.saveEmployees = async function() {
   const cleaned = employeeRows.filter(e => e.name.trim());
@@ -1302,6 +1362,7 @@ function screenDashboardOffice() {
     <div class="wrap wide">
       <h1>This week's ledger</h1>
       <p class="sub">Live from /api/bookings/locations/.../ledger</p>
+      <div id="locationSwitcherBox" style="margin-bottom:16px;"></div>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'postSlot'})">➕ Post an open slot</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'officeSettings'})">⚙️ Office Settings</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
@@ -1763,6 +1824,33 @@ async function submitPostSlot() {
   }
 }
 
+async function loadLocationSwitcher() {
+  const box = document.getElementById('locationSwitcherBox');
+  if (!box) return;
+  try {
+    const locations = await api('/api/locations/mine');
+    if (locations.length <= 1) { box.innerHTML = ''; return; }
+    box.innerHTML = `
+      <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Location</label>
+      <select onchange="switchLocation(this.value)">
+        ${locations.map(l => `<option value="${l.id}" ${l.id === state.me.locationId ? 'selected' : ''}>${l.name}</option>`).join('')}
+      </select>`;
+  } catch (err) {}
+}
+
+window.switchLocation = async function(locationId) {
+  if (locationId === state.me.locationId) return;
+  try {
+    const res = await api('/api/auth/switch-location', { method: 'POST', body: JSON.stringify({ locationId }) });
+    localStorage.setItem('token', res.token);
+    state.me = { ...state.me, ...res.staff };
+    loadOfficeLedger();
+    loadLocationSwitcher();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 async function loadOfficeLedger() {
   const box = document.getElementById('ledgerBox');
   try {
@@ -2053,7 +2141,7 @@ function render() {
   else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
   else if (state.screen === 'signup') app.innerHTML = screenSignup();
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
-  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); }
+  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); }
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
   else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }
@@ -2066,7 +2154,7 @@ function render() {
   else if (state.screen === 'materials') { app.innerHTML = screenMaterials(); loadMaterials(); }
   else if (state.screen === 'attendance') { app.innerHTML = screenAttendance(); loadAttendees(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
-  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); }
+  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); loadLocationSwitcher(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
 
   const billingParam = new URLSearchParams(window.location.search).get('billing');

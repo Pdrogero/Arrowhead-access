@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { JwtPayload } from '../auth/auth.types';
 import { sendEmail } from '../email';
-import { requireAuth } from '../auth/auth.guard';
+import { requireAuth, requireRole } from '../auth/auth.guard';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -104,6 +104,17 @@ router.post('/rep/login', async (req, res) => {
   }
 });
 
+// Staff accounts predate the organizationId column, so it may be unset —
+// resolve it from their current location the first time it's needed and
+// persist it so future lookups are a plain field read.
+async function resolveStaffOrgId(staff: { id: string; organizationId: string | null; locationId: string }): Promise<string | null> {
+  if (staff.organizationId) return staff.organizationId;
+  const location = await prisma.location.findUnique({ where: { id: staff.locationId } });
+  if (!location) return null;
+  await prisma.staffUser.update({ where: { id: staff.id }, data: { organizationId: location.organizationId } });
+  return location.organizationId;
+}
+
 router.post('/staff/login', async (req, res) => {
   try {
     const { password } = req.body;
@@ -113,10 +124,12 @@ router.post('/staff/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    const organizationId = await resolveStaffOrgId(staff);
+
     const token = signToken({
       sub: staff.id,
       role: staff.role === 'ADMIN' ? 'office_admin' : 'office_staff',
-      organizationId: '',
+      organizationId: organizationId ?? '',
       locationId: staff.locationId,
     });
 
@@ -126,6 +139,44 @@ router.post('/staff/login', async (req, res) => {
     res.status(500).json({ error: 'Unexpected server error during login' });
   }
 });
+
+// --- Office staff: switch which of their org's locations this login is
+// currently scoped to. Updates the StaffUser row in place (so every other
+// route that reads staff.locationId picks it up automatically) and issues
+// a fresh token carrying the new locationId.
+router.post('/switch-location', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const organizationId = await resolveStaffOrgId(staff);
+    if (!organizationId) return res.status(500).json({ error: 'Could not resolve your organization' });
+
+    const targetLocationId = String(req.body.locationId || '');
+    const target = await prisma.location.findUnique({ where: { id: targetLocationId } });
+    if (!target || target.organizationId !== organizationId) {
+      return res.status(403).json({ error: 'That location is not part of your organization' });
+    }
+
+    const updated = await prisma.staffUser.update({
+      where: { id: staff.id },
+      data: { locationId: targetLocationId, organizationId },
+    });
+
+    const token = signToken({
+      sub: updated.id,
+      role: updated.role === 'ADMIN' ? 'office_admin' : 'office_staff',
+      organizationId,
+      locationId: updated.locationId,
+    });
+
+    res.json({ token, staff: { id: updated.id, email: updated.email, role: updated.role, locationId: updated.locationId } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not switch location' });
+  }
+});
+
 router.post('/office/signup', async (req, res) => {
   try {
     const { officeName, locationName, address, timezone, password } = req.body;
@@ -154,7 +205,7 @@ router.post('/office/signup', async (req, res) => {
         },
       });
       const staff = await tx.staffUser.create({
-        data: { email, passwordHash, role: 'ADMIN', locationId: location.id },
+        data: { email, passwordHash, role: 'ADMIN', locationId: location.id, organizationId: org.id },
       });
       return { org, location, staff };
     });

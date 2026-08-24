@@ -97,6 +97,7 @@ model Organization {
   locations     Location[]
   reps          Rep[]
   subscription  Subscription?
+  staff         StaffUser[]
 }
 
 model Location {
@@ -160,15 +161,21 @@ model RecurringSlotTemplate {
 }
 
 model StaffUser {
-  id           String    @id @default(cuid())
-  locationId   String
-  location     Location  @relation(fields: [locationId], references: [id])
-  email        String    @unique
-  passwordHash String
-  role         StaffRole @default(STAFF)
-  createdAt    DateTime  @default(now())
+  id             String        @id @default(cuid())
+  // The location this login is currently "pointed at" — same field used
+  // everywhere in the app to scope what this staff account can see/edit.
+  // Switching locations (for orgs with more than one) updates this in
+  // place rather than requiring a separate login per location.
+  locationId     String
+  location       Location      @relation(fields: [locationId], references: [id])
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  email          String        @unique
+  passwordHash   String
+  role           StaffRole     @default(STAFF)
+  createdAt      DateTime      @default(now())
 
-  createdSlots Slot[]
+  createdSlots   Slot[]
 }
 
 // --- Manufacturer catalog (like RxVantage's company/product picker) -------
