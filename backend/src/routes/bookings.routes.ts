@@ -85,6 +85,20 @@ router.get('/mine', requireAuth, requireRole('rep'), async (req, res) => {
   res.json(bookings);
 });
 
+// --- Rep: visit history (past visits that were actually confirmed) ------
+router.get('/history', requireAuth, requireRole('rep'), async (req, res) => {
+  const bookings = await prisma.booking.findMany({
+    where: {
+      repId: req.user!.sub,
+      status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] },
+      slot: { endTime: { lt: new Date() } },
+    },
+    include: { slot: { include: { location: true } } },
+    orderBy: { slot: { startTime: 'desc' } },
+  });
+  res.json(bookings);
+});
+
 // --- Rep: get (or create) their private calendar subscription link -------
 router.get('/calendar-link', requireAuth, requireRole('rep'), async (req, res) => {
   try {
@@ -156,6 +170,25 @@ router.get('/locations/:locationId/ledger', requireAuth, requireRole('office_adm
     where: { locationId: req.params.locationId },
     include: { booking: { include: { rep: true } } },
     orderBy: { startTime: 'asc' },
+  });
+  res.json(slots);
+});
+
+// --- Office staff: visit history (past slots with a confirmed visit) ----
+router.get('/locations/:locationId/history', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    assertOwnsLocation(req, req.params.locationId);
+  } catch (err) {
+    return res.status(403).json({ error: (err as Error).message });
+  }
+  const slots = await prisma.slot.findMany({
+    where: {
+      locationId: req.params.locationId,
+      endTime: { lt: new Date() },
+      booking: { status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } },
+    },
+    include: { booking: { include: { rep: true } } },
+    orderBy: { startTime: 'desc' },
   });
   res.json(slots);
 });

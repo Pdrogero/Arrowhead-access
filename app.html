@@ -1441,6 +1441,16 @@ function screenTransfers() {
     </div>`;
 }
 
+function screenVisitHistory() {
+  return `
+    <div class="wrap wide">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to dashboard</button>
+      <h1>Visit History</h1>
+      <p class="sub">Past visits, including lunches that were scheduled and carried out.</p>
+      <div id="historyBox" class="listcard"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+
 function screenDashboardOffice() {
   return `
     <div class="wrap wide">
@@ -1452,6 +1462,7 @@ function screenDashboardOffice() {
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'messages'})">💬 Messages</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'literature'})">📄 Literature</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'visitHistory'})">📜 Visit History</button>
       <div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
@@ -2091,6 +2102,48 @@ async function loadMyBookings() {
   }
 }
 
+async function loadRepHistory() {
+  const box = document.getElementById('historyBox');
+  try {
+    const bookings = await api('/api/bookings/history');
+    if (!bookings.length) { box.innerHTML = '<div class="empty">No past visits yet.</div>'; return; }
+    const officeRatings = await fetchRatingAverages(bookings.map(b => b.slot.location.id), 'office');
+    box.innerHTML = bookings.map(b => `
+      <div class="row" style="flex-wrap:wrap;">
+        <div class="time">${fmtTime(b.slot.startTime)}</div>
+        <div class="mid"><div class="who">${b.slot.location.name}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}${lunchDetailsSummaryHtml(b.slot)}</div>
+        <span class="chip ${b.status}">${b.status}</span>
+        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message</button>
+        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+async function loadOfficeHistory() {
+  const box = document.getElementById('historyBox');
+  try {
+    const slots = await api('/api/bookings/locations/' + state.me.locationId + '/history');
+    if (!slots.length) { box.innerHTML = '<div class="empty">No past visits yet.</div>'; return; }
+    const repIds = slots.filter(s => s.booking?.rep).map(s => s.booking.rep.id);
+    const repRatings = await fetchRatingAverages(repIds, 'rep');
+    box.innerHTML = slots.map(s => `
+      <div class="row" style="flex-wrap:wrap;">
+        <div class="time">${fmtTime(s.startTime)}</div>
+        <div class="mid">
+          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count)}` : ''}
+          ${lunchDetailsSummaryHtml(s)}
+        </div>
+        <span class="chip ${s.status}">${s.status}</span>
+        ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
+        ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">⭐ Rate rep</button>` : ''}
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
 window.orderLunch = function(address) {
   if (address && navigator.clipboard) {
     navigator.clipboard.writeText(address).then(() => {
@@ -2165,6 +2218,7 @@ window.toggleProfileMenu = function() {
     <div class="card" style="margin-bottom:16px;padding:14px;">
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'profile'})">✏️ Edit Profile</button>
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'materials'})">📚 Marketing Materials</button>
+      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'visitHistory'})">📜 Visit History</button>
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="scrollToBilling()">💳 Billing</button>
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="openCalendar()">📅 Calendar Sync</button>
       <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
@@ -2343,6 +2397,8 @@ function render() {
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); loadLocationSwitcher(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
+  else if (state.screen === 'visitHistory' && state.role === 'office') { app.innerHTML = screenVisitHistory(); loadOfficeHistory(); }
+  else if (state.screen === 'visitHistory' && state.role === 'rep') { app.innerHTML = screenVisitHistory(); loadRepHistory(); }
 
   const billingParam = new URLSearchParams(window.location.search).get('billing');
   if (billingParam === 'success') { setTimeout(() => alert('Subscription started! Your 14-day free trial has begun.'), 300); }
