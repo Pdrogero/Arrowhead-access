@@ -484,15 +484,18 @@ function lunchDetailsFieldsHtml(prefix, values = {}) {
       <input type="checkbox" id="${prefix}RepHandles" style="margin-right:8px;" ${repHandles ? 'checked' : ''} onchange="toggleLunchOrderNotes('${prefix}')">
       Let the rep place the order instead
     </label>
-    <div id="${prefix}OrderNotesWrap" style="${repHandles ? 'display:none;' : ''}">
-      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">What to order</label>
-      <textarea id="${prefix}OrderNotes" rows="3" placeholder="e.g. 3 turkey club sandwiches, 2 chicken caesar salads, assorted drinks" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;">${values.foodOrderNotes || ''}</textarea>
-    </div>`;
+    <label id="${prefix}OrderNotesLabel" style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">${repHandles ? 'Notes for the rep (budget, preferences, delivery instructions, etc.)' : 'What to order'}</label>
+    <textarea id="${prefix}OrderNotes" rows="3" placeholder="${repHandles ? 'e.g. Budget is $150, please include a vegetarian option, deliver by 12:15' : 'e.g. 3 turkey club sandwiches, 2 chicken caesar salads, assorted drinks'}" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;">${values.foodOrderNotes || ''}</textarea>`;
 }
 
 window.toggleLunchOrderNotes = function(prefix) {
   const checked = document.getElementById(prefix + 'RepHandles').checked;
-  document.getElementById(prefix + 'OrderNotesWrap').style.display = checked ? 'none' : '';
+  const label = document.getElementById(prefix + 'OrderNotesLabel');
+  const textarea = document.getElementById(prefix + 'OrderNotes');
+  label.textContent = checked ? 'Notes for the rep (budget, preferences, delivery instructions, etc.)' : 'What to order';
+  textarea.placeholder = checked
+    ? 'e.g. Budget is $150, please include a vegetarian option, deliver by 12:15'
+    : 'e.g. 3 turkey club sandwiches, 2 chicken caesar salads, assorted drinks';
 };
 
 function readLunchDetailsFields(prefix) {
@@ -521,9 +524,8 @@ function lunchDetailsSummaryHtml(slot) {
       🍽 <strong>Lunch order</strong>
       ${slot.headCount ? `<div>${slot.headCount} people</div>` : ''}
       ${slot.allergyNotes ? `<div>Allergies: ${slot.allergyNotes.replace(/</g, '&lt;')}</div>` : ''}
-      ${slot.repHandlesOrder
-        ? `<div style="font-weight:600;color:var(--coral);">Office asked rep to place the order</div>`
-        : (slot.foodOrderNotes ? `<div>Order: ${slot.foodOrderNotes.replace(/</g, '&lt;')}</div>` : '')}
+      ${slot.repHandlesOrder ? `<div style="font-weight:600;color:var(--coral);">Office asked rep to place the order</div>` : ''}
+      ${slot.foodOrderNotes ? `<div>${slot.repHandlesOrder ? 'Notes for rep' : 'Order'}: ${slot.foodOrderNotes.replace(/</g, '&lt;')}</div>` : ''}
     </div>`;
 }
 
