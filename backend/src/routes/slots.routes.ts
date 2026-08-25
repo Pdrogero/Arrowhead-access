@@ -64,7 +64,14 @@ router.patch('/:id/lunch-details', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Only lunch slots can have order details' });
     }
 
-    const { headCount, allergyNotes, foodOrderNotes, repHandlesOrder } = req.body;
+    const { headCount, allergyNotes, foodOrderNotes, repHandlesOrder, startTime, endTime } = req.body;
+    if ((startTime && !endTime) || (!startTime && endTime)) {
+      return res.status(400).json({ error: 'startTime and endTime must be updated together' });
+    }
+    if (startTime && endTime && new Date(endTime) <= new Date(startTime)) {
+      return res.status(400).json({ error: 'End time must be after start time' });
+    }
+
     const updated = await prisma.slot.update({
       where: { id: slot.id },
       data: {
@@ -72,6 +79,7 @@ router.patch('/:id/lunch-details', requireAuth, async (req, res) => {
         allergyNotes: allergyNotes || null,
         foodOrderNotes: foodOrderNotes || null,
         repHandlesOrder: !!repHandlesOrder,
+        ...(startTime && endTime ? { startTime: new Date(startTime), endTime: new Date(endTime) } : {}),
       },
     });
 

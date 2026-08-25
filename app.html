@@ -474,9 +474,21 @@ function eventTypeLabel(t) {
 // Shared lunch-order fields, used both when posting a new lunch slot and
 // when an office edits an existing one's details from the ledger. `prefix`
 // namespaces the element ids so more than one instance can exist at once.
-function lunchDetailsFieldsHtml(prefix, values = {}) {
+function toDatetimeLocalValue(isoString) {
+  const d = new Date(isoString);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function lunchDetailsFieldsHtml(prefix, values = {}, opts = {}) {
   const repHandles = !!values.repHandlesOrder;
   return `
+    ${opts.includeTime ? `
+    <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Start time for lunch</label>
+    <input id="${prefix}StartTime" type="datetime-local" value="${values.startTime ? toDatetimeLocalValue(values.startTime) : ''}">
+    <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">End time for lunch</label>
+    <input id="${prefix}EndTime" type="datetime-local" value="${values.endTime ? toDatetimeLocalValue(values.endTime) : ''}">
+    ` : ''}
     <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Number of people</label>
     <input id="${prefix}HeadCount" type="number" min="1" value="${values.headCount ?? ''}" placeholder="e.g. 8">
     <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Allergies / dietary notes</label>
@@ -500,12 +512,19 @@ window.toggleLunchOrderNotes = function(prefix) {
 };
 
 function readLunchDetailsFields(prefix) {
-  return {
+  const fields = {
     headCount: document.getElementById(prefix + 'HeadCount').value,
     allergyNotes: document.getElementById(prefix + 'AllergyNotes').value.trim(),
     repHandlesOrder: document.getElementById(prefix + 'RepHandles').checked,
     foodOrderNotes: document.getElementById(prefix + 'OrderNotes').value.trim(),
   };
+  const startInput = document.getElementById(prefix + 'StartTime');
+  const endInput = document.getElementById(prefix + 'EndTime');
+  if (startInput && endInput) {
+    fields.startTime = new Date(startInput.value).toISOString();
+    fields.endTime = new Date(endInput.value).toISOString();
+  }
+  return fields;
 }
 
 window.togglePostSlotLunchFields = function() {
@@ -2069,7 +2088,7 @@ async function loadOfficeLedger() {
         ${s.eventType === 'LUNCH' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="toggleLunchEdit('${s.id}')">🍽 Edit lunch order</button>` : ''}
         ${s.eventType === 'LUNCH' ? `
           <div id="lunchEditBox-${s.id}" class="card" style="display:none;width:100%;margin-top:10px;padding:14px;">
-            ${lunchDetailsFieldsHtml('lunchEdit' + s.id, s)}
+            ${lunchDetailsFieldsHtml('lunchEdit' + s.id, s, { includeTime: true })}
             <button class="primary" style="margin-top:0;margin-bottom:0;" onclick="saveLunchDetails('${s.id}')">Save order details</button>
           </div>` : ''}
       </div>`).join('');
