@@ -444,9 +444,10 @@ function screenPostSlot() {
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
         <div id="postSlotLunchFields" style="display:none;">${lunchDetailsFieldsHtml('postSlot')}</div>
-        <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Date & time</label>
-        <input id="startTime" type="datetime-local" placeholder="Start date & time">
-        <input id="endTime" type="datetime-local" placeholder="End date & time">
+        <label id="startTimeLabel" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Start time</label>
+        <input id="startTime" type="datetime-local">
+        <label id="endTimeLabel" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">End time</label>
+        <input id="endTime" type="datetime-local">
         <button class="primary" id="postSlotBtn" onclick="submitPostSlot()">Post slot</button>
       </div>
     </div>`;
@@ -510,6 +511,8 @@ function readLunchDetailsFields(prefix) {
 window.togglePostSlotLunchFields = function() {
   const isLunch = document.getElementById('eventType').value === 'LUNCH';
   document.getElementById('postSlotLunchFields').style.display = isLunch ? '' : 'none';
+  document.getElementById('startTimeLabel').textContent = isLunch ? 'Start time for lunch' : 'Start time';
+  document.getElementById('endTimeLabel').textContent = isLunch ? 'End time for lunch' : 'End time';
 };
 
 // Renders a read-only summary of a lunch's order details, for reps looking
