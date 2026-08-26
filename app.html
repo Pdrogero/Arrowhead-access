@@ -2202,7 +2202,7 @@ async function loadBillingStatus() {
       <p style="font-size:13px;color:var(--slate);margin-bottom:12px;">14-day free trial, cancel anytime during the trial.</p>
       ${isFoundingRep ? `<div class="msg ok">You're eligible for the founding rate — $379.99/year, locked in for as long as you stay subscribed. (${foundingSpotsRemaining} spots left)</div>` : ''}
       <button class="primary" style="background:var(--ink);" onclick="goToCheckout('monthly')">Monthly — $49.95/mo</button>
-      <button class="primary" style="background:var(--coral);" onclick="goToCheckout('annual')">Annual — $379.99/yr${isFoundingRep ? ' Founding Rate' : ''}</button>`;
+      <button class="primary" style="background:var(--coral);" onclick="goToCheckout('annual')">Annual — ${isFoundingRep ? '$379.99/yr Founding Rate' : '$479.40/yr'}</button>`;
   } catch (err) {
     box.innerHTML = `<div class="msg err">${err.message}</div>`;
   }
