@@ -443,7 +443,18 @@ function screenPostSlot() {
           <option value="STAFF_TRAINING">Staff training</option>
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
-        <div id="postSlotLunchFields" style="display:none;">${lunchDetailsFieldsHtml('postSlot')}</div>
+        <div id="postSlotLunchFields" style="display:none;">
+          ${lunchDetailsFieldsHtml('postSlot')}
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Repeat this lunch</label>
+          <select id="postSlotRepeat">
+            <option value="">Doesn't repeat</option>
+            <option value="MONTHLY">Every month</option>
+            <option value="QUARTERLY">Every quarter (3 months)</option>
+            <option value="SEMIANNUAL">Every 6 months</option>
+            <option value="ANNUAL">Every year</option>
+          </select>
+          <p style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">Same headcount, allergy notes, and order details will be copied to each repeat, about 2 years out.</p>
+        </div>
         <label id="startTimeLabel" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Start time</label>
         <input id="startTime" type="datetime-local">
         <label id="endTimeLabel" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">End time</label>
@@ -2047,7 +2058,11 @@ async function submitPostSlot() {
   }
 
   const payload = { startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), eventType };
-  if (eventType === 'LUNCH') Object.assign(payload, readLunchDetailsFields('postSlot'));
+  if (eventType === 'LUNCH') {
+    Object.assign(payload, readLunchDetailsFields('postSlot'));
+    const repeat = document.getElementById('postSlotRepeat').value;
+    if (repeat) payload.repeatInterval = repeat;
+  }
 
   btn.disabled = true; btn.textContent = 'Posting…';
   try {

@@ -9,19 +9,53 @@ import { requireAuth, requireRole } from '../auth/auth.guard';
 const prisma = new PrismaClient();
 const router = Router();
 
+// Months to add per repeat interval, for duplicating a lunch's schedule
+// (and its headcount/allergy/order details) forward in time so an office
+// doesn't have to re-enter the same recurring lunch over and over.
+const REPEAT_INTERVAL_MONTHS: Record<string, number> = {
+  MONTHLY: 1,
+  QUARTERLY: 3,
+  SEMIANNUAL: 6,
+  ANNUAL: 12,
+};
+const REPEAT_HORIZON_YEARS = 2;
+
+// Adds N months to a date, clamping to the last valid day of the target
+// month (e.g. Jan 31 + 1mo -> Feb 28, not the JS default of overflowing
+// into March 3). Always computed from the given date rather than chained
+// from a prior result, so a lunch on the 31st lands on the 28th in
+// February but goes right back to the 31st in March instead of drifting
+// permanently to the 28th.
+function addMonthsPreserveTime(date: Date, months: number): Date {
+  const d = new Date(date);
+  const originalDay = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  const daysInTargetMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(originalDay, daysInTargetMonth));
+  return d;
+}
+
 // --- Office staff: post a new open slot at their own location -------------
 router.post('/', requireAuth, async (req, res) => {
   if (!['office_admin', 'office_staff'].includes(req.user!.role)) {
     return res.status(403).json({ error: 'Only office staff can post slots' });
   }
   try {
-    const { startTime, endTime, eventType, headCount, allergyNotes, foodOrderNotes, repHandlesOrder } = req.body;
+    const { startTime, endTime, eventType, headCount, allergyNotes, foodOrderNotes, repHandlesOrder, repeatInterval } = req.body;
     if (!startTime || !endTime) {
       return res.status(400).json({ error: 'startTime and endTime are required' });
     }
 
     const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
     if (!staff) return res.status(404).json({ error: 'Staff account not found' });
+
+    const lunchDetails = eventType === 'LUNCH' ? {
+      headCount: headCount != null && headCount !== '' ? parseInt(headCount, 10) : null,
+      allergyNotes: allergyNotes || null,
+      foodOrderNotes: foodOrderNotes || null,
+      repHandlesOrder: !!repHandlesOrder,
+    } : {};
 
     const slot = await prisma.slot.create({
       data: {
@@ -31,14 +65,33 @@ router.post('/', requireAuth, async (req, res) => {
         status: 'OPEN',
         eventType: eventType || 'REP_VISIT',
         createdByStaffId: staff.id,
-        ...(eventType === 'LUNCH' ? {
-          headCount: headCount != null && headCount !== '' ? parseInt(headCount, 10) : null,
-          allergyNotes: allergyNotes || null,
-          foodOrderNotes: foodOrderNotes || null,
-          repHandlesOrder: !!repHandlesOrder,
-        } : {}),
+        ...lunchDetails,
       },
     });
+
+    const months = eventType === 'LUNCH' ? REPEAT_INTERVAL_MONTHS[repeatInterval] : undefined;
+    if (months) {
+      const horizon = new Date(startTime);
+      horizon.setFullYear(horizon.getFullYear() + REPEAT_HORIZON_YEARS);
+
+      const origStart = new Date(startTime);
+      const origEnd = new Date(endTime);
+      const repeats = [];
+      for (let i = 1; ; i++) {
+        const occStart = addMonthsPreserveTime(origStart, months * i);
+        if (occStart >= horizon) break;
+        repeats.push({
+          locationId: staff.locationId,
+          startTime: occStart,
+          endTime: addMonthsPreserveTime(origEnd, months * i),
+          status: 'OPEN' as const,
+          eventType: 'LUNCH' as const,
+          createdByStaffId: staff.id,
+          ...lunchDetails,
+        });
+      }
+      if (repeats.length) await prisma.slot.createMany({ data: repeats });
+    }
 
     res.status(201).json(slot);
   } catch (err) {
