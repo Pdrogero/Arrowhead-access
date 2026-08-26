@@ -64,14 +64,16 @@
     body.medical-bg{
       min-height:100vh;
       background-image:
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72'%3E%3Cg fill='none' stroke='%232D6F5E' stroke-width='2.5' stroke-linecap='round' opacity='0.14'%3E%3Cpath d='M36 20v32M20 36h32'/%3E%3C/g%3E%3C/svg%3E"),
-        radial-gradient(circle at 15% 10%, #EAF6F1 0%, transparent 55%),
-        linear-gradient(180deg, #F1FAF6 0%, #FFFFFF 60%);
-      background-repeat:repeat, no-repeat, no-repeat;
-      background-size:72px 72px, cover, cover;
-      background-attachment:fixed, fixed, fixed;
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cg fill='none' stroke='%232D6F5E' stroke-width='3' stroke-linecap='round' opacity='0.22'%3E%3Cpath d='M32 18v28M18 32h28'/%3E%3C/g%3E%3C/svg%3E"),
+        radial-gradient(circle at 12% 8%, rgba(232,104,74,0.16) 0%, transparent 45%),
+        radial-gradient(circle at 90% 85%, rgba(45,111,94,0.16) 0%, transparent 50%),
+        linear-gradient(180deg, #EAF7F1 0%, #FDF4F0 100%);
+      background-repeat:repeat, no-repeat, no-repeat, no-repeat;
+      background-size:64px 64px, cover, cover, cover;
+      background-attachment:fixed, fixed, fixed, fixed;
     }
     body.medical-bg .card{box-shadow:0 12px 32px rgba(31,74,63,0.14);}
+    .role-badge{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--teal),var(--teal-dark));display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:16px;box-shadow:0 8px 20px rgba(45,111,94,0.28);}
   </style>
 </head>
 <body>
@@ -163,11 +165,12 @@ function fmtTime(isoStr) { return new Date(isoStr).toLocaleString('en-US', { mon
 // ========== SCREENS ==========
 function screenRole() {
   return `
-    <div class="wrap">
+    <div class="wrap" style="padding-top:52px;">
+      <div class="role-badge">⚕️</div>
       <h1>Welcome to Arrowhead Access</h1>
-      <p class="sub">OpenTable for medical sales visits.</p>
-      <button class="primary" onclick="setState({screen:'login',role:'office'})">Office</button>
-      <button class="primary" style="background:var(--coral);" onclick="setState({screen:'login',role:'rep'})">Sales Rep</button>
+      <p class="sub">The scheduling platform connecting medical sales reps with offices.</p>
+      <button class="primary" onclick="setState({screen:'login',role:'office'})">🏥&nbsp; Office</button>
+      <button class="primary" style="background:var(--coral);" onclick="setState({screen:'login',role:'rep'})">🩺&nbsp; Sales Rep</button>
     </div>`;
 }
 
@@ -2479,7 +2482,7 @@ function render() {
   const app = document.getElementById('app');
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.style.display = state.screen === 'role' ? 'none' : 'block';
-  document.body.classList.toggle('medical-bg', ['login', 'forgotPassword', 'resetPassword'].includes(state.screen));
+  document.body.classList.toggle('medical-bg', ['role', 'login', 'forgotPassword', 'resetPassword'].includes(state.screen));
 
   if (state.screen === 'role') app.innerHTML = screenRole();
   else if (state.screen === 'login') app.innerHTML = screenLogin();
