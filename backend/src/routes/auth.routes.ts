@@ -210,6 +210,33 @@ router.post('/office/signup', async (req, res) => {
       return { org, location, staff };
     });
 
+    // Notify any reps who asked to hear when this office joined — matched
+    // loosely (case-insensitive, either name containing the other) since
+    // the rep's search term won't always exactly match the office's
+    // official location name.
+    const newNameLower = result.location.name.toLowerCase();
+    const pendingInterest = await prisma.officeInterestRequest.findMany({
+      where: { notified: false },
+      include: { rep: true },
+    });
+    const matches = pendingInterest.filter(r => {
+      const searched = r.officeName.toLowerCase();
+      return newNameLower.includes(searched) || searched.includes(newNameLower);
+    });
+    if (matches.length) {
+      await prisma.officeInterestRequest.updateMany({
+        where: { id: { in: matches.map(m => m.id) } },
+        data: { notified: true },
+      });
+      matches.forEach(m => {
+        sendEmail({
+          to: m.rep.email,
+          subject: `${result.location.name} just joined Arrowhead Access`,
+          html: `<p>Good news — <strong>${result.location.name}</strong>, the office you asked to be notified about, just joined Arrowhead Access. You can now find them and book a visit.</p>`,
+        }).catch(() => {});
+      });
+    }
+
     const token = signToken({
       sub: result.staff.id,
       role: 'office_admin',

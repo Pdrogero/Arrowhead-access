@@ -575,7 +575,12 @@ function renderBrowseContent() {
 
 function renderBrowseList(slots) {
   const content = document.getElementById('browseContent');
-  if (!slots.length) { content.innerHTML = '<div class="listcard"><div class="empty">No open slots found.</div></div>'; return; }
+  if (!slots.length) {
+    const query = browseSearchQuery.trim();
+    content.innerHTML = `<div class="listcard"><div class="empty">No open slots found.</div>${query ? '<div id="officeSearchFallback" style="padding:0 16px 16px;font-size:13px;color:var(--slate);">Checking if this office is on Arrowhead Access…</div>' : ''}</div>`;
+    if (query) loadOfficeSearchFallback(query);
+    return;
+  }
   content.innerHTML = `<div class="listcard">${slots.map(s => `
     <div class="row">
       <div class="time">${fmtTime(s.startTime)}</div>
@@ -589,6 +594,40 @@ function renderBrowseList(slots) {
       <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
     </div>`).join('')}</div>`;
 }
+
+async function loadOfficeSearchFallback(query) {
+  const box = document.getElementById('officeSearchFallback');
+  try {
+    const matches = await api('/api/locations/search?q=' + encodeURIComponent(query));
+    if (!document.getElementById('officeSearchFallback')) return;
+    if (matches.length) {
+      box.innerHTML = matches.map(m => `<div style="margin-top:8px;"><strong>${m.name.replace(/</g, '&lt;')}</strong> is on Arrowhead Access (${m.address.replace(/</g, '&lt;')}), but has no open slots posted right now.</div>`).join('');
+    } else {
+      box.innerHTML = `
+        <div style="margin-top:8px;"><strong>${query.replace(/</g, '&lt;')}</strong> isn't on Arrowhead Access yet.</div>
+        <label style="display:flex;align-items:center;margin-top:8px;">
+          <input type="checkbox" id="notifyMeCheckbox" style="margin-right:8px;">
+          Notify me when they join
+        </label>
+        <button class="primary" style="margin-top:8px;width:auto;padding:8px 16px;" onclick="submitNotifyMe('${query.replace(/'/g, "\\'")}')">Save</button>
+        <div id="notifyMeStatus" style="margin-top:6px;"></div>`;
+    }
+  } catch (err) {
+    if (box) box.innerHTML = '';
+  }
+}
+
+window.submitNotifyMe = async function(officeName) {
+  const checkbox = document.getElementById('notifyMeCheckbox');
+  const status = document.getElementById('notifyMeStatus');
+  if (!checkbox.checked) { status.innerHTML = '<span style="color:#C23C3C;">Check the box first.</span>'; return; }
+  try {
+    await api('/api/locations/notify-me', { method: 'POST', body: JSON.stringify({ officeName }) });
+    status.innerHTML = '<span style="color:var(--teal-dark);">✓ We\'ll email you when they join.</span>';
+  } catch (err) {
+    status.innerHTML = `<span style="color:#C23C3C;">${err.message}</span>`;
+  }
+};
 
 function renderBrowseCalendar(slots) {
   const content = document.getElementById('browseContent');

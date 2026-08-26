@@ -255,6 +255,21 @@ model Rep {
   conversations        Conversation[]
   literatureItems      LiteratureItem[]
   marketingMaterials   RepMarketingMaterial[]
+  officeInterestRequests OfficeInterestRequest[]
+}
+
+// A rep searched for an office that isn't on Arrowhead Access yet (or has
+// no open slots) and asked to be emailed once that office signs up.
+model OfficeInterestRequest {
+  id         String   @id @default(cuid())
+  repId      String
+  rep        Rep      @relation(fields: [repId], references: [id], onDelete: Cascade)
+  officeName String
+  notified   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([officeName])
+  @@index([repId])
 }
 
 // A rep's saved library of marketing files (brochures, case studies, etc.)

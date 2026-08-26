@@ -65,4 +65,46 @@ router.post('/', requireAuth, requireRole('office_admin'), async (req, res) => {
   }
 });
 
+// --- Rep: search all offices on the platform by name, regardless of ------
+// whether they currently have any open slots posted.
+router.get('/search', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json([]);
+
+    const locations = await prisma.location.findMany({
+      where: { name: { contains: q, mode: 'insensitive' } },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        _count: { select: { slots: { where: { status: 'OPEN', startTime: { gte: new Date() } } } } },
+      },
+      orderBy: { name: 'asc' },
+      take: 20,
+    });
+
+    res.json(locations.map(l => ({ id: l.id, name: l.name, address: l.address, openSlotCount: l._count.slots })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not search offices' });
+  }
+});
+
+// --- Rep: ask to be emailed once an office not yet on the platform joins --
+router.post('/notify-me', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const officeName = String(req.body.officeName || '').trim();
+    if (!officeName) return res.status(400).json({ error: 'officeName is required' });
+
+    const request = await prisma.officeInterestRequest.create({
+      data: { repId: req.user!.sub, officeName },
+    });
+    res.status(201).json(request);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not save notify request' });
+  }
+});
+
 export default router;
