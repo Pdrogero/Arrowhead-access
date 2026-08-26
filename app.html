@@ -445,15 +445,23 @@ function screenPostSlot() {
         </select>
         <div id="postSlotLunchFields" style="display:none;">
           ${lunchDetailsFieldsHtml('postSlot')}
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Repeat weekly on (optional)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+            ${['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'].map(day => `
+              <label style="display:flex;align-items:center;font-size:13px;"><input type="checkbox" id="postSlotDay-${day}" style="margin-right:6px;" onchange="updateLunchRepeatHint()"> ${day.slice(0,3)}</label>
+            `).join('')}
+          </div>
+          <p style="font-size:12px;color:var(--slate);margin:0 0 12px;">Check one or more days to repeat this lunch weekly on those days, using the date below as the starting point. Leave unchecked to use just that exact date.</p>
+
           <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Repeat this lunch</label>
-          <select id="postSlotRepeat">
+          <select id="postSlotRepeat" onchange="updateLunchRepeatHint()">
             <option value="">Doesn't repeat</option>
             <option value="MONTHLY">Every month</option>
             <option value="QUARTERLY">Every quarter (3 months)</option>
             <option value="SEMIANNUAL">Every 6 months</option>
             <option value="ANNUAL">Every year</option>
           </select>
-          <p style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">Same headcount, allergy notes, and order details will be copied to each repeat, about 2 years out.</p>
+          <p id="postSlotRepeatHint" style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">Same headcount, allergy notes, and order details will be copied to each repeat, about 2 years out.</p>
         </div>
         <label id="startTimeLabel" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Start time</label>
         <input id="startTime" type="datetime-local">
@@ -543,6 +551,24 @@ window.togglePostSlotLunchFields = function() {
   document.getElementById('postSlotLunchFields').style.display = isLunch ? '' : 'none';
   document.getElementById('startTimeLabel').textContent = isLunch ? 'Start time for lunch' : 'Start time';
   document.getElementById('endTimeLabel').textContent = isLunch ? 'End time for lunch' : 'End time';
+};
+
+const REPEAT_LENGTH_LABELS = { MONTHLY: '1 month', QUARTERLY: '3 months', SEMIANNUAL: '6 months', ANNUAL: '1 year' };
+
+window.updateLunchRepeatHint = function() {
+  const hint = document.getElementById('postSlotRepeatHint');
+  if (!hint) return;
+  const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+    .filter(d => document.getElementById('postSlotDay-' + d)?.checked);
+  const repeat = document.getElementById('postSlotRepeat').value;
+  if (days.length) {
+    const dayLabel = days.map(d => d.slice(0, 1) + d.slice(1, 3).toLowerCase()).join('/');
+    hint.textContent = repeat
+      ? `Will post a lunch every ${dayLabel} until about ${REPEAT_LENGTH_LABELS[repeat]} out, all with the same details.`
+      : `Will post a lunch on the next ${dayLabel} this week only. Pick a repeat length above to keep it going.`;
+  } else {
+    hint.textContent = 'Same headcount, allergy notes, and order details will be copied to each repeat, about 2 years out.';
+  }
 };
 
 // Renders a read-only summary of a lunch's order details, for reps looking
@@ -2062,12 +2088,15 @@ async function submitPostSlot() {
     Object.assign(payload, readLunchDetailsFields('postSlot'));
     const repeat = document.getElementById('postSlotRepeat').value;
     if (repeat) payload.repeatInterval = repeat;
+    const daysOfWeek = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+      .filter(d => document.getElementById('postSlotDay-' + d).checked);
+    if (daysOfWeek.length) payload.daysOfWeek = daysOfWeek;
   }
 
   btn.disabled = true; btn.textContent = 'Posting…';
   try {
-    await api('/api/slots', { method: 'POST', body: JSON.stringify(payload) });
-    alert('Slot posted!');
+    const res = await api('/api/slots', { method: 'POST', body: JSON.stringify(payload) });
+    alert(res.created > 1 ? `${res.created} lunches posted!` : 'Slot posted!');
     setState({ screen: 'dashboard' });
   } catch (err) {
     setState({ formErr: err.message });
