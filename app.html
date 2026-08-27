@@ -368,8 +368,16 @@ function screenOfficeSettings() {
         <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Max visits per company per month</label>
         <input id="maxVisitsPerCompany" type="number" value="2" min="1">
         
-        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Confirmation deadline (hours before visit)</label>
-        <input id="confirmationDeadline" type="number" value="48" min="0">
+        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Confirmation deadline</label>
+        <select id="confirmationDeadlinePreset" onchange="applyConfirmationDeadlinePreset()" style="margin-bottom:8px;">
+          <option value="">Select common option…</option>
+          <option value="24 hours">24 hours</option>
+          <option value="48 hours">48 hours</option>
+          <option value="72 hours">72 hours</option>
+          <option value="1 week">1 week</option>
+        </select>
+        <input id="confirmationDeadline" type="text" placeholder="e.g. 48 hours, 2 business days, by 5pm the day before" value="48 hours">
+        <p style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">Pick a common option above, or type your own for more specific wording.</p>
 
         <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Allergies / dietary notes for reps to know about</label>
         <textarea id="generalAllergyNotes" rows="3" placeholder="e.g. Please avoid peanuts — a staff member has a severe allergy." style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
@@ -700,9 +708,9 @@ function renderBrowseCalendar(slots) {
 
   content.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-      <button class="link" style="width:auto;margin:0;" onclick="changeBrowseCalendarMonth(-1)">‹</button>
+      <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeBrowseCalendarMonth(-1)">‹</button>
       <div style="font-family:'Instrument Serif',serif;font-size:20px;">${monthLabel}</div>
-      <button class="link" style="width:auto;margin:0;" onclick="changeBrowseCalendarMonth(1)">›</button>
+      <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeBrowseCalendarMonth(1)">›</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;">
       ${['S','M','T','W','T','F','S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
@@ -767,9 +775,9 @@ function screenCalendar() {
     <div class="wrap wide">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-        <button class="link" style="width:auto;margin:0;" onclick="changeCalendarMonth(-1)">‹</button>
+        <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeCalendarMonth(-1)">‹</button>
         <h1 style="margin:0;">${monthLabel}</h1>
-        <button class="link" style="width:auto;margin:0;" onclick="changeCalendarMonth(1)">›</button>
+        <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeCalendarMonth(1)">›</button>
       </div>
       <p class="sub">Tap a day to see what's scheduled.</p>
       <button class="link" style="text-align:left;margin-bottom:14px;" onclick="toggleCalendarSync()">🔗 Sync with Apple/Google Calendar</button>
@@ -1991,10 +1999,15 @@ async function saveProfile() {
   }
 }
 
+window.applyConfirmationDeadlinePreset = function() {
+  const preset = document.getElementById('confirmationDeadlinePreset').value;
+  if (preset) document.getElementById('confirmationDeadline').value = preset;
+};
+
 window.saveOfficePolicy = async function(silent) {
   const maxRep = document.getElementById('maxVisitsPerRep').value;
   const maxCompany = document.getElementById('maxVisitsPerCompany').value;
-  const deadline = document.getElementById('confirmationDeadline').value;
+  const confirmationDeadline = document.getElementById('confirmationDeadline').value.trim();
   const generalAllergyNotes = document.getElementById('generalAllergyNotes').value.trim();
 
   try {
@@ -2003,7 +2016,7 @@ window.saveOfficePolicy = async function(silent) {
       body: JSON.stringify({
         maxVisitsPerRepPerMonth: parseInt(maxRep),
         maxVisitsPerCompanyPerMonth: parseInt(maxCompany),
-        confirmationDeadlineHours: parseInt(deadline),
+        confirmationDeadline,
         closedDays: [],
         generalAllergyNotes,
       })
@@ -2022,7 +2035,7 @@ async function loadOfficePolicy() {
     const policy = await api('/api/policies');
     document.getElementById('maxVisitsPerRep').value = policy.maxVisitsPerRepPerMonth ?? 1;
     document.getElementById('maxVisitsPerCompany').value = policy.maxVisitsPerCompanyPerMonth ?? 2;
-    document.getElementById('confirmationDeadline').value = policy.confirmationDeadlineHours ?? 48;
+    document.getElementById('confirmationDeadline').value = policy.confirmationDeadline || '48 hours';
     document.getElementById('generalAllergyNotes').value = policy.generalAllergyNotes || '';
   } catch (err) {}
 }

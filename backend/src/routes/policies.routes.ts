@@ -23,7 +23,7 @@ router.get('/', requireAuth, async (req, res) => {
     res.json(policy || {
       maxVisitsPerRepPerMonth: 1,
       maxVisitsPerCompanyPerMonth: 2,
-      confirmationDeadlineHours: 48,
+      confirmationDeadline: '48 hours',
       closedDays: [],
       generalAllergyNotes: '',
     });
@@ -39,14 +39,14 @@ router.post('/', requireAuth, async (req, res) => {
     const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
 
-    const { maxVisitsPerRepPerMonth, maxVisitsPerCompanyPerMonth, confirmationDeadlineHours, closedDays, generalAllergyNotes } = req.body;
+    const { maxVisitsPerRepPerMonth, maxVisitsPerCompanyPerMonth, confirmationDeadline, closedDays, generalAllergyNotes } = req.body;
 
     const policy = await prisma.officePolicy.upsert({
       where: { locationId: staff.locationId },
       update: {
         maxVisitsPerRepPerMonth: maxVisitsPerRepPerMonth || 1,
         maxVisitsPerCompanyPerMonth: maxVisitsPerCompanyPerMonth || 2,
-        confirmationDeadlineHours: confirmationDeadlineHours || 48,
+        confirmationDeadline: confirmationDeadline || null,
         closedDays: closedDays || [],
         generalAllergyNotes: generalAllergyNotes || null,
       },
@@ -54,7 +54,7 @@ router.post('/', requireAuth, async (req, res) => {
         locationId: staff.locationId,
         maxVisitsPerRepPerMonth: maxVisitsPerRepPerMonth || 1,
         maxVisitsPerCompanyPerMonth: maxVisitsPerCompanyPerMonth || 2,
-        confirmationDeadlineHours: confirmationDeadlineHours || 48,
+        confirmationDeadline: confirmationDeadline || null,
         closedDays: closedDays || [],
         generalAllergyNotes: generalAllergyNotes || null,
       },

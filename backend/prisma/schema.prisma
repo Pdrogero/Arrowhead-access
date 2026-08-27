@@ -140,7 +140,11 @@ model OfficePolicy {
   location                    Location @relation(fields: [locationId], references: [id])
   maxVisitsPerRepPerMonth     Int      @default(1)
   maxVisitsPerCompanyPerMonth Int      @default(2)
-  confirmationDeadlineHours   Int      @default(48)
+  // Free text (e.g. "48 hours", "2 business days", "by 5pm the day
+  // before") — a dropdown of common hour presets fills this in, but the
+  // office can type something more specific too, so it's not strictly
+  // numeric.
+  confirmationDeadline        String?
   closedDays                  DayOfWeek[]
   closedTimeStart             String?  // HH:MM format, null = no blocked time today
   closedTimeEnd               String?
