@@ -172,7 +172,110 @@ function screenRole() {
       <p class="sub">The scheduling platform connecting medical sales reps with offices.</p>
       <button class="primary" onclick="setState({screen:'login',role:'office'})">Office</button>
       <button class="primary" style="background:var(--coral);" onclick="setState({screen:'login',role:'rep'})">Sales Rep</button>
+      <p style="text-align:center;font-size:11px;color:var(--slate);margin-top:24px;">
+        <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--slate);">Terms of Service</a>
+        &nbsp;·&nbsp;
+        <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--slate);">Privacy Policy</a>
+      </p>
     </div>`;
+}
+
+function legalPageWrap(title, bodyHtml) {
+  return `
+    <div class="wrap wide">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'role'})">&larr; Back</button>
+      <h1>${title}</h1>
+      <p class="sub">Last updated ${LEGAL_LAST_UPDATED}</p>
+      <div style="font-size:14px;line-height:1.6;color:var(--ink);">${bodyHtml}</div>
+    </div>`;
+}
+
+const LEGAL_LAST_UPDATED = 'August 27, 2026';
+const LEGAL_SECTION_STYLE = 'font-size:15px;font-weight:600;margin:20px 0 8px;';
+const LEGAL_P_STYLE = 'margin-bottom:10px;color:var(--slate);';
+
+function screenTerms() {
+  return legalPageWrap('Terms of Service', `
+    <p style="${LEGAL_P_STYLE}">These Terms of Service ("Terms") govern your access to and use of Arrowhead Access (the "Service"), operated by Rogero Group LLC, doing business as Arrowhead Access ("Arrowhead Access," "we," "us," or "our"). By creating an account or otherwise using the Service, you agree to these Terms. If you don't agree, don't use the Service.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">1. What Arrowhead Access Is</p>
+    <p style="${LEGAL_P_STYLE}">Arrowhead Access is a scheduling and communication platform that connects pharmaceutical and medical device sales representatives ("Reps") with medical offices ("Offices") to coordinate visits, meals, and related interactions. We are not a healthcare provider, do not practice medicine, and do not participate in any clinical decision-making. The Service is a scheduling and coordination tool only.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">2. Eligibility &amp; Accounts</p>
+    <p style="${LEGAL_P_STYLE}">You must be at least 18 years old and able to form a binding contract to use the Service. You're responsible for the accuracy of the information you provide, for keeping your login credentials confidential, and for all activity under your account. Office accounts represent that the person creating the account is authorized to do so on behalf of the office/practice named.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">3. No Patient Health Information</p>
+    <p style="${LEGAL_P_STYLE}">The Service is not designed or intended to collect, store, or transmit patient health information (PHI) of any kind. You must never upload, message, or otherwise submit PHI or any patient-identifiable medical information through the Service. Doing so is a violation of these Terms.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">4. Rep Subscriptions &amp; Billing</p>
+    <p style="${LEGAL_P_STYLE}">Rep accounts are billed on a subscription basis (monthly or annual) through our payment processor, Stripe. Subscriptions may include a free trial period; unless cancelled before the trial ends, your card will be charged at the then-current rate. Subscriptions renew automatically each billing period until cancelled. You can cancel anytime from your account; cancellation takes effect at the end of the current billing period, and we don't provide partial refunds for unused time except where required by law. Founding-rep pricing, where offered, is limited to a stated number of accounts and is not guaranteed to remain available.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">5. Acceptable Use</p>
+    <p style="${LEGAL_P_STYLE}">You agree not to: (a) impersonate any person or misrepresent your affiliation with a company or office; (b) upload content you don't have the right to share, or that infringes another party's intellectual property; (c) use the Service to send unsolicited marketing outside the normal scheduling/messaging features; (d) attempt to access another user's account or data without authorization; (e) interfere with or disrupt the Service's operation; or (f) use the Service for any unlawful purpose.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">6. Content You Submit</p>
+    <p style="${LEGAL_P_STYLE}">You retain ownership of the content you upload (marketing materials, literature, profile information, messages). By submitting content, you grant Arrowhead Access a non-exclusive, worldwide license to host, store, and display that content solely to operate the Service — for example, sharing literature you send with the office you sent it to. You're solely responsible for the content you submit and for having the rights to share it.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">7. Reviews &amp; Ratings</p>
+    <p style="${LEGAL_P_STYLE}">Reps and offices may rate and review each other after a confirmed visit. Reviews must be honest and based on an actual interaction through the Service. We may remove reviews that violate these Terms.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">8. Disclaimers</p>
+    <p style="${LEGAL_P_STYLE}">The Service is provided "as is" and "as available," without warranties of any kind, express or implied, including merchantability, fitness for a particular purpose, and non-infringement. We don't guarantee that offices will accept visit requests, that reps will show up as scheduled, or that the Service will be uninterrupted or error-free. Interactions and agreements between reps and offices (including any arrangements around meals or visits) are solely between those parties — Arrowhead Access is not a party to them and is not responsible for what happens during or as a result of a visit.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">9. Limitation of Liability</p>
+    <p style="${LEGAL_P_STYLE}">To the fullest extent permitted by law, Arrowhead Access and Rogero Group LLC will not be liable for any indirect, incidental, special, consequential, or punitive damages, or for any loss of profits or revenues, arising from your use of the Service. Our total liability for any claim relating to the Service will not exceed the amount you paid us in the 12 months before the claim arose.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">10. Termination</p>
+    <p style="${LEGAL_P_STYLE}">You may stop using the Service and delete your account at any time. We may suspend or terminate accounts that violate these Terms, engage in fraud or abuse, or for other reasonable cause, with or without notice.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">11. Changes to These Terms</p>
+    <p style="${LEGAL_P_STYLE}">We may update these Terms from time to time. If we make material changes, we'll update the "Last updated" date above and, where appropriate, notify you. Continued use of the Service after changes take effect means you accept the revised Terms.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">12. Governing Law</p>
+    <p style="${LEGAL_P_STYLE}">These Terms are governed by the laws of the State of Florida, without regard to its conflict-of-laws principles. Any dispute arising from these Terms or the Service will be subject to the exclusive jurisdiction of the state and federal courts located in Florida.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">13. Contact</p>
+    <p style="${LEGAL_P_STYLE}">Questions about these Terms? Reach us at <a href="mailto:legal@arrowheadaccess.com" style="color:var(--teal);">legal@arrowheadaccess.com</a>.</p>
+  `);
+}
+
+function screenPrivacy() {
+  return legalPageWrap('Privacy Policy', `
+    <p style="${LEGAL_P_STYLE}">This Privacy Policy explains how Rogero Group LLC, doing business as Arrowhead Access, collects, uses, and shares information when you use the Service.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">1. Information We Collect</p>
+    <p style="${LEGAL_P_STYLE}"><strong>Account &amp; profile information:</strong> name, email, phone number, company/office name and address, professional title/credentials, and (optionally) NPI number.<br>
+    <strong>Content you provide:</strong> messages sent through the Service, marketing materials and literature you upload, visit details (headcount, dietary notes, order details), and reviews/ratings.<br>
+    <strong>Billing information:</strong> for rep subscriptions, payment details are collected and processed directly by Stripe — we don't store your full card number.<br>
+    <strong>Usage data:</strong> basic technical information like login timestamps and general activity within the Service, used for security and to keep the Service working correctly.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">2. How We Use Information</p>
+    <p style="${LEGAL_P_STYLE}">We use the information we collect to: operate and provide the Service (matching reps and offices, scheduling visits, delivering messages); send transactional emails (account notifications, booking confirmations, message alerts, billing receipts); process subscription payments; maintain the security of the Service; and improve and troubleshoot the Service.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">3. How Information Is Shared</p>
+    <p style="${LEGAL_P_STYLE}">Within the Service, your profile and relevant visit information is visible to the other party in a booking (e.g., an office sees a rep's name, company, and profile when they book a visit, and vice versa). We also share information with service providers who help us operate the Service, including Stripe (payments), Resend (transactional email), and our hosting/infrastructure providers (Vercel, Render, Neon) — each solely to perform services on our behalf. We don't sell your personal information. We may disclose information if required by law or to protect the rights, safety, or property of Arrowhead Access, our users, or others.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">4. Data Security</p>
+    <p style="${LEGAL_P_STYLE}">We use reasonable technical and organizational measures to protect your information, including encrypted connections and hashed passwords. No method of transmission or storage is 100% secure, and we can't guarantee absolute security.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">5. Data Retention</p>
+    <p style="${LEGAL_P_STYLE}">We retain account and activity information for as long as your account is active and as needed to provide the Service, comply with legal obligations, resolve disputes, and enforce our agreements. You can request deletion of your account by contacting us.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">6. Your Choices</p>
+    <p style="${LEGAL_P_STYLE}">You can review and update most of your profile information directly in your account settings. You may request access to, correction of, or deletion of your personal information, or ask us questions about how it's handled, by emailing us at the address below.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">7. No Patient Health Information</p>
+    <p style="${LEGAL_P_STYLE}">The Service isn't designed to collect patient health information, and this Privacy Policy doesn't address HIPAA-regulated data because none should ever be submitted through the Service. See our Terms of Service for more.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">8. Children's Privacy</p>
+    <p style="${LEGAL_P_STYLE}">The Service is intended for business use by adults and is not directed to anyone under 18. We don't knowingly collect information from children.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">9. Changes to This Policy</p>
+    <p style="${LEGAL_P_STYLE}">We may update this Privacy Policy from time to time. We'll update the "Last updated" date above when we do, and for material changes we'll take reasonable steps to notify you.</p>
+
+    <p style="${LEGAL_SECTION_STYLE}">10. Contact</p>
+    <p style="${LEGAL_P_STYLE}">Questions about this Privacy Policy or your information? Reach us at <a href="mailto:legal@arrowheadaccess.com" style="color:var(--teal);">legal@arrowheadaccess.com</a>.</p>
+  `);
 }
 
 function screenLogin() {
@@ -236,6 +339,7 @@ function screenSignup() {
           <input id="address" type="text" placeholder="Address">
           <input id="email" type="email" placeholder="Email" autocapitalize="none" autocorrect="off" spellcheck="false">
           <input id="password" type="password" placeholder="Password">
+          <p style="font-size:11px;color:var(--slate);margin-bottom:12px;">By creating an account, you agree to our <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--teal);">Terms of Service</a> and <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--teal);">Privacy Policy</a>.</p>
           <button class="primary" onclick="doOfficeSignup()">Create Account</button>
         </div>
       </div>`;
@@ -250,6 +354,7 @@ function screenSignup() {
           <input id="companyName" type="text" placeholder="Company name">
           <input id="email" type="email" placeholder="Email" autocapitalize="none" autocorrect="off" spellcheck="false">
           <input id="password" type="password" placeholder="Password">
+          <p style="font-size:11px;color:var(--slate);margin-bottom:12px;">By creating an account, you agree to our <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--teal);">Terms of Service</a> and <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--teal);">Privacy Policy</a>.</p>
           <button class="primary" onclick="doRepSignup()">Create Account</button>
         </div>
       </div>`;
@@ -2553,9 +2658,11 @@ function render() {
   const app = document.getElementById('app');
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.style.display = state.screen === 'role' ? 'none' : 'block';
-  document.body.classList.toggle('medical-bg', ['role', 'login', 'forgotPassword', 'resetPassword'].includes(state.screen));
+  document.body.classList.toggle('medical-bg', ['role', 'login', 'forgotPassword', 'resetPassword', 'terms', 'privacy'].includes(state.screen));
 
   if (state.screen === 'role') app.innerHTML = screenRole();
+  else if (state.screen === 'terms') app.innerHTML = screenTerms();
+  else if (state.screen === 'privacy') app.innerHTML = screenPrivacy();
   else if (state.screen === 'login') app.innerHTML = screenLogin();
   else if (state.screen === 'forgotPassword') app.innerHTML = screenForgotPassword();
   else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
