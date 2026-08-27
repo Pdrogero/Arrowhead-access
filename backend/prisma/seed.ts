@@ -23,51 +23,64 @@ const CATALOG: Record<string, string[]> = {
 };
 
 async function main() {
-  const passwordHash = await bcrypt.hash('demo1234', 10);
+  // The demo office (and its known-manufacturer-domain used for rep
+  // auto-verification testing) is test data — it only gets created when
+  // explicitly requested, so production deploys don't keep recreating a
+  // fake office real reps could stumble into. Set SEED_DEMO_OFFICE=true
+  // to seed it, e.g. for local development.
+  if (process.env.SEED_DEMO_OFFICE === 'true') {
+    const passwordHash = await bcrypt.hash('demo1234', 10);
 
-  const org = await prisma.organization.upsert({
-    where: { id: 'demo-office-org' },
-    update: {},
-    create: {
-      id: 'demo-office-org',
-      name: 'Meridian Family Practice',
-      type: 'OFFICE',
-      billingEmail: 'billing@meridianfamilypractice.com',
-    },
-  });
+    const org = await prisma.organization.upsert({
+      where: { id: 'demo-office-org' },
+      update: {},
+      create: {
+        id: 'demo-office-org',
+        name: 'Meridian Family Practice',
+        type: 'OFFICE',
+        billingEmail: 'billing@meridianfamilypractice.com',
+      },
+    });
 
-  const location = await prisma.location.upsert({
-    where: { id: 'demo-office-location' },
-    update: {},
-    create: {
-      id: 'demo-office-location',
-      organizationId: org.id,
-      name: 'Meridian Family Practice — Main Office',
-      address: '123 Main St, Springfield',
-      timezone: 'America/New_York',
-      maxVisitsPerRepPerMonth: 1,
-      maxVisitsPerCompanyPerMonth: 2,
-    },
-  });
+    const location = await prisma.location.upsert({
+      where: { id: 'demo-office-location' },
+      update: {},
+      create: {
+        id: 'demo-office-location',
+        organizationId: org.id,
+        name: 'Meridian Family Practice — Main Office',
+        address: '123 Main St, Springfield',
+        timezone: 'America/New_York',
+        maxVisitsPerRepPerMonth: 1,
+        maxVisitsPerCompanyPerMonth: 2,
+      },
+    });
 
-  await prisma.staffUser.upsert({
-    where: { email: 'staff@meridianfamilypractice.com' },
-    update: {},
-    create: {
-      email: 'staff@meridianfamilypractice.com',
-      passwordHash,
-      role: 'ADMIN',
-      locationId: location.id,
-    },
-  });
+    await prisma.staffUser.upsert({
+      where: { email: 'staff@meridianfamilypractice.com' },
+      update: {},
+      create: {
+        email: 'staff@meridianfamilypractice.com',
+        passwordHash,
+        role: 'ADMIN',
+        locationId: location.id,
+      },
+    });
 
-  await prisma.knownManufacturerDomain.upsert({
-    where: { domain: 'meridianpharma.com' },
-    update: {},
-    create: { domain: 'meridianpharma.com' },
-  });
+    await prisma.knownManufacturerDomain.upsert({
+      where: { domain: 'meridianpharma.com' },
+      update: {},
+      create: { domain: 'meridianpharma.com' },
+    });
 
-  // --- Manufacturer / product catalog ---
+    console.log('Seeded office login:');
+    console.log('  email: staff@meridianfamilypractice.com');
+    console.log('  password: demo1234');
+    console.log(`  locationId: ${location.id}`);
+  }
+
+  // --- Manufacturer / product catalog (always seeded — real data the ---
+  // --- rep profile's company picker needs in production too) ----------
   for (const [companyName, products] of Object.entries(CATALOG)) {
     const company = await prisma.manufacturerCompany.upsert({
       where: { name: companyName },
@@ -83,10 +96,6 @@ async function main() {
     }
   }
 
-  console.log('Seeded office login:');
-  console.log('  email: staff@meridianfamilypractice.com');
-  console.log('  password: demo1234');
-  console.log(`  locationId: ${location.id}`);
   console.log(`Seeded ${Object.keys(CATALOG).length} manufacturer companies with products.`);
 }
 
