@@ -68,7 +68,37 @@ router.get('/founding-status', requireAuth, requireRole('rep'), async (req, res)
   res.json({
     isFoundingRep: rep.isFoundingRep,
     foundingSpotsRemaining: Math.max(0, FOUNDING_REP_LIMIT - foundingCount),
+    hasActiveSubscription: !!rep.stripeSubscriptionId && rep.subscriptionStatus !== 'CANCELED',
+    subscriptionStatus: rep.subscriptionStatus,
+    cancelAtPeriodEnd: rep.cancelAtPeriodEnd,
+    currentPeriodEnd: rep.currentPeriodEnd,
+    billingCycle: rep.billingCycle,
   });
+});
+
+// --- Cancel the rep's subscription, effective at the end of the current --
+// billing period (no partial refund for time already paid, per the ToS) —
+// they keep full access until then, then it simply stops renewing.
+router.post('/rep/cancel', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const rep = await prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } });
+    if (!rep.stripeSubscriptionId || rep.subscriptionStatus === 'CANCELED') {
+      return res.status(400).json({ error: 'No active subscription to cancel' });
+    }
+
+    const sub = await stripe.subscriptions.update(rep.stripeSubscriptionId, { cancel_at_period_end: true });
+
+    const currentPeriodEnd = new Date(sub.current_period_end * 1000);
+    await prisma.rep.update({
+      where: { id: rep.id },
+      data: { cancelAtPeriodEnd: true, currentPeriodEnd },
+    });
+
+    res.json({ cancelAtPeriodEnd: true, currentPeriodEnd });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not cancel subscription' });
+  }
 });
 
 router.post('/webhook', async (req, res) => {
@@ -96,6 +126,7 @@ router.post('/webhook', async (req, res) => {
             billingCycle,
             subscriptionStatus: 'TRIALING',
             currentPeriodEnd: new Date(sub.current_period_end * 1000),
+            cancelAtPeriodEnd: sub.cancel_at_period_end,
             renewalReminder30dSent: false,
             renewalReminder7dSent: false,
             renewalReminder1dSent: false,
@@ -117,6 +148,7 @@ router.post('/webhook', async (req, res) => {
           data: {
             subscriptionStatus: status,
             currentPeriodEnd: newPeriodEnd,
+            cancelAtPeriodEnd: sub.cancel_at_period_end,
             ...(renewed ? { renewalReminder30dSent: false, renewalReminder7dSent: false, renewalReminder1dSent: false } : {}),
           },
         });
@@ -125,7 +157,7 @@ router.post('/webhook', async (req, res) => {
       const sub = event.data.object as Stripe.Subscription;
       const rep = await prisma.rep.findFirst({ where: { stripeSubscriptionId: sub.id } });
       if (rep) {
-        await prisma.rep.update({ where: { id: rep.id }, data: { subscriptionStatus: 'CANCELED' } });
+        await prisma.rep.update({ where: { id: rep.id }, data: { subscriptionStatus: 'CANCELED', cancelAtPeriodEnd: false } });
       }
     }
     res.json({ received: true });

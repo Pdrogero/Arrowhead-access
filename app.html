@@ -2621,7 +2621,22 @@ async function loadBillingStatus() {
   const box = document.getElementById('billingBox');
   try {
     const res = await api('/api/billing/founding-status');
-    const { isFoundingRep, foundingSpotsRemaining, subscriptionStatus } = res;
+    const { isFoundingRep, foundingSpotsRemaining, hasActiveSubscription, cancelAtPeriodEnd, currentPeriodEnd, billingCycle, subscriptionStatus } = res;
+
+    if (hasActiveSubscription) {
+      const cycleLabel = billingCycle === 'ANNUAL' ? 'Annual' : 'Monthly';
+      const dateStr = currentPeriodEnd ? new Date(currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
+      box.innerHTML = cancelAtPeriodEnd ? `
+        <h2 style="font-size:16px;margin-bottom:12px;">Your plan</h2>
+        <div class="note" style="margin-top:0;">Your ${cycleLabel.toLowerCase()} subscription is set to cancel${dateStr ? ' on ' + dateStr : ''}. You'll keep full access until then, and won't be charged again.</div>
+      ` : `
+        <h2 style="font-size:16px;margin-bottom:12px;">Your plan</h2>
+        <p style="font-size:13px;color:var(--slate);margin-bottom:12px;">${cycleLabel} plan${subscriptionStatus === 'TRIALING' ? ' (in trial)' : ''}${dateStr ? ' — renews ' + dateStr : ''}.</p>
+        <button class="link" style="text-align:left;color:#C23C3C;" onclick="cancelSubscription()">Cancel subscription</button>
+      `;
+      return;
+    }
+
     box.innerHTML = `
       <h2 style="font-size:16px;margin-bottom:12px;">Choose your plan</h2>
       <p style="font-size:13px;color:var(--slate);margin-bottom:12px;">14-day free trial, cancel anytime during the trial.</p>
@@ -2632,6 +2647,18 @@ async function loadBillingStatus() {
     box.innerHTML = `<div class="msg err">${err.message}</div>`;
   }
 }
+
+window.cancelSubscription = async function() {
+  const ok = confirm(`Cancel your subscription? You'll keep full access until the end of your current billing period, then it won't renew. No refund is given for unused time, per the Terms of Service.`);
+  if (!ok) return;
+  try {
+    await api('/api/billing/rep/cancel', { method: 'POST' });
+    await loadBillingStatus();
+    alert('Your subscription is set to cancel at the end of the current billing period.');
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 async function loadOpenSlots() {
   const content = document.getElementById('browseContent');

@@ -246,6 +246,7 @@ model Rep {
   stripeSubscriptionId String?             @unique
   billingCycle         BillingCycle?
   subscriptionStatus   SubscriptionStatus  @default(TRIALING)
+  cancelAtPeriodEnd    Boolean             @default(false)
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?           // next renewal/charge date, synced from Stripe
   renewalReminder30dSent Boolean           @default(false)
