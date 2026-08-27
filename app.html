@@ -864,7 +864,8 @@ async function saveAttendees() {
   }
 }
 
-const EMPLOYEE_TITLE_OPTIONS = ['MD', 'DO', 'DPM', 'ARNP', 'PA', 'Nurse', 'LPN', 'Medical Assistant', 'Staff', 'Front Desk', 'Student'];
+const EMPLOYEE_TITLE_OPTIONS = ['MD', 'DO', 'DPM', 'ARNP', 'PA', 'Nurse', 'LPN', 'Medical Assistant', 'Staff', 'Front Desk', 'Medical Student'];
+const NPI_ELIGIBLE_TITLES = ['MD', 'DO', 'DPM', 'ARNP', 'PA', 'Medical Student'];
 
 function renderEmployeeRows() {
   const box = document.getElementById('employeeRowsBox');
@@ -872,16 +873,23 @@ function renderEmployeeRows() {
     box.innerHTML = `<p style="font-size:13px;color:var(--slate);margin-bottom:12px;">No team members added yet.</p>`;
     return;
   }
-  box.innerHTML = employeeRows.map((e, i) => `
-    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
-      <input type="text" placeholder="Full name" value="${e.name || ''}" oninput="updateEmployeeField(${i}, this.value)" style="margin-bottom:0;flex:2;">
-      <select onchange="updateEmployeeTitleField(${i}, this.value)" style="margin-bottom:0;flex:1;">
-        <option value="">Title…</option>
-        ${EMPLOYEE_TITLE_OPTIONS.map(t => `<option value="${t}" ${e.title === t ? 'selected' : ''}>${t}</option>`).join('')}
-      </select>
-      <button type="button" onclick="removeEmployeeRow(${i})" title="Remove" style="background:none;border:none;color:#C23C3C;font-size:16px;cursor:pointer;padding:4px 8px;">✕</button>
-    </div>
-  `).join('');
+  box.innerHTML = employeeRows.map((e, i) => {
+    const showNpi = NPI_ELIGIBLE_TITLES.includes(e.title) || e.customTitle;
+    return `
+    <div style="margin-bottom:10px;padding-bottom:10px;${i < employeeRows.length - 1 ? 'border-bottom:1px solid var(--line);' : ''}">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:${e.customTitle || showNpi ? '6px' : '0'};">
+        <input type="text" placeholder="Full name" value="${e.name || ''}" oninput="updateEmployeeField(${i}, this.value)" style="margin-bottom:0;flex:2;">
+        <select onchange="updateEmployeeTitleField(${i}, this.value)" style="margin-bottom:0;flex:1;">
+          <option value="">Title…</option>
+          ${EMPLOYEE_TITLE_OPTIONS.map(t => `<option value="${t}" ${e.title === t ? 'selected' : ''}>${t}</option>`).join('')}
+          <option value="__OTHER__" ${e.customTitle ? 'selected' : ''}>Other…</option>
+        </select>
+        <button type="button" onclick="removeEmployeeRow(${i})" title="Remove" style="background:none;border:none;color:#C23C3C;font-size:16px;cursor:pointer;padding:4px 8px;">✕</button>
+      </div>
+      ${e.customTitle ? `<input type="text" placeholder="Enter title" value="${e.title || ''}" oninput="updateEmployeeCustomTitle(${i}, this.value)" style="margin-bottom:${showNpi ? '6px' : '0'};">` : ''}
+      ${showNpi ? `<input type="text" placeholder="NPI number (optional)" value="${e.npi || ''}" oninput="updateEmployeeNpiField(${i}, this.value)" style="margin-bottom:0;">` : ''}
+    </div>`;
+  }).join('');
 }
 
 window.updateEmployeeField = function(index, value) {
@@ -889,11 +897,26 @@ window.updateEmployeeField = function(index, value) {
 };
 
 window.updateEmployeeTitleField = function(index, value) {
+  if (value === '__OTHER__') {
+    employeeRows[index].customTitle = true;
+    employeeRows[index].title = '';
+  } else {
+    employeeRows[index].customTitle = false;
+    employeeRows[index].title = value;
+  }
+  renderEmployeeRows();
+};
+
+window.updateEmployeeCustomTitle = function(index, value) {
   employeeRows[index].title = value;
 };
 
+window.updateEmployeeNpiField = function(index, value) {
+  employeeRows[index].npi = value;
+};
+
 window.addEmployeeRow = function() {
-  employeeRows.push({ name: '', title: '' });
+  employeeRows.push({ name: '', title: '', npi: '', customTitle: false });
   renderEmployeeRows();
 };
 
@@ -905,7 +928,12 @@ window.removeEmployeeRow = function(index) {
 async function loadEmployees() {
   try {
     const employees = await api('/api/employees/mine');
-    employeeRows = employees.map(e => ({ name: e.name, title: e.title || '' }));
+    employeeRows = employees.map(e => ({
+      name: e.name,
+      title: e.title || '',
+      npi: e.npi || '',
+      customTitle: !!e.title && !EMPLOYEE_TITLE_OPTIONS.includes(e.title),
+    }));
   } catch (err) {
     employeeRows = [];
   }
@@ -980,7 +1008,7 @@ function screenOfficeStaff() {
         ${viewedOfficeStaff === null
           ? '<div class="empty">Loading…</div>'
           : viewedOfficeStaff.length
-            ? viewedOfficeStaff.map(e => `<div class="row"><div class="mid"><div class="who">${e.name}${e.title ? ` <span style="color:var(--slate);font-weight:400;">· ${e.title}</span>` : ''}</div></div></div>`).join('')
+            ? viewedOfficeStaff.map(e => `<div class="row"><div class="mid"><div class="who">${e.name}${e.title ? ` <span style="color:var(--slate);font-weight:400;">· ${e.title}</span>` : ''}${e.npi ? ` <span style="color:var(--slate);font-weight:400;">· NPI ${e.npi}</span>` : ''}</div></div></div>`).join('')
             : '<div class="empty">This office has not listed their team yet.</div>'}
       </div>
     </div>`;

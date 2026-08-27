@@ -36,13 +36,17 @@ router.post('/mine', requireAuth, requireRole('office_admin', 'office_staff'), a
 
     const employees = Array.isArray(req.body.employees) ? req.body.employees : [];
     const rows = employees
-      .map((e: any) => ({ name: String(e.name || '').trim(), title: String(e.title || '').trim() || null }))
+      .map((e: any) => ({
+        name: String(e.name || '').trim(),
+        title: String(e.title || '').trim() || null,
+        npi: String(e.npi || '').trim() || null,
+      }))
       .filter((e: { name: string }) => e.name);
 
     await prisma.$transaction([
       prisma.officeEmployee.deleteMany({ where: { locationId: staff.locationId } }),
       prisma.officeEmployee.createMany({
-        data: rows.map((e: { name: string; title: string | null }) => ({ ...e, locationId: staff.locationId })),
+        data: rows.map((e: { name: string; title: string | null; npi: string | null }) => ({ ...e, locationId: staff.locationId })),
       }),
     ]);
 
