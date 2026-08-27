@@ -17,3 +17,7 @@ jobs:
         run: |
           curl -sS -f -X POST "https://arrowhead-access-api.onrender.com/api/bookings/check-lunch-reminders" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+      - name: Trigger unread message reminder check
+        run: |
+          curl -sS -f -X POST "https://arrowhead-access-api.onrender.com/api/messages/check-unread-reminders" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
