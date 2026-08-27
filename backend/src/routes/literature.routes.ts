@@ -9,7 +9,7 @@
 import { Router } from 'express';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
-import { requireAuth, requireRole } from '../auth/auth.guard';
+import { requireAuth, requireRole, requireActiveSubscription } from '../auth/auth.guard';
 import { sendEmail } from '../email';
 import { put } from '@vercel/blob';
 import multer from 'multer';
@@ -46,7 +46,7 @@ function blobKeyFor(file: Express.Multer.File): string {
 
 // --- Rep: upload a literature/sample file (PDF, image, etc.) --------------
 // Returns a public URL to use as the linkUrl when creating the item.
-router.post('/upload', requireAuth, requireRole('rep'), upload.single('file'), async (req, res) => {
+router.post('/upload', requireAuth, requireRole('rep'), requireActiveSubscription, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
@@ -64,7 +64,7 @@ router.post('/upload', requireAuth, requireRole('rep'), upload.single('file'), a
 });
 
 // --- Rep: send literature/samples to an office they've visited before -----
-router.post('/', requireAuth, requireRole('rep'), async (req, res) => {
+router.post('/', requireAuth, requireRole('rep'), requireActiveSubscription, async (req, res) => {
   try {
     const locationId = String(req.body.locationId || '');
     const title = String(req.body.title || '').trim();

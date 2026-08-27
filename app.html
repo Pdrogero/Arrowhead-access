@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Arrowhead Access — App</title>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -88,6 +89,10 @@
 <script>
 const API_BASE = 'https://arrowhead-access-api.onrender.com';
 const DEMO_LOCATION_ID = 'clznrmxov0000o8g8w8wxplk0';
+// Cloudflare Turnstile site key — public by design, safe to ship in the
+// frontend. The matching secret key lives server-side only (Render env var).
+const TURNSTILE_SITE_KEY = '0x4AAAAAAA0000000000000000';
+let turnstileToken = null;
 
 let state = {
   screen: 'role',
@@ -339,6 +344,7 @@ function screenSignup() {
           <input id="address" type="text" placeholder="Address">
           <input id="email" type="email" placeholder="Email" autocapitalize="none" autocorrect="off" spellcheck="false">
           <input id="password" type="password" placeholder="Password">
+          <div id="turnstileBox" style="margin-bottom:12px;"></div>
           <p style="font-size:11px;color:var(--slate);margin-bottom:12px;">By creating an account, you agree to our <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--teal);">Terms of Service</a> and <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--teal);">Privacy Policy</a>.</p>
           <button class="primary" onclick="doOfficeSignup()">Create Account</button>
         </div>
@@ -354,6 +360,7 @@ function screenSignup() {
           <input id="companyName" type="text" placeholder="Company name">
           <input id="email" type="email" placeholder="Email" autocapitalize="none" autocorrect="off" spellcheck="false">
           <input id="password" type="password" placeholder="Password">
+          <div id="turnstileBox" style="margin-bottom:12px;"></div>
           <p style="font-size:11px;color:var(--slate);margin-bottom:12px;">By creating an account, you agree to our <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--teal);">Terms of Service</a> and <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--teal);">Privacy Policy</a>.</p>
           <button class="primary" onclick="doRepSignup()">Create Account</button>
         </div>
@@ -1348,7 +1355,7 @@ window.sendMessage = async function() {
     input.value = '';
     await loadConversationMessages();
   } catch (err) {
-    alert(err.message);
+    if (!handleSubscriptionRequired(err)) alert(err.message);
   }
 };
 
@@ -1687,6 +1694,7 @@ window.submitLiterature = async function() {
       }
       return;
     }
+    if (handleSubscriptionRequired(err)) return;
     setState({ formErr: err.message });
   }
 };
@@ -1851,6 +1859,24 @@ async function doChangePassword() {
   }
 }
 
+// Renders the Cloudflare Turnstile widget into the signup form's placeholder
+// div. The script tag loads async, so this polls briefly until it's ready
+// rather than assuming it's already on window by the time the screen renders.
+function renderTurnstile() {
+  turnstileToken = null;
+  const container = document.getElementById('turnstileBox');
+  if (!container) return;
+  const tryRender = () => {
+    if (!document.getElementById('turnstileBox')) return; // navigated away
+    if (!window.turnstile) { setTimeout(tryRender, 150); return; }
+    turnstile.render('#turnstileBox', {
+      sitekey: TURNSTILE_SITE_KEY,
+      callback: (token) => { turnstileToken = token; },
+    });
+  };
+  tryRender();
+}
+
 async function doRepSignup() {
   const name = document.getElementById('name').value;
   const companyName = document.getElementById('companyName').value;
@@ -1858,7 +1884,7 @@ async function doRepSignup() {
   const password = document.getElementById('password').value;
   
   try {
-    const res = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ name, companyName, email, password }) });
+    const res = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ name, companyName, email, password, turnstileToken }) });
     localStorage.setItem('token', res.token);
     state.me = res;
     setState({ screen: 'profile', role: 'rep' });
@@ -1875,7 +1901,7 @@ async function doOfficeSignup() {
   const password = document.getElementById('password').value;
 
   try {
-    const res = await api('/api/auth/office/signup', { method: 'POST', body: JSON.stringify({ officeName, locationName, address, email, password }) });
+    const res = await api('/api/auth/office/signup', { method: 'POST', body: JSON.stringify({ officeName, locationName, address, email, password, turnstileToken }) });
     localStorage.setItem('token', res.token);
     state.me = res;
     setState({ screen: 'dashboard', role: 'office' });
@@ -2499,7 +2525,7 @@ window.claimSlot = async function(slotId) {
     alert('Slot claimed! You can now see it in your bookings.');
     setState({ screen: 'dashboard' });
   } catch (err) {
-    alert(err.message);
+    if (!handleSubscriptionRequired(err)) alert(err.message);
   }
 };
 
@@ -2525,6 +2551,16 @@ window.toggleProfileMenu = function() {
 window.scrollToBilling = function() {
   document.getElementById('billingBox')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
+
+// Paid-feature routes return 402 when a rep hasn't completed subscription
+// checkout — route them to the billing card instead of a dead-end alert.
+function handleSubscriptionRequired(err) {
+  if (err.status !== 402) return false;
+  alert(err.message);
+  setState({ screen: 'dashboard' });
+  setTimeout(scrollToBilling, 300);
+  return true;
+}
 
 window.openCalendar = function() {
   calendarMonth = new Date();
@@ -2678,7 +2714,7 @@ function render() {
   else if (state.screen === 'login') app.innerHTML = screenLogin();
   else if (state.screen === 'forgotPassword') app.innerHTML = screenForgotPassword();
   else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
-  else if (state.screen === 'signup') app.innerHTML = screenSignup();
+  else if (state.screen === 'signup') { app.innerHTML = screenSignup(); renderTurnstile(); }
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
   else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); loadOfficePolicy(); loadRecurringTemplates(); }
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }

@@ -8,6 +8,7 @@ import { PrismaClient } from '@prisma/client';
 import { JwtPayload } from '../auth/auth.types';
 import { sendEmail } from '../email';
 import { requireAuth, requireRole } from '../auth/auth.guard';
+import { verifyTurnstile } from '../turnstile';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -18,10 +19,14 @@ function signToken(payload: JwtPayload): string {
 
 router.post('/rep/signup', async (req, res) => {
   try {
-    const { password, name, companyName } = req.body;
+    const { password, name, companyName, turnstileToken } = req.body;
     const email = String(req.body.email || '').trim().toLowerCase();
     if (!email || !password || !name || !companyName) {
       return res.status(400).json({ error: 'email, password, name, and companyName are required' });
+    }
+
+    if (!(await verifyTurnstile(turnstileToken, req.ip))) {
+      return res.status(400).json({ error: 'Verification failed. Please try again.' });
     }
 
     const existing = await prisma.rep.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
@@ -179,10 +184,14 @@ router.post('/switch-location', requireAuth, requireRole('office_admin', 'office
 
 router.post('/office/signup', async (req, res) => {
   try {
-    const { officeName, locationName, address, timezone, password } = req.body;
+    const { officeName, locationName, address, timezone, password, turnstileToken } = req.body;
     const email = String(req.body.email || '').trim().toLowerCase();
     if (!officeName || !locationName || !address || !email || !password) {
       return res.status(400).json({ error: 'officeName, locationName, address, email, and password are required' });
+    }
+
+    if (!(await verifyTurnstile(turnstileToken, req.ip))) {
+      return res.status(400).json({ error: 'Verification failed. Please try again.' });
     }
 
     const existing = await prisma.staffUser.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });

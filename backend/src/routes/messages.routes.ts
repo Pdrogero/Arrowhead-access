@@ -5,7 +5,7 @@
 
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { requireAuth } from '../auth/auth.guard';
+import { requireAuth, requireActiveSubscription } from '../auth/auth.guard';
 import { sendEmail } from '../email';
 
 const prisma = new PrismaClient();
@@ -102,7 +102,9 @@ router.get('/conversations/:id/messages', requireAuth, async (req, res) => {
 });
 
 // --- Send a message, creating the conversation on first contact -----------
-router.post('/', requireAuth, async (req, res) => {
+// requireActiveSubscription is a no-op for office callers — it only blocks
+// unsubscribed reps.
+router.post('/', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const body = String(req.body.body || '').trim();
     if (!body) return res.status(400).json({ error: 'Message body is required' });

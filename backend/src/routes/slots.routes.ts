@@ -4,7 +4,7 @@
 
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { requireAuth, requireRole } from '../auth/auth.guard';
+import { requireAuth, requireRole, requireActiveSubscription } from '../auth/auth.guard';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -198,7 +198,7 @@ router.patch('/:id/lunch-details', requireAuth, async (req, res) => {
 });
 
 // --- Reps: browse open slots across all locations --------------------------
-router.get('/open', requireAuth, requireRole('rep'), async (req, res) => {
+router.get('/open', requireAuth, requireRole('rep'), requireActiveSubscription, async (req, res) => {
   const slots = await prisma.slot.findMany({
     where: { status: 'OPEN', startTime: { gte: new Date() } },
     include: { location: true },
@@ -209,7 +209,7 @@ router.get('/open', requireAuth, requireRole('rep'), async (req, res) => {
 });
 
 // --- Reps: claim an open slot ----------------------------------------------
-router.post('/:id/claim', requireAuth, requireRole('rep'), async (req, res) => {
+router.post('/:id/claim', requireAuth, requireRole('rep'), requireActiveSubscription, async (req, res) => {
   try {
     const rep = await prisma.rep.findUnique({ where: { id: req.user!.sub } });
     if (!rep) return res.status(404).json({ error: 'Rep not found' });
