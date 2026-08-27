@@ -99,7 +99,7 @@ let turnstileToken = null;
 // anything back) — safe to ship in the frontend. Placeholder until a real
 // Sentry project exists; Sentry.init() below is skipped entirely if it's
 // still the placeholder, so this is harmless to ship as-is.
-const SENTRY_DSN = '__PENDING_SENTRY_DSN__';
+const SENTRY_DSN = 'https://f47ece2beae81a451e9451e798544f72@o4511983137783808.ingest.us.sentry.io/4511983257911296';
 if (window.Sentry && SENTRY_DSN && SENTRY_DSN !== '__PENDING_SENTRY_DSN__') {
   Sentry.init({ dsn: SENTRY_DSN, environment: 'production' });
 }
