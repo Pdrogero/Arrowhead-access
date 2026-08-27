@@ -1031,11 +1031,18 @@ window.copyAttendanceList = function() {
 window.printAttendance = function() {
   const block = document.getElementById('attendancePrintBlock');
   if (block) {
-    const lines = attendanceListLines();
+    const rows = attendeeRows.filter(a => (a.firstName || '').trim() || (a.lastName || '').trim());
+    const listHtml = rows.length
+      ? `<ul style="list-style:none;padding-left:0;">${attendanceListLines().map(l => `
+          <li style="display:flex;align-items:center;margin-bottom:12px;font-size:14px;">
+            <span style="display:inline-block;width:16px;height:16px;border:1.5px solid #333;margin-right:10px;flex-shrink:0;"></span>
+            ${l.replace(/</g, '&lt;')}
+          </li>`).join('')}</ul>`
+      : `<p>No attendees logged.</p>`;
     block.innerHTML = `
       <h2 style="margin-bottom:4px;">${(attendanceLocationName || '').replace(/</g, '&lt;')}</h2>
       <p style="margin-bottom:16px;">${(attendanceDateStr || '').replace(/</g, '&lt;')}</p>
-      <ul style="padding-left:18px;">${lines.map(l => `<li>${l.replace(/</g, '&lt;')}</li>`).join('')}</ul>`;
+      ${listHtml}`;
   }
   window.print();
 };
