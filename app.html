@@ -2472,6 +2472,7 @@ async function loadMyBookings() {
         ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
         ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openAttendance('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime)}')">📝 Attendance</button>` : ''}
         ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>` : ''}
+        ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="logConcurExpense('${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🧾 Log in Concur</button>` : ''}
         ${b.status === 'CONFIRMED' && b.slot.eventType === 'LUNCH' ? `
           <div style="width:100%;display:flex;gap:8px;margin-top:8px;">
             <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🍽️ Order via ezCater</button>
@@ -2548,6 +2549,24 @@ window.orderCedarOlive = function(address) {
     });
   } else {
     window.open('https://cedarandolive.com/menu/catering', '_blank');
+  }
+};
+
+// SAP Concur has no public per-company deep link (each employer's instance
+// lives behind its own SSO), so like the ezCater/Cedar & Olive buttons this
+// just copies a ready-to-paste visit summary and opens Concur's shared
+// login portal — not a real API integration.
+window.logConcurExpense = function(locationName, address, whenLabel) {
+  const summary = `Office visit — ${locationName}${address ? ', ' + address : ''}${whenLabel ? ' — ' + whenLabel : ''}`;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(summary).then(() => {
+      alert('Visit details copied:\n' + summary + '\n\nPaste it into a new expense entry in Concur.');
+      window.open('https://www.concursolutions.com/', '_blank');
+    }).catch(() => {
+      window.open('https://www.concursolutions.com/', '_blank');
+    });
+  } else {
+    window.open('https://www.concursolutions.com/', '_blank');
   }
 };
 
