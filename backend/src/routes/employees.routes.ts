@@ -35,14 +35,14 @@ router.post('/mine', requireAuth, requireRole('office_admin', 'office_staff'), a
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
 
     const employees = Array.isArray(req.body.employees) ? req.body.employees : [];
-    const names = employees
-      .map((e: any) => String(e.name || '').trim())
-      .filter(Boolean);
+    const rows = employees
+      .map((e: any) => ({ name: String(e.name || '').trim(), title: String(e.title || '').trim() || null }))
+      .filter((e: { name: string }) => e.name);
 
     await prisma.$transaction([
       prisma.officeEmployee.deleteMany({ where: { locationId: staff.locationId } }),
       prisma.officeEmployee.createMany({
-        data: names.map((name: string) => ({ name, locationId: staff.locationId })),
+        data: rows.map((e: { name: string; title: string | null }) => ({ ...e, locationId: staff.locationId })),
       }),
     ]);
 

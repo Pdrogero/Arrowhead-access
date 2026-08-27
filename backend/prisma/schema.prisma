@@ -127,6 +127,7 @@ model OfficeEmployee {
   locationId String
   location   Location @relation(fields: [locationId], references: [id])
   name       String
+  title      String?
   createdAt  DateTime @default(now())
 
   @@index([locationId])

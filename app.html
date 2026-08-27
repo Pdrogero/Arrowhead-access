@@ -864,6 +864,8 @@ async function saveAttendees() {
   }
 }
 
+const EMPLOYEE_TITLE_OPTIONS = ['MD', 'DO', 'DPM', 'ARNP', 'PA', 'Nurse', 'LPN', 'Medical Assistant', 'Staff', 'Front Desk', 'Student'];
+
 function renderEmployeeRows() {
   const box = document.getElementById('employeeRowsBox');
   if (!employeeRows.length) {
@@ -872,7 +874,11 @@ function renderEmployeeRows() {
   }
   box.innerHTML = employeeRows.map((e, i) => `
     <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
-      <input type="text" placeholder="Full name" value="${e.name || ''}" oninput="updateEmployeeField(${i}, this.value)" style="margin-bottom:0;flex:1;">
+      <input type="text" placeholder="Full name" value="${e.name || ''}" oninput="updateEmployeeField(${i}, this.value)" style="margin-bottom:0;flex:2;">
+      <select onchange="updateEmployeeTitleField(${i}, this.value)" style="margin-bottom:0;flex:1;">
+        <option value="">Title…</option>
+        ${EMPLOYEE_TITLE_OPTIONS.map(t => `<option value="${t}" ${e.title === t ? 'selected' : ''}>${t}</option>`).join('')}
+      </select>
       <button type="button" onclick="removeEmployeeRow(${i})" title="Remove" style="background:none;border:none;color:#C23C3C;font-size:16px;cursor:pointer;padding:4px 8px;">✕</button>
     </div>
   `).join('');
@@ -882,8 +888,12 @@ window.updateEmployeeField = function(index, value) {
   employeeRows[index].name = value;
 };
 
+window.updateEmployeeTitleField = function(index, value) {
+  employeeRows[index].title = value;
+};
+
 window.addEmployeeRow = function() {
-  employeeRows.push({ name: '' });
+  employeeRows.push({ name: '', title: '' });
   renderEmployeeRows();
 };
 
@@ -895,7 +905,7 @@ window.removeEmployeeRow = function(index) {
 async function loadEmployees() {
   try {
     const employees = await api('/api/employees/mine');
-    employeeRows = employees.map(e => ({ name: e.name }));
+    employeeRows = employees.map(e => ({ name: e.name, title: e.title || '' }));
   } catch (err) {
     employeeRows = [];
   }
@@ -970,7 +980,7 @@ function screenOfficeStaff() {
         ${viewedOfficeStaff === null
           ? '<div class="empty">Loading…</div>'
           : viewedOfficeStaff.length
-            ? viewedOfficeStaff.map(e => `<div class="row"><div class="mid"><div class="who">${e.name}</div></div></div>`).join('')
+            ? viewedOfficeStaff.map(e => `<div class="row"><div class="mid"><div class="who">${e.name}${e.title ? ` <span style="color:var(--slate);font-weight:400;">· ${e.title}</span>` : ''}</div></div></div>`).join('')
             : '<div class="empty">This office has not listed their team yet.</div>'}
       </div>
     </div>`;
