@@ -313,8 +313,8 @@ function screenLogin() {
       <h1>${isOffice ? 'Office Login' : 'Sales Rep Login'}</h1>
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
-        <input id="email" type="email" placeholder="Email" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" value="${isOffice ? 'staff@meridianfamilypractice.com' : ''}">
-        <input id="password" type="password" placeholder="Password" autocomplete="off" value="${isOffice ? 'demo1234' : ''}">
+        <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${isOffice ? 'staff@meridianfamilypractice.com' : ''}">
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" value="${isOffice ? 'demo1234' : ''}">
         <button class="primary" onclick="doLogin()">Log In</button>
         <button class="link" onclick="setState({screen:'forgotPassword',role:state.role})">Forgot password?</button>
         ${!isOffice ? `<button class="link" onclick="setState({screen:'signup'})">Create Account</button>` : ''}
@@ -333,7 +333,7 @@ function screenForgotPassword() {
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         ${state.forgotSent ? `<div class="msg ok">If that email is registered, a reset link is on its way.</div>` : `
-          <input id="forgotEmail" type="email" placeholder="Email" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+          <input id="forgotEmail" type="email" placeholder="Email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false">
           <button class="primary" onclick="doForgotPassword()">Send reset link</button>
         `}
       </div>
@@ -346,8 +346,8 @@ function screenResetPassword() {
       <h1>Choose a new password</h1>
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
-        <input id="newPassword" type="password" placeholder="New password" autocomplete="off">
-        <input id="confirmPassword" type="password" placeholder="Confirm new password" autocomplete="off">
+        <input id="newPassword" type="password" placeholder="New password" autocomplete="new-password">
+        <input id="confirmPassword" type="password" placeholder="Confirm new password" autocomplete="new-password">
         <button class="primary" onclick="doResetPassword()">Set new password</button>
       </div>
     </div>`;
@@ -364,8 +364,8 @@ function screenSignup() {
           <input id="officeName" type="text" placeholder="Office name">
           <input id="locationName" type="text" placeholder="Location name">
           <input id="address" type="text" placeholder="Address">
-          <input id="email" type="email" placeholder="Email" autocapitalize="none" autocorrect="off" spellcheck="false">
-          <input id="password" type="password" placeholder="Password">
+          <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+          <input id="password" type="password" placeholder="Password" autocomplete="new-password">
           <div id="turnstileBox" style="margin-bottom:12px;"></div>
           <p style="font-size:11px;color:var(--slate);margin-bottom:12px;">By creating an account, you agree to our <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--teal);">Terms of Service</a> and <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--teal);">Privacy Policy</a>.</p>
           <button class="primary" onclick="doOfficeSignup()">Create Account</button>
@@ -380,8 +380,8 @@ function screenSignup() {
           ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
           <input id="name" type="text" placeholder="Full name">
           <input id="companyName" type="text" placeholder="Company name">
-          <input id="email" type="email" placeholder="Email" autocapitalize="none" autocorrect="off" spellcheck="false">
-          <input id="password" type="password" placeholder="Password">
+          <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+          <input id="password" type="password" placeholder="Password" autocomplete="new-password">
           <div id="turnstileBox" style="margin-bottom:12px;"></div>
           <p style="font-size:11px;color:var(--slate);margin-bottom:12px;">By creating an account, you agree to our <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--teal);">Terms of Service</a> and <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--teal);">Privacy Policy</a>.</p>
           <button class="primary" onclick="doRepSignup()">Create Account</button>
@@ -478,9 +478,9 @@ function screenAccountSettings() {
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         ${state.passwordChanged ? `<div class="msg ok">Password updated successfully.</div>` : ''}
-        <input id="currentPassword" type="password" placeholder="Current password" autocomplete="off">
-        <input id="newPassword" type="password" placeholder="New password" autocomplete="off">
-        <input id="confirmPassword" type="password" placeholder="Confirm new password" autocomplete="off">
+        <input id="currentPassword" type="password" placeholder="Current password" autocomplete="current-password">
+        <input id="newPassword" type="password" placeholder="New password" autocomplete="new-password">
+        <input id="confirmPassword" type="password" placeholder="Confirm new password" autocomplete="new-password">
         <button class="primary" onclick="doChangePassword()">Update password</button>
       </div>
     </div>`;
