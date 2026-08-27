@@ -60,6 +60,11 @@
       .row{align-items:flex-start;}
       .time{width:88px;font-size:11.5px;}
     }
+    .print-only{display:none;}
+    @media print {
+      .no-print{display:none !important;}
+      .print-only{display:block !important;}
+    }
     .msg{padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:12px;}
     .msg.err{background:#FDEAEA;color:#C23C3C;}
     .msg.ok{background:#E8F5E9;color:#2D6F5E;}
@@ -987,18 +992,53 @@ function screenCalendar() {
 function screenAttendance() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <button class="link no-print" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
       <h1>Visit attendance</h1>
       <p class="sub">${attendanceLocationName} — ${attendanceDateStr}</p>
-      <p style="font-size:12px;color:var(--slate);margin-bottom:16px;">Log everyone who attended, for your own expense report. NPI is optional.</p>
-      <div class="card">
+      <p class="no-print" style="font-size:12px;color:var(--slate);margin-bottom:16px;">Log everyone who attended, for your own expense report. NPI is optional.</p>
+      <div class="card no-print">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         <div id="attendeeRowsBox"></div>
         <button type="button" class="link" style="text-align:left;margin-top:4px;" onclick="addAttendeeRow()">+ Add attendee</button>
         <button class="primary" style="margin-top:12px;" onclick="saveAttendees()">Save attendance</button>
       </div>
+      <div class="card no-print" style="margin-top:12px;display:flex;gap:8px;">
+        <button type="button" style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="copyAttendanceList()">📋 Copy attendee list</button>
+        <button type="button" style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="printAttendance()">🖨️ Print</button>
+      </div>
+      <div id="attendancePrintBlock" class="print-only"></div>
     </div>`;
 }
+
+function attendanceListLines() {
+  const rows = attendeeRows.filter(a => (a.firstName || '').trim() || (a.lastName || '').trim());
+  if (!rows.length) return ['No attendees logged.'];
+  return rows.map(a => {
+    const name = [a.firstName, a.lastName].filter(Boolean).join(' ').trim();
+    return a.npi ? `${name} (NPI: ${a.npi})` : name;
+  });
+}
+
+window.copyAttendanceList = function() {
+  const text = [`${attendanceLocationName} — ${attendanceDateStr}`, '', ...attendanceListLines()].join('\n');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => alert('Attendance list copied to clipboard.')).catch(() => alert(text));
+  } else {
+    alert(text);
+  }
+};
+
+window.printAttendance = function() {
+  const block = document.getElementById('attendancePrintBlock');
+  if (block) {
+    const lines = attendanceListLines();
+    block.innerHTML = `
+      <h2 style="margin-bottom:4px;">${(attendanceLocationName || '').replace(/</g, '&lt;')}</h2>
+      <p style="margin-bottom:16px;">${(attendanceDateStr || '').replace(/</g, '&lt;')}</p>
+      <ul style="padding-left:18px;">${lines.map(l => `<li>${l.replace(/</g, '&lt;')}</li>`).join('')}</ul>`;
+  }
+  window.print();
+};
 
 function renderAttendeeRows() {
   const box = document.getElementById('attendeeRowsBox');
