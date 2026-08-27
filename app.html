@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Arrowhead Access — App</title>
+  <script src="https://browser.sentry-cdn.com/10.71.0/bundle.min.js" crossorigin="anonymous"></script>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -93,6 +94,15 @@ const DEMO_LOCATION_ID = 'clznrmxov0000o8g8w8wxplk0';
 // frontend. The matching secret key lives server-side only (Render env var).
 const TURNSTILE_SITE_KEY = '0x4AAAAAAEdz_UoXRXHu0Xgw';
 let turnstileToken = null;
+
+// Sentry DSN is public by design (it only accepts error reports, can't read
+// anything back) — safe to ship in the frontend. Placeholder until a real
+// Sentry project exists; Sentry.init() below is skipped entirely if it's
+// still the placeholder, so this is harmless to ship as-is.
+const SENTRY_DSN = '__PENDING_SENTRY_DSN__';
+if (window.Sentry && SENTRY_DSN && SENTRY_DSN !== '__PENDING_SENTRY_DSN__') {
+  Sentry.init({ dsn: SENTRY_DSN, environment: 'production' });
+}
 
 let state = {
   screen: 'role',

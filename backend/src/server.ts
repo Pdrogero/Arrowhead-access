@@ -1,5 +1,7 @@
 // src/server.ts — application entry point
 
+import './instrument';
+import * as Sentry from '@sentry/node';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -64,6 +66,11 @@ app.use('/api/reviews', reviewsRouter);
 app.use('/api/messages', messagesRouter);
 app.use('/api/literature', literatureRouter);
 app.use('/api/locations', locationsRouter);
+
+// Reports any error that reaches Express's error-handling chain to Sentry
+// before falling through to Express's default 500 response. Must be
+// registered after all routes.
+Sentry.setupExpressErrorHandler(app);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
