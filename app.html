@@ -512,12 +512,13 @@ function screenOfficeSettings() {
         <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Event type</label>
         <select id="recurringEventType" style="margin-bottom:12px;" onchange="prefillRecurringFieldsForEventType()">
           <option value="REP_VISIT">Rep visit</option>
+          <option value="LUNCH">Lunch</option>
           <option value="BREAKFAST">Breakfast</option>
           <option value="QUICK_VISIT">Quick visit (15–20 min)</option>
           <option value="STAFF_TRAINING">Staff training</option>
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
-        <p style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">For recurring lunches, use "Post an open slot" instead — it carries headcount, allergies, and order details to every repeat.</p>
+        <p id="recurringLunchNote" style="display:none;font-size:12px;color:var(--slate);margin:-8px 0 12px;">Recurring lunches created here won't have headcount, allergy, or order details filled in — add those per-occurrence afterward with "Edit lunch order", or use "Post an open slot" instead to have the same order details carried to every repeat.</p>
 
         <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Days (select all that apply)</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
@@ -573,7 +574,7 @@ function screenPostSlot() {
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Event type</label>
-        <select id="eventType" style="margin-bottom:12px;" onchange="togglePostSlotLunchFields(); toggleQuickVisitNote();">
+        <select id="eventType" style="margin-bottom:12px;" onchange="togglePostSlotLunchFields(); toggleQuickVisitNote(); prefillPostSlotTimeForEventType();">
           <option value="REP_VISIT">Rep visit</option>
           <option value="LUNCH">Lunch</option>
           <option value="BREAKFAST">Breakfast</option>
@@ -637,6 +638,16 @@ const EVENT_TYPE_LABELS = {
 function eventTypeLabel(t) {
   return EVENT_TYPE_LABELS[t] || t;
 }
+
+// Sensible starting times per event type, used to prefill the time fields
+// on both the Recurring Slots and Post an Open Slot forms so the office
+// doesn't have to pick times for the common cases. A location's own saved
+// recurring template (if one exists for that event type) always wins over
+// these generic defaults.
+const DEFAULT_EVENT_TIMES = {
+  BREAKFAST: { start: '08:00', end: '09:00' },
+  LUNCH: { start: '12:00', end: '13:00' },
+};
 
 // Shared lunch-order fields, used both when posting a new lunch slot and
 // when an office edits an existing one's details from the ledger. `prefix`
@@ -704,6 +715,32 @@ window.togglePostSlotLunchFields = function() {
 window.toggleQuickVisitNote = function() {
   const isQuickVisit = document.getElementById('eventType').value === 'QUICK_VISIT';
   document.getElementById('quickVisitNote').style.display = isQuickVisit ? '' : 'none';
+};
+
+function dateOnly(datetimeLocalValue) {
+  if (datetimeLocalValue) return datetimeLocalValue.split('T')[0];
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Prefills the start/end time fields when an event type is picked: this
+// location's own saved recurring schedule for that event type if one
+// exists, otherwise a sensible generic default (see DEFAULT_EVENT_TIMES).
+// Keeps whatever date is already selected — only the time-of-day changes.
+window.prefillPostSlotTimeForEventType = function() {
+  const eventType = document.getElementById('eventType')?.value;
+  const template = recurringTemplates.find(t => t.eventType === eventType);
+  const times = template ? { start: template.startTime, end: template.endTime } : DEFAULT_EVENT_TIMES[eventType];
+  if (!times) return;
+
+  const startInput = document.getElementById('startTime');
+  const endInput = document.getElementById('endTime');
+  if (!startInput || !endInput) return;
+
+  startInput.value = `${dateOnly(startInput.value)}T${times.start}`;
+  endInput.value = `${dateOnly(endInput.value)}T${times.end}`;
 };
 
 const REPEAT_LENGTH_LABELS = { MONTHLY: '1 month', QUARTERLY: '3 months', SEMIANNUAL: '6 months', ANNUAL: '1 year' };
@@ -2281,16 +2318,20 @@ async function loadRecurringTemplates() {
 window.prefillRecurringFieldsForEventType = function() {
   const eventType = document.getElementById('recurringEventType')?.value;
   const note = document.getElementById('recurringCurrentScheduleNote');
+  const lunchNote = document.getElementById('recurringLunchNote');
   const days = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
   const template = recurringTemplates.find(t => t.eventType === eventType);
+  const defaults = DEFAULT_EVENT_TIMES[eventType] || { start: '09:00', end: '17:00' };
 
   days.forEach(day => {
     const cb = document.getElementById('day-' + day);
     if (cb) cb.checked = !!template?.daysOfWeek.includes(day);
   });
 
-  if (document.getElementById('recurringStart')) document.getElementById('recurringStart').value = template?.startTime || '09:00';
-  if (document.getElementById('recurringEnd')) document.getElementById('recurringEnd').value = template?.endTime || '17:00';
+  if (document.getElementById('recurringStart')) document.getElementById('recurringStart').value = template?.startTime || defaults.start;
+  if (document.getElementById('recurringEnd')) document.getElementById('recurringEnd').value = template?.endTime || defaults.end;
+
+  if (lunchNote) lunchNote.style.display = eventType === 'LUNCH' ? '' : 'none';
 
   if (note) {
     note.textContent = template
@@ -2730,7 +2771,7 @@ function render() {
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
   else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }
-  else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); }
+  else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); loadRecurringTemplates().then(prefillPostSlotTimeForEventType); }
   else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
   else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }
   else if (state.screen === 'messages') { app.innerHTML = screenMessages(); loadConversations(); }

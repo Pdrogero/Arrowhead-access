@@ -94,9 +94,6 @@ router.post('/recurring', requireAuth, async (req, res) => {
     if (!daysOfWeek || !startTime || !endTime || !eventType) {
       return res.status(400).json({ error: 'daysOfWeek, startTime, endTime, eventType required' });
     }
-    if (eventType === 'LUNCH') {
-      return res.status(400).json({ error: 'For recurring lunches, use "Post an open slot" instead — it carries headcount, allergies, and order details to every repeat.' });
-    }
 
     const template = await prisma.recurringSlotTemplate.create({
       data: {
