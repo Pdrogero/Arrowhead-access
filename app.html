@@ -1276,12 +1276,24 @@ window.openConversation = function(id, counterpart, targetId) {
   setState({ screen: 'conversation' });
 };
 
-window.startConversation = function(targetId, counterpart) {
+window.startConversation = async function(targetId, counterpart) {
   activeConversationId = null;
   activeConversationCounterpart = counterpart;
   activeConversationTargetId = targetId;
   conversationMessages = [];
   setState({ screen: 'conversation' });
+
+  // A conversation with this counterpart may already exist (e.g. reached via
+  // a "Message" button on a booking row rather than the messages list) — look
+  // it up so existing history loads instead of showing an empty "say hello".
+  try {
+    const conversations = await api('/api/messages/conversations');
+    const existing = conversations.find(c => (state.role === 'rep' ? c.location.id : c.rep.id) === targetId);
+    if (existing) {
+      activeConversationId = existing.id;
+      await loadConversationMessages();
+    }
+  } catch (err) {}
 };
 
 function screenConversation() {
