@@ -41,6 +41,8 @@ enum SlotStatus {
 enum SlotEventType {
   REP_VISIT
   LUNCH
+  BREAKFAST
+  QUICK_VISIT
   STAFF_TRAINING
   OFFICE_CLOSED
 }

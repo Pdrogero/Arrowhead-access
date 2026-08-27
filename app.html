@@ -390,6 +390,8 @@ function screenOfficeSettings() {
         <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Event type</label>
         <select id="recurringEventType" style="margin-bottom:12px;" onchange="prefillRecurringFieldsForEventType()">
           <option value="REP_VISIT">Rep visit</option>
+          <option value="BREAKFAST">Breakfast</option>
+          <option value="QUICK_VISIT">Quick visit (15–20 min)</option>
           <option value="STAFF_TRAINING">Staff training</option>
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
@@ -449,12 +451,15 @@ function screenPostSlot() {
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Event type</label>
-        <select id="eventType" style="margin-bottom:12px;" onchange="togglePostSlotLunchFields()">
+        <select id="eventType" style="margin-bottom:12px;" onchange="togglePostSlotLunchFields(); toggleQuickVisitNote();">
           <option value="REP_VISIT">Rep visit</option>
           <option value="LUNCH">Lunch</option>
+          <option value="BREAKFAST">Breakfast</option>
+          <option value="QUICK_VISIT">Quick visit</option>
           <option value="STAFF_TRAINING">Staff training</option>
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
+        <p id="quickVisitNote" style="display:none;font-size:12px;color:var(--slate);margin:-8px 0 12px;">Quick visits are typically 15–20 minutes.</p>
         <div id="postSlotLunchFields" style="display:none;">
           ${lunchDetailsFieldsHtml('postSlot')}
           <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Repeat weekly on (optional)</label>
@@ -498,8 +503,17 @@ function screenBrowseSlots() {
     </div>`;
 }
 
+const EVENT_TYPE_LABELS = {
+  REP_VISIT: 'Rep visit',
+  LUNCH: 'Lunch',
+  BREAKFAST: 'Breakfast',
+  QUICK_VISIT: 'Quick visit (15–20 min)',
+  STAFF_TRAINING: 'Staff training',
+  OFFICE_CLOSED: 'Office closed',
+};
+
 function eventTypeLabel(t) {
-  return t === 'REP_VISIT' ? 'Rep visit' : t === 'LUNCH' ? 'Lunch' : t === 'STAFF_TRAINING' ? 'Staff training' : 'Office closed';
+  return EVENT_TYPE_LABELS[t] || t;
 }
 
 // Shared lunch-order fields, used both when posting a new lunch slot and
@@ -563,6 +577,11 @@ window.togglePostSlotLunchFields = function() {
   document.getElementById('postSlotLunchFields').style.display = isLunch ? '' : 'none';
   document.getElementById('startTimeLabel').textContent = isLunch ? 'Start time for lunch' : 'Start time';
   document.getElementById('endTimeLabel').textContent = isLunch ? 'End time for lunch' : 'End time';
+};
+
+window.toggleQuickVisitNote = function() {
+  const isQuickVisit = document.getElementById('eventType').value === 'QUICK_VISIT';
+  document.getElementById('quickVisitNote').style.display = isQuickVisit ? '' : 'none';
 };
 
 const REPEAT_LENGTH_LABELS = { MONTHLY: '1 month', QUARTERLY: '3 months', SEMIANNUAL: '6 months', ANNUAL: '1 year' };
