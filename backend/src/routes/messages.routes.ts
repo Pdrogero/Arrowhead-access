@@ -7,6 +7,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireActiveSubscription } from '../auth/auth.guard';
 import { sendEmail } from '../email';
+import { findPhiSignal } from '../phiFilter';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -108,6 +109,13 @@ router.post('/', requireAuth, requireActiveSubscription, async (req, res) => {
   try {
     const body = String(req.body.body || '').trim();
     if (!body) return res.status(400).json({ error: 'Message body is required' });
+
+    const phiSignal = findPhiSignal(body);
+    if (phiSignal) {
+      return res.status(400).json({
+        error: `This message looks like it may contain ${phiSignal} — please remove any patient-identifying information before sending. Messages on Arrowhead Access must not include PHI (see our Terms of Service).`,
+      });
+    }
 
     const conversation = await resolveConversation(req.user!, req.body);
     if (!conversation) return res.status(400).json({ error: 'locationId (rep) or repId (office) is required' });
