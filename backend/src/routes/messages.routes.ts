@@ -82,6 +82,14 @@ router.get('/conversations/:id/messages', requireAuth, async (req, res) => {
       if (!staff || staff.locationId !== conversation.locationId) return res.status(404).json({ error: 'Conversation not found' });
     }
 
+    // Opening a conversation reads everything the other side sent into it.
+    const myType = req.user!.role === 'rep' ? 'REP' : 'OFFICE';
+    const otherType = myType === 'REP' ? 'OFFICE' : 'REP';
+    await prisma.message.updateMany({
+      where: { conversationId: conversation.id, senderType: otherType, readAt: null },
+      data: { readAt: new Date() },
+    });
+
     const messages = await prisma.message.findMany({
       where: { conversationId: conversation.id },
       orderBy: { createdAt: 'asc' },
@@ -133,6 +141,54 @@ router.post('/', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not send message' });
+  }
+});
+
+// --- Daily unread-message check, called by a scheduled trigger --------------
+// Not behind requireAuth — guarded by the same shared cron secret used for
+// the lunch-reminder and renewal-reminder checks. Sends one reminder email
+// per message that's sat unread for 24+ hours, then marks it so it's never
+// reminded twice.
+const UNREAD_REMINDER_DELAY_MS = 24 * 60 * 60 * 1000;
+
+router.post('/check-unread-reminders', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const cutoff = new Date(Date.now() - UNREAD_REMINDER_DELAY_MS);
+    const messages = await prisma.message.findMany({
+      where: { readAt: null, reminderSent: false, createdAt: { lte: cutoff } },
+      include: { conversation: { include: { rep: true, location: { include: { staff: true } } } } },
+    });
+
+    let remindersSent = 0;
+    for (const message of messages) {
+      const { conversation } = message;
+      if (message.senderType === 'REP') {
+        for (const staff of conversation.location.staff) {
+          await sendEmail({
+            to: staff.email,
+            subject: `Reminder: unread message from ${conversation.rep.name}`,
+            html: `<p>You still have an unread message from <strong>${conversation.rep.name}</strong> (${conversation.rep.companyName}) sent over a day ago: "${message.body}"</p>`,
+          }).catch(() => {});
+        }
+      } else {
+        await sendEmail({
+          to: conversation.rep.email,
+          subject: `Reminder: unread message from ${conversation.location.name}`,
+          html: `<p>You still have an unread message from <strong>${conversation.location.name}</strong> sent over a day ago: "${message.body}"</p>`,
+        }).catch(() => {});
+      }
+      await prisma.message.update({ where: { id: message.id }, data: { reminderSent: true } });
+      remindersSent++;
+    }
+
+    res.json({ checked: messages.length, remindersSent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check unread message reminders' });
   }
 });
 

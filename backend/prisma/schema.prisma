@@ -455,6 +455,12 @@ model Message {
   body           String
   createdAt      DateTime          @default(now())
 
+  // Set when the other side of the conversation opens it after this
+  // message was sent. Used to send a single idle-unread reminder email
+  // (reminderSent) if it's still unread after 24 hours.
+  readAt         DateTime?
+  reminderSent   Boolean           @default(false)
+
   @@index([conversationId, createdAt])
 }
 
