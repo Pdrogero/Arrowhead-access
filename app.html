@@ -650,8 +650,24 @@ const EVENT_TYPE_LABELS = {
   OFFICE_CLOSED: 'Office closed',
 };
 
+// Distinct colors per event type so it's scannable at a glance, separate
+// from the green/amber/red palette already used for booking/transfer status.
+const EVENT_TYPE_COLORS = {
+  REP_VISIT: { bg: '#DFE7FF', color: '#1F3A8A' },
+  LUNCH: { bg: '#FDECE7', color: '#C2410C' },
+  BREAKFAST: { bg: '#FEF9C3', color: '#854D0E' },
+  QUICK_VISIT: { bg: '#F3E8FF', color: '#6B21A8' },
+  STAFF_TRAINING: { bg: '#E0F2FE', color: '#075985' },
+  OFFICE_CLOSED: { bg: '#F3F4F6', color: '#4B5563' },
+};
+
 function eventTypeLabel(t) {
   return EVENT_TYPE_LABELS[t] || t;
+}
+
+function eventTypeChipHtml(t) {
+  const c = EVENT_TYPE_COLORS[t] || { bg: 'var(--paper)', color: 'var(--slate)' };
+  return `<span class="chip" style="background:${c.bg};color:${c.color};">${eventTypeLabel(t)}</span>`;
 }
 
 // Wraps an office address in a link to Google Maps (opens the Maps app on
@@ -838,7 +854,7 @@ function renderBrowseList(slots) {
       <div class="mid">
         <div class="who">${s.location.name}</div>
         <div class="what">${addressLinkHtml(s.location.address)}</div>
-        <div class="what" style="margin-top:4px;"><strong>${eventTypeLabel(s.eventType)}</strong></div>
+        <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
         ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count)}
         ${lunchDetailsSummaryHtml(s)}
       </div>
@@ -926,7 +942,7 @@ function renderBrowseCalendar(slots) {
             <div class="time">${fmtTime(s.startTime)}</div>
             <div class="mid">
               <div class="who">${s.location.name}</div>
-              <div class="what">${eventTypeLabel(s.eventType)}</div>
+              <div>${eventTypeChipHtml(s.eventType)}</div>
               ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count)}
             </div>
             <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
@@ -2494,6 +2510,7 @@ async function loadOfficeLedger() {
         <div class="time">${fmtTime(s.startTime)}</div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count)}` : `<div class="what">Open slot</div>`}
+          <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
           ${lunchDetailsSummaryHtml(s)}
         </div>
         <span class="chip ${s.status}">${s.status}</span>
@@ -2527,7 +2544,7 @@ async function loadMyBookings() {
         <div class="mid">
           <div class="who">${b.slot.location.name}</div>
           <div class="what">${addressLinkHtml(b.slot.location.address)}</div>
-          <div class="what" style="margin-top:4px;"><strong>${eventTypeLabel(b.slot.eventType)}</strong></div>
+          <div style="margin-top:4px;">${eventTypeChipHtml(b.slot.eventType)}</div>
           ${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}
           ${lunchDetailsSummaryHtml(b.slot)}
         </div>
@@ -2560,7 +2577,7 @@ async function loadRepHistory() {
     box.innerHTML = bookings.map(b => `
       <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(b.slot.startTime)}</div>
-        <div class="mid"><div class="who">${b.slot.location.name}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}${lunchDetailsSummaryHtml(b.slot)}</div>
+        <div class="mid"><div class="who">${b.slot.location.name}</div><div style="margin-top:4px;">${eventTypeChipHtml(b.slot.eventType)}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}${lunchDetailsSummaryHtml(b.slot)}</div>
         <span class="chip ${b.status}">${b.status}</span>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message</button>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>
@@ -2582,6 +2599,7 @@ async function loadOfficeHistory() {
         <div class="time">${fmtTime(s.startTime)}</div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count)}` : ''}
+          <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
           ${lunchDetailsSummaryHtml(s)}
         </div>
         <span class="chip ${s.status}">${s.status}</span>
