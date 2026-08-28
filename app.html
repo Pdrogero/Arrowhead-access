@@ -2515,14 +2515,22 @@ async function loadMyBookings() {
     box.innerHTML = bookings.map(b => `
       <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(b.slot.startTime)}</div>
-        <div class="mid"><div class="who">${b.slot.location.name}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}${lunchDetailsSummaryHtml(b.slot)}</div>
+        <div class="mid">
+          <div class="who">${b.slot.location.name}</div>
+          <div class="what">${b.slot.location.address}</div>
+          <div class="what" style="margin-top:4px;"><strong>${eventTypeLabel(b.slot.eventType)}</strong></div>
+          ${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}
+          ${lunchDetailsSummaryHtml(b.slot)}
+        </div>
         <span class="chip ${b.status}">${b.status}</span>
-        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
-        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message</button>
-        ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
-        ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openAttendance('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime)}')">📝 Attendance</button>` : ''}
-        ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>` : ''}
-        ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="logConcurExpense('${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🧾 Log in Concur</button>` : ''}
+        <div style="width:100%;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px;">
+          <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
+          <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message</button>
+          ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
+          ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openAttendance('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime)}')">📝 Attendance</button>` : ''}
+          ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>` : ''}
+          ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="logConcurExpense('${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🧾 Log in Concur</button>` : ''}
+        </div>
         ${b.status === 'CONFIRMED' && b.slot.eventType === 'LUNCH' ? `
           <div style="width:100%;display:flex;gap:8px;margin-top:8px;">
             <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🍽️ Order via ezCater</button>
