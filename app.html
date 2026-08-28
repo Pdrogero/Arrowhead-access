@@ -855,7 +855,7 @@ function renderBrowseList(slots) {
         <div class="who">${s.location.name}</div>
         <div class="what">${addressLinkHtml(s.location.address)}</div>
         <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
-        ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count)}
+        ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count, 'office', s.location.id, s.location.name)}
         ${lunchDetailsSummaryHtml(s)}
       </div>
       <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
@@ -943,7 +943,7 @@ function renderBrowseCalendar(slots) {
             <div class="mid">
               <div class="who">${s.location.name}</div>
               <div>${eventTypeChipHtml(s.eventType)}</div>
-              ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count)}
+              ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count, 'office', s.location.id, s.location.name)}
             </div>
             <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
           </div>`).join('') : '<div class="empty">No open slots this day.</div>'}
@@ -1356,9 +1356,53 @@ window.saveReview = async function() {
   }
 };
 
-function ratingBadge(average, count) {
+function ratingBadge(average, count, kind, id, title) {
   if (!count) return `<span style="font-size:11px;color:var(--slate);">No ratings yet</span>`;
-  return `<span style="font-size:11px;color:var(--slate);">⭐ ${average.toFixed(1)} (${count})</span>`;
+  if (!kind || !id) return `<span style="font-size:11px;color:var(--slate);">⭐ ${average.toFixed(1)} (${count})</span>`;
+  const safeTitle = (title || '').replace(/'/g, "\\'");
+  return `<span onclick="event.stopPropagation();openReviewList('${kind}','${id}','${safeTitle}')" style="font-size:11px;color:var(--slate);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);">⭐ ${average.toFixed(1)} (${count})</span>`;
+}
+
+let reviewListKind = null;
+let reviewListId = null;
+let reviewListTitle = '';
+let reviewListData = [];
+let reviewListReturnScreen = 'dashboard';
+
+window.openReviewList = function(kind, id, title) {
+  reviewListKind = kind;
+  reviewListId = id;
+  reviewListTitle = title;
+  reviewListReturnScreen = state.screen;
+  setState({ screen: 'reviewList' });
+};
+
+function screenReviewList() {
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:reviewListReturnScreen})">&larr; Back</button>
+      <h1>${reviewListTitle}</h1>
+      <p class="sub">${reviewListKind === 'rep' ? 'What offices have said' : 'What reps have said'}</p>
+      <div id="reviewListBox" class="listcard"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+
+async function loadReviewList() {
+  const box = document.getElementById('reviewListBox');
+  try {
+    reviewListData = await api(`/api/reviews/${reviewListKind}-list/${reviewListId}`);
+    if (!reviewListData.length) { box.innerHTML = '<div class="empty">No reviews yet.</div>'; return; }
+    box.innerHTML = reviewListData.map(r => `
+      <div class="row" style="flex-wrap:wrap;align-items:flex-start;">
+        <div class="mid">
+          <div class="who">${'⭐'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)} <span style="font-weight:400;color:var(--slate);">${r.authorName}${r.authorDetail ? ' · ' + r.authorDetail : ''}</span></div>
+          ${r.comment ? `<div class="what" style="margin-top:4px;">${r.comment.replace(/</g, '&lt;')}</div>` : ''}
+          <div class="what" style="margin-top:4px;font-size:11px;">${new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+        </div>
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
 }
 
 async function fetchRatingAverages(ids, kind) {
@@ -2509,7 +2553,7 @@ async function loadOfficeLedger() {
       <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(s.startTime)}</div>
         <div class="mid">
-          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count)}` : `<div class="what">Open slot</div>`}
+          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">Open slot</div>`}
           <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
           ${lunchDetailsSummaryHtml(s)}
         </div>
@@ -2545,7 +2589,7 @@ async function loadMyBookings() {
           <div class="who">${b.slot.location.name}</div>
           <div class="what">${addressLinkHtml(b.slot.location.address)}</div>
           <div style="margin-top:4px;">${eventTypeChipHtml(b.slot.eventType)}</div>
-          ${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}
+          ${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count, 'office', b.slot.location.id, b.slot.location.name)}
           ${lunchDetailsSummaryHtml(b.slot)}
         </div>
         <span class="chip ${b.status}">${b.status}</span>
@@ -2577,7 +2621,7 @@ async function loadRepHistory() {
     box.innerHTML = bookings.map(b => `
       <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(b.slot.startTime)}</div>
-        <div class="mid"><div class="who">${b.slot.location.name}</div><div style="margin-top:4px;">${eventTypeChipHtml(b.slot.eventType)}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}${lunchDetailsSummaryHtml(b.slot)}</div>
+        <div class="mid"><div class="who">${b.slot.location.name}</div><div style="margin-top:4px;">${eventTypeChipHtml(b.slot.eventType)}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count, 'office', b.slot.location.id, b.slot.location.name)}${lunchDetailsSummaryHtml(b.slot)}</div>
         <span class="chip ${b.status}">${b.status}</span>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message</button>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>
@@ -2598,7 +2642,7 @@ async function loadOfficeHistory() {
       <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(s.startTime)}</div>
         <div class="mid">
-          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count)}` : ''}
+          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : ''}
           <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
           ${lunchDetailsSummaryHtml(s)}
         </div>
@@ -2920,6 +2964,7 @@ function render() {
   else if (state.screen === 'literature') { app.innerHTML = screenLiterature(); loadLiterature(); }
   else if (state.screen === 'materials') { app.innerHTML = screenMaterials(); loadMaterials(); }
   else if (state.screen === 'attendance') { app.innerHTML = screenAttendance(); loadAttendees(); }
+  else if (state.screen === 'reviewList') { app.innerHTML = screenReviewList(); loadReviewList(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); loadLocationSwitcher(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }

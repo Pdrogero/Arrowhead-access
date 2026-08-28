@@ -99,4 +99,46 @@ router.get('/rep-average/:repId', requireAuth, async (req, res) => {
   }
 });
 
+// --- Full list of reviews reps have left about a location -------------------
+router.get('/office-list/:locationId', requireAuth, async (req, res) => {
+  try {
+    const reviews = await prisma.visitReview.findMany({
+      where: { authorType: 'REP', booking: { slot: { locationId: req.params.locationId } } },
+      include: { booking: { include: { rep: { select: { name: true, companyName: true } } } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(reviews.map(r => ({
+      rating: r.rating,
+      comment: r.comment,
+      createdAt: r.createdAt,
+      authorName: r.booking.rep.name,
+      authorDetail: r.booking.rep.companyName,
+    })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch reviews' });
+  }
+});
+
+// --- Full list of reviews offices have left about a rep ---------------------
+router.get('/rep-list/:repId', requireAuth, async (req, res) => {
+  try {
+    const reviews = await prisma.visitReview.findMany({
+      where: { authorType: 'OFFICE', booking: { repId: req.params.repId } },
+      include: { booking: { include: { slot: { include: { location: { select: { name: true } } } } } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(reviews.map(r => ({
+      rating: r.rating,
+      comment: r.comment,
+      createdAt: r.createdAt,
+      authorName: r.booking.slot.location.name,
+      authorDetail: null,
+    })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch reviews' });
+  }
+});
+
 export default router;
