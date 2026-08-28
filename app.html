@@ -562,6 +562,13 @@ function screenOfficeSettings() {
       <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Our Team</p>
       <div class="card">
         <p style="font-size:12px;color:var(--slate);margin-bottom:12px;">List your staff so reps know who they're meeting with when they visit.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--paper-raised, #F4F6F3);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:14px;">
+          <div style="flex:1;min-width:200px;font-size:12px;color:var(--slate);">Have a long staff list already saved? Upload a CSV instead of typing each person in.</div>
+          <button type="button" class="link" style="padding:6px 10px;border:1px solid var(--line);border-radius:6px;" onclick="document.getElementById('employeeCsvInput').click()">📄 Upload CSV</button>
+          <button type="button" class="link" style="padding:6px 10px;" onclick="downloadEmployeeCsvTemplate()">Download template</button>
+          <input type="file" id="employeeCsvInput" accept=".csv,text/csv" style="display:none;" onchange="handleEmployeeCsvUpload(event)">
+        </div>
+        <div id="employeeUploadMsg"></div>
         <div id="employeeRowsBox"></div>
         <button type="button" class="link" style="text-align:left;margin-top:4px;" onclick="addEmployeeRow()">+ Add team member</button>
         <button class="primary" style="margin-top:12px;" onclick="saveEmployees()">Save team list</button>
@@ -1192,6 +1199,99 @@ window.updateEmployeeNpiField = function(index, value) {
 window.addEmployeeRow = function() {
   employeeRows.push({ name: '', title: '', npi: '', customTitle: false });
   renderEmployeeRows();
+};
+
+function parseEmployeeCsv(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field); field = '';
+    } else if (c === '\n') {
+      row.push(field); rows.push(row); row = []; field = '';
+    } else if (c === '\r') {
+      // skip, \n (or end of file) closes the row
+    } else {
+      field += c;
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(f => f.trim() !== ''));
+}
+
+window.downloadEmployeeCsvTemplate = function() {
+  const csv = 'Name,Title,NPI\nJane Smith,MD,1234567890\nJohn Doe,Nurse,\n';
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'arrowhead-team-template.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+window.handleEmployeeCsvUpload = function(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const msgBox = document.getElementById('employeeUploadMsg');
+  const reader = new FileReader();
+  reader.onload = function() {
+    event.target.value = '';
+    const rows = parseEmployeeCsv(String(reader.result || ''));
+    if (!rows.length) {
+      if (msgBox) msgBox.innerHTML = `<div class="msg err">That file appears to be empty.</div>`;
+      return;
+    }
+
+    let startIdx = 0, nameIdx = 0, titleIdx = -1, npiIdx = -1;
+    const header = rows[0].map(h => h.trim().toLowerCase());
+    if (header.some(h => h.includes('name'))) {
+      nameIdx = header.findIndex(h => h.includes('name'));
+      titleIdx = header.findIndex(h => h.includes('title') || h.includes('role') || h.includes('position'));
+      npiIdx = header.findIndex(h => h.includes('npi'));
+      startIdx = 1;
+    }
+
+    let added = 0;
+    for (let i = startIdx; i < rows.length; i++) {
+      const r = rows[i];
+      const name = (r[nameIdx] || '').trim();
+      if (!name) continue;
+      const rawTitle = titleIdx >= 0 ? (r[titleIdx] || '').trim() : '';
+      const npi = npiIdx >= 0 ? (r[npiIdx] || '').trim() : '';
+      const matchedTitle = EMPLOYEE_TITLE_OPTIONS.find(t => t.toLowerCase() === rawTitle.toLowerCase());
+      employeeRows.push({
+        name,
+        title: matchedTitle || rawTitle,
+        npi,
+        customTitle: !!rawTitle && !matchedTitle,
+      });
+      added++;
+    }
+
+    renderEmployeeRows();
+    if (msgBox) {
+      msgBox.innerHTML = added
+        ? `<div class="msg ok">Added ${added} team member${added === 1 ? '' : 's'} from your file. Review the list below, then click "Save team list".</div>`
+        : `<div class="msg err">No names were found in that file. Make sure it has a "Name" column (or a name in the first column of each row).</div>`;
+    }
+  };
+  reader.onerror = function() {
+    if (msgBox) msgBox.innerHTML = `<div class="msg err">Could not read that file. Please try again.</div>`;
+  };
+  reader.readAsText(file);
 };
 
 window.removeEmployeeRow = function(index) {
