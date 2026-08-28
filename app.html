@@ -123,6 +123,9 @@ let state = {
 };
 
 let catalogData = [];
+// Set from a ?transfer=1&email=... link in a transfer-invite email, so the
+// signup screen can prefill the email and explain why they're here.
+let pendingTransferEmail = null;
 let selectedProfileImage; // undefined = unchanged, null = remove, string = new data URL
 const SPECIALTY_OPTIONS = ['PCP','Wound Care Centers','Podiatry','Vascular Surgery','Plastic Surgery','General Surgery','Home Health','Long-Term Care','Hospital Value Analysis','ASCs','Traveling Physicians','Medical Distributors'];
 let calendarMonth = new Date();
@@ -375,11 +378,12 @@ function screenSignup() {
       <div class="wrap">
         <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'login'})">&larr; Back</button>
         <h1>Create Rep Account</h1>
+        ${pendingTransferEmail ? `<div class="msg ok">You've been invited to accept a visit transfer — sign up with the same email it was sent to, then check Transfers on your dashboard.</div>` : ''}
         <div class="card">
           ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
           <input id="name" type="text" placeholder="Full name">
           <input id="companyName" type="text" placeholder="Company name">
-          <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+          <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${pendingTransferEmail || ''}">
           <input id="password" type="password" placeholder="Password" autocomplete="new-password">
           <div id="turnstileBox" style="margin-bottom:12px;"></div>
           <p style="font-size:11px;color:var(--slate);margin-bottom:12px;">By creating an account, you agree to our <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--teal);">Terms of Service</a> and <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--teal);">Privacy Policy</a>.</p>
@@ -1895,7 +1899,7 @@ async function doLogin() {
   try {
     const res = await api(endpoint, { method: 'POST', body: JSON.stringify({ email, password }) });
     localStorage.setItem('token', res.token);
-    state.me = res;
+    state.me = state.role === 'office' ? res.staff : res.rep;
     setState({ screen: 'dashboard', role: state.role });
   } catch (err) {
     setState({ formErr: err.message });
@@ -1987,7 +1991,7 @@ async function doRepSignup() {
   try {
     const res = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ name, companyName, email, password, turnstileToken }) });
     localStorage.setItem('token', res.token);
-    state.me = res;
+    state.me = res.rep;
     setState({ screen: 'profile', role: 'rep' });
   } catch (err) {
     setState({ formErr: err.message });
@@ -2004,7 +2008,7 @@ async function doOfficeSignup() {
   try {
     const res = await api('/api/auth/office/signup', { method: 'POST', body: JSON.stringify({ officeName, locationName, address, email, password, turnstileToken }) });
     localStorage.setItem('token', res.token);
-    state.me = res;
+    state.me = res.staff;
     setState({ screen: 'dashboard', role: 'office' });
   } catch (err) {
     setState({ formErr: err.message });
@@ -2804,7 +2808,7 @@ async function loadTransfers() {
         <div class="time">${fmtTime(t.booking.slot.startTime)}</div>
         <div class="mid">
           <div class="who">${t.booking.slot.location.name}</div>
-          <div class="what">to ${t.toRep.name} · ${t.toRep.companyName}</div>
+          <div class="what">${t.toRep ? `to ${t.toRep.name} · ${t.toRep.companyName}` : `to ${t.toRepEmail} — not signed up yet, invited by email`}</div>
         </div>
         <span class="chip ${t.status}">${t.status}</span>
       </div>`).join('') : '<div class="empty">No outgoing transfers.</div>';
@@ -2823,11 +2827,13 @@ window.decideTransfer = async function(id, decision) {
 };
 
 window.offerTransfer = async function(bookingId) {
-  const toRepEmail = prompt('Transfer this booking to which rep? Enter their email:');
+  const toRepEmail = prompt("Transfer this booking to which rep? Enter their email — they don't need an Arrowhead Access account yet:");
   if (!toRepEmail) return;
   try {
-    await api('/api/transfers', { method: 'POST', body: JSON.stringify({ bookingId, toRepEmail }) });
-    alert('Transfer offered — they can accept or decline it from their Transfers screen.');
+    const transfer = await api('/api/transfers', { method: 'POST', body: JSON.stringify({ bookingId, toRepEmail }) });
+    alert(transfer.toRepId
+      ? 'Transfer offered — they can accept or decline it from their Transfers screen.'
+      : "Transfer offered — they don't have an account yet, so we emailed them an invite to sign up and accept it.");
   } catch (err) {
     alert(err.message);
   }
@@ -2892,26 +2898,32 @@ function render() {
 
 // Init
 const resetTokenParam = new URLSearchParams(window.location.search).get('resetToken');
+const transferParam = new URLSearchParams(window.location.search).get('transfer');
+const transferEmailParam = new URLSearchParams(window.location.search).get('email');
 if (resetTokenParam) {
   state.resetToken = resetTokenParam;
   state.screen = 'resetPassword';
   render();
 } else if (localStorage.getItem('token')) {
-  api('/api/profile/rep').then(me => {
-    state.me = me;
-    state.role = 'rep';
+  api('/api/auth/me').then(async me => {
+    if (me.role === 'rep') {
+      state.me = await api('/api/profile/rep');
+      state.role = 'rep';
+    } else {
+      state.me = { id: me.sub, role: me.role === 'office_admin' ? 'ADMIN' : 'STAFF', locationId: me.locationId };
+      state.role = 'office';
+    }
     state.screen = 'dashboard';
     render();
   }).catch(() => {
-    api('/api/bookings/locations/clznrmxov0000o8g8w8wxplk0/ledger').then(() => {
-      state.role = 'office';
-      state.screen = 'dashboard';
-      render();
-    }).catch(() => {
-      localStorage.removeItem('token');
-      render();
-    });
+    localStorage.removeItem('token');
+    render();
   });
+} else if (transferParam === '1' && transferEmailParam) {
+  pendingTransferEmail = transferEmailParam;
+  state.screen = 'signup';
+  state.role = 'rep';
+  render();
 } else {
   render();
 }

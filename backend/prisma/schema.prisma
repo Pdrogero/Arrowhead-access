@@ -404,14 +404,20 @@ model BookingTransfer {
   booking    Booking        @relation(fields: [bookingId], references: [id])
   fromRepId  String
   fromRep    Rep            @relation("TransfersSent", fields: [fromRepId], references: [id])
-  toRepId    String
-  toRep      Rep            @relation("TransfersReceived", fields: [toRepId], references: [id])
+  // The email the transfer was offered to — always set. toRepId is only
+  // filled in once a matching rep account exists: either one already did
+  // when the transfer was offered, or a new signup with this email claims
+  // it (see /api/auth/rep/signup).
+  toRepEmail String
+  toRepId    String?
+  toRep      Rep?           @relation("TransfersReceived", fields: [toRepId], references: [id])
   status     TransferStatus @default(PENDING)
   createdAt  DateTime       @default(now())
   decidedAt  DateTime?
 
   @@index([toRepId, status])
   @@index([fromRepId])
+  @@index([toRepEmail, status])
 }
 
 model Subscription {

@@ -12,9 +12,15 @@ const prisma = new PrismaClient();
 const router = Router();
 
 // --- Offer a transfer -----------------------------------------------------
+// toRepEmail doesn't have to belong to an existing rep — if nobody's signed
+// up with that email yet, the transfer is created unclaimed (toRepId null)
+// and an invite email goes out instead of a "you've got a transfer" email.
+// It's automatically claimed the moment someone signs up with that email
+// (see /api/auth/rep/signup).
 router.post('/', requireAuth, requireRole('rep'), async (req, res) => {
   try {
-    const { bookingId, toRepEmail } = req.body;
+    const { bookingId } = req.body;
+    const toRepEmail = String(req.body.toRepEmail || '').trim().toLowerCase();
     if (!bookingId || !toRepEmail) {
       return res.status(400).json({ error: 'bookingId and toRepEmail are required' });
     }
@@ -27,30 +33,41 @@ router.post('/', requireAuth, requireRole('rep'), async (req, res) => {
       return res.status(400).json({ error: 'Only confirmed or requested bookings can be transferred' });
     }
 
-    const toRep = await prisma.rep.findUnique({ where: { email: toRepEmail } });
-    if (!toRep) return res.status(404).json({ error: 'No rep found with that email' });
-    if (toRep.id === req.user!.sub) return res.status(400).json({ error: "You can't transfer a booking to yourself" });
+    const fromRep = await prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } });
+    if (toRepEmail === fromRep.email.toLowerCase()) {
+      return res.status(400).json({ error: "You can't transfer a booking to yourself" });
+    }
 
     const existingPending = await prisma.bookingTransfer.findFirst({
       where: { bookingId, status: 'PENDING' },
     });
     if (existingPending) return res.status(409).json({ error: 'This booking already has a pending transfer' });
 
+    const toRep = await prisma.rep.findFirst({ where: { email: { equals: toRepEmail, mode: 'insensitive' } } });
+
     const transfer = await prisma.bookingTransfer.create({
-      data: { bookingId, fromRepId: req.user!.sub, toRepId: toRep.id },
+      data: { bookingId, fromRepId: req.user!.sub, toRepEmail, toRepId: toRep?.id ?? null },
       include: {
         booking: { include: { slot: { include: { location: true } } } },
-        toRep: true,
-        fromRep: { select: { name: true, companyName: true } },
       },
     });
 
     const dateStr = transfer.booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    sendEmail({
-      to: transfer.toRep.email,
-      subject: `${transfer.fromRep.name} wants to transfer a visit to you`,
-      html: `<p><strong>${transfer.fromRep.name}</strong> (${transfer.fromRep.companyName}) wants to transfer their visit at <strong>${transfer.booking.slot.location.name}</strong> on ${dateStr} to you. Log in to accept or decline it.</p>`,
-    }).catch(() => {});
+
+    if (toRep) {
+      sendEmail({
+        to: toRepEmail,
+        subject: `${fromRep.name} wants to transfer a visit to you`,
+        html: `<p><strong>${fromRep.name}</strong> (${fromRep.companyName}) wants to transfer their visit at <strong>${transfer.booking.slot.location.name}</strong> on ${dateStr} to you. Log in to accept or decline it.</p>`,
+      }).catch(() => {});
+    } else {
+      const signupUrl = `${process.env.APP_URL}/app.html?transfer=1&email=${encodeURIComponent(toRepEmail)}`;
+      sendEmail({
+        to: toRepEmail,
+        subject: `${fromRep.name} wants to transfer a visit to you on Arrowhead Access`,
+        html: `<p><strong>${fromRep.name}</strong> (${fromRep.companyName}) wants to transfer their visit at <strong>${transfer.booking.slot.location.name}</strong> on ${dateStr} to you on Arrowhead Access.</p><p>You don't have an account yet — <a href="${signupUrl}">sign up with this email address</a> to review and accept it.</p>`,
+      }).catch(() => {});
+    }
 
     res.status(201).json(transfer);
   } catch (err) {
@@ -114,7 +131,7 @@ router.post('/:id/decide', requireAuth, requireRole('rep'), async (req, res) => 
         toRep: { select: { name: true } },
       },
     });
-    if (full) {
+    if (full && full.toRep) {
       const dateStr = full.booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
       const accepted = decision === 'accept';
       sendEmail({

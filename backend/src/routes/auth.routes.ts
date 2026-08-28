@@ -64,10 +64,17 @@ router.post('/rep/signup', async (req, res) => {
       verified: rep.verificationStatus === 'VERIFIED',
     });
 
+    // Claim any visit transfers that were offered to this email before they
+    // had an account — they'll now show up under Incoming transfers.
+    const claimedTransfers = await prisma.bookingTransfer.updateMany({
+      where: { toRepEmail: { equals: email, mode: 'insensitive' }, toRepId: null, status: 'PENDING' },
+      data: { toRepId: rep.id },
+    });
+
     sendEmail({
       to: rep.email,
       subject: 'Welcome to Arrowhead Access',
-      html: `<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p><p>— Arrowhead Access</p>`,
+      html: `<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p>${claimedTransfers.count ? `<p>You also have ${claimedTransfers.count} pending visit transfer${claimedTransfers.count > 1 ? 's' : ''} waiting for you under Transfers.</p>` : ''}<p>— Arrowhead Access</p>`,
     }).catch(() => {});
 
     res.status(201).json({
@@ -143,6 +150,14 @@ router.post('/staff/login', async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Unexpected server error during login' });
   }
+});
+
+// --- Whoever this token belongs to, rep or staff — just echoes the JWT's
+// own claims (sub, role, organizationId, locationId, verified). No DB call
+// needed since the token already carries everything; used by the frontend
+// on page load to figure out who's logged in before fetching a full profile.
+router.get('/me', requireAuth, (req, res) => {
+  res.json(req.user);
 });
 
 // --- Office staff: switch which of their org's locations this login is
