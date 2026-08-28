@@ -654,6 +654,15 @@ function eventTypeLabel(t) {
   return EVENT_TYPE_LABELS[t] || t;
 }
 
+// Wraps an office address in a link to Google Maps (opens the Maps app on
+// mobile if installed, otherwise the web) so a rep can tap straight
+// through to directions instead of copying/pasting the address themselves.
+function addressLinkHtml(address) {
+  if (!address) return '';
+  const url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address);
+  return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;text-decoration-color:var(--line);" onclick="event.stopPropagation();">${address.replace(/</g, '&lt;')}</a>`;
+}
+
 // Sensible starting times per event type, used to prefill the time fields
 // on both the Recurring Slots and Post an Open Slot forms so the office
 // doesn't have to pick times for the common cases. A location's own saved
@@ -828,7 +837,7 @@ function renderBrowseList(slots) {
       <div class="time">${fmtTime(s.startTime)}</div>
       <div class="mid">
         <div class="who">${s.location.name}</div>
-        <div class="what">${s.location.address}</div>
+        <div class="what">${addressLinkHtml(s.location.address)}</div>
         <div class="what" style="margin-top:4px;"><strong>${eventTypeLabel(s.eventType)}</strong></div>
         ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count)}
         ${lunchDetailsSummaryHtml(s)}
@@ -2517,7 +2526,7 @@ async function loadMyBookings() {
         <div class="time">${fmtTime(b.slot.startTime)}</div>
         <div class="mid">
           <div class="who">${b.slot.location.name}</div>
-          <div class="what">${b.slot.location.address}</div>
+          <div class="what">${addressLinkHtml(b.slot.location.address)}</div>
           <div class="what" style="margin-top:4px;"><strong>${eventTypeLabel(b.slot.eventType)}</strong></div>
           ${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count)}
           ${lunchDetailsSummaryHtml(b.slot)}
