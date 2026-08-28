@@ -404,11 +404,13 @@ model BookingTransfer {
   booking    Booking        @relation(fields: [bookingId], references: [id])
   fromRepId  String
   fromRep    Rep            @relation("TransfersSent", fields: [fromRepId], references: [id])
-  // The email the transfer was offered to — always set. toRepId is only
-  // filled in once a matching rep account exists: either one already did
-  // when the transfer was offered, or a new signup with this email claims
-  // it (see /api/auth/rep/signup).
-  toRepEmail String
+  // The email the transfer was offered to. Set on every transfer created
+  // after this field was added; nullable only so existing rows (which
+  // predate it and always have toRepId set) don't block the migration.
+  // toRepId is filled in once a matching rep account exists: either one
+  // already did when the transfer was offered, or a new signup with this
+  // email claims it (see /api/auth/rep/signup).
+  toRepEmail String?
   toRepId    String?
   toRep      Rep?           @relation("TransfersReceived", fields: [toRepId], references: [id])
   status     TransferStatus @default(PENDING)
