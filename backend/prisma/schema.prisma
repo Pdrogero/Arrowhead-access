@@ -56,6 +56,11 @@ enum BookingStatus {
   CANCELLED
 }
 
+enum RescheduleDecision {
+  ACCEPTED
+  DECLINED
+}
+
 enum SubscriptionPlan {
   OFFICE
   REP
@@ -359,8 +364,15 @@ model Booking {
   // gets a real explanation in the notification email.
   cancelReason String?
   // Optional alternative time the office proposes when cancelling — just
-  // a suggestion included in the cancellation email, not a new booking.
+  // a suggestion until the rep responds below.
   suggestedRescheduleAt DateTime?
+  // The rep's answer to that suggestion. Accepting creates a brand new
+  // slot + booking (rescheduledBookingId points to it); declining just
+  // records their message for the office.
+  rescheduleResponse        RescheduleDecision?
+  rescheduleResponseMessage String?
+  rescheduleRespondedAt     DateTime?
+  rescheduledBookingId      String?
 
   // Only meaningful for lunch-type slots — tracks the 1-day-out and
   // day-of reminder emails so the daily cron doesn't resend them.

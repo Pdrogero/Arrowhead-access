@@ -4,7 +4,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { requireAuth, requireRole, requireVerifiedRep } from '../auth/auth.guard';
-import { assertOwnsLocation } from '../auth/scoping';
+import { assertOwnsLocation, assertOwnsRep } from '../auth/scoping';
 import { claimOpenSlot, requestNewSlot, decideBooking, BookingError } from '../booking/booking.service';
 import { PrismaClient } from '@prisma/client';
 import { sendEmail } from '../email';
@@ -295,7 +295,7 @@ router.post('/:bookingId/cancel', requireAuth, requireRole('office_admin', 'offi
 
     const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     const suggestionHtml = suggestedRescheduleAt
-      ? `<p>The office would like to suggest rescheduling to <strong>${suggestedRescheduleAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong>. Log in to Arrowhead Access to request that time, or reply to arrange another.</p>`
+      ? `<p>The office would like to suggest rescheduling to <strong>${suggestedRescheduleAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong>. Log in to Arrowhead Access to accept or decline that time.</p>`
       : '';
     sendEmail({
       to: booking.rep.email,
@@ -307,6 +307,90 @@ router.post('/:bookingId/cancel', requireAuth, requireRole('office_admin', 'offi
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not cancel this visit' });
+  }
+});
+
+// --- Rep: accept or decline a suggested reschedule time --------------------
+router.post('/:bookingId/reschedule/respond', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.bookingId },
+      include: { slot: { include: { location: true } } },
+    });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    try {
+      assertOwnsRep(req, booking.repId);
+    } catch (err) {
+      return res.status(403).json({ error: (err as Error).message });
+    }
+
+    if (booking.status !== 'CANCELLED' || !booking.suggestedRescheduleAt) {
+      return res.status(409).json({ error: 'There is no suggested reschedule to respond to' });
+    }
+    if (booking.rescheduleResponse) {
+      return res.status(409).json({ error: 'You already responded to this suggestion' });
+    }
+
+    const decision = req.body.decision === 'accept' ? 'ACCEPTED' : req.body.decision === 'decline' ? 'DECLINED' : null;
+    if (!decision) return res.status(400).json({ error: "decision must be 'accept' or 'decline'" });
+
+    const message = String(req.body.message || '').trim();
+    if (decision === 'DECLINED' && !message) {
+      return res.status(400).json({ error: 'A message is required so the office knows why' });
+    }
+
+    const rep = await prisma.rep.findUniqueOrThrow({ where: { id: booking.repId } });
+    let newBooking = null;
+
+    if (decision === 'ACCEPTED') {
+      const duration = booking.slot.endTime.getTime() - booking.slot.startTime.getTime();
+      const newSlot = await prisma.slot.create({
+        data: {
+          locationId: booking.slot.locationId,
+          startTime: booking.suggestedRescheduleAt,
+          endTime: new Date(booking.suggestedRescheduleAt.getTime() + duration),
+          status: 'CONFIRMED',
+          eventType: booking.slot.eventType,
+        },
+      });
+      newBooking = await prisma.booking.create({
+        data: {
+          slotId: newSlot.id,
+          repId: booking.repId,
+          topic: booking.topic,
+          status: 'CONFIRMED',
+          decidedAt: new Date(),
+        },
+      });
+    }
+
+    const updatedBooking = await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        rescheduleResponse: decision,
+        rescheduleResponseMessage: message || null,
+        rescheduleRespondedAt: new Date(),
+        rescheduledBookingId: newBooking?.id || null,
+      },
+    });
+
+    const staff = await prisma.staffUser.findMany({ where: { locationId: booking.slot.locationId } });
+    const newDateStr = booking.suggestedRescheduleAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const subject = decision === 'ACCEPTED'
+      ? `${rep.name} accepted your suggested reschedule to ${newDateStr}`
+      : `${rep.name} declined your suggested reschedule to ${newDateStr}`;
+    const html = decision === 'ACCEPTED'
+      ? `<p><strong>${rep.name}</strong> (${rep.companyName}) accepted your suggested reschedule to <strong>${newDateStr}</strong> — it's now on the calendar as confirmed.</p>${message ? `<p>Their message: "${message}"</p>` : ''}`
+      : `<p><strong>${rep.name}</strong> (${rep.companyName}) declined your suggested reschedule to <strong>${newDateStr}</strong>.</p><p>Their message: "${message}"</p>`;
+    staff.forEach(s => {
+      sendEmail({ to: s.email, subject, html }).catch(() => {});
+    });
+
+    res.json(updatedBooking);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not save your response' });
   }
 });
 

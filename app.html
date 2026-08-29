@@ -2793,6 +2793,18 @@ async function loadMyBookings() {
             <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🍽️ Order via ezCater</button>
             <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderCedarOlive('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🥙 Cedar & Olive</button>
           </div>` : ''}
+        ${b.status === 'CANCELLED' && b.suggestedRescheduleAt && !b.rescheduleResponse ? `
+          <div class="card" style="width:100%;margin-top:8px;padding:14px;background:#FFF8F0;border:1px solid #F0D9B5;">
+            <p style="font-size:12.5px;font-weight:600;margin-bottom:4px;">📅 They'd like to reschedule you to ${fmtTime(b.suggestedRescheduleAt)}</p>
+            ${b.cancelReason ? `<p style="font-size:12px;color:var(--slate);margin-bottom:8px;">Cancellation reason: ${b.cancelReason}</p>` : ''}
+            <textarea id="rescheduleMsg-${b.id}" placeholder="Message to the office (required if declining)..." style="width:100%;min-height:56px;margin-bottom:8px;"></textarea>
+            <div style="display:flex;gap:8px;">
+              <button style="flex:1;background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="respondToReschedule('${b.id}','accept')">✓ Accept this time</button>
+              <button style="flex:1;background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="respondToReschedule('${b.id}','decline')">✕ Decline</button>
+            </div>
+          </div>` : ''}
+        ${b.status === 'CANCELLED' && b.rescheduleResponse ? `
+          <div style="width:100%;margin-top:8px;font-size:12px;color:var(--slate);">You ${b.rescheduleResponse === 'ACCEPTED' ? 'accepted' : 'declined'} the suggested reschedule to ${fmtTime(b.suggestedRescheduleAt)}.</div>` : ''}
       </div>`).join('');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
@@ -3152,6 +3164,23 @@ async function loadTransfers() {
     outgoingBox.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
 }
+
+window.respondToReschedule = async function(bookingId, decision) {
+  const messageBox = document.getElementById(`rescheduleMsg-${bookingId}`);
+  const message = (messageBox?.value || '').trim();
+  if (decision === 'decline' && !message) {
+    alert('Please add a quick message so the office knows why — required when declining.');
+    return;
+  }
+  if (decision === 'accept' && !confirm('Accept this new time? It will be confirmed on the calendar right away.')) return;
+  try {
+    await api(`/api/bookings/${bookingId}/reschedule/respond`, { method: 'POST', body: JSON.stringify({ decision, message }) });
+    alert(decision === 'accept' ? 'Reschedule accepted — the new visit is confirmed.' : 'Your response was sent to the office.');
+    loadMyBookings();
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 window.decideTransfer = async function(id, decision) {
   try {
