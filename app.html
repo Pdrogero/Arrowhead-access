@@ -141,6 +141,7 @@ let calendarSelectedDay = null;
 let officeCalendarMonth = new Date();
 let officeCalendarSlots = [];
 let officeCalendarSelectedDay = null;
+let officeCancelDraft = null; // { bookingId, repName, timeLabel, reason } once a reason has been given
 let openSlotsData = [];
 let browseOfficeRatings = {};
 let browseSearchQuery = '';
@@ -1088,7 +1089,19 @@ function screenOfficeCalendar() {
                 <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
               </div>
               <span class="chip ${s.booking.status}">${s.booking.status}</span>
-              ${s.booking.status === 'CONFIRMED' ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Cancel this visit</button>` : ''}
+              ${s.booking.status === 'CONFIRMED' && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Cancel this visit</button>` : ''}
+              ${officeCancelDraft && officeCancelDraft.bookingId === s.booking.id ? `
+                <div class="card" style="width:100%;margin-top:10px;padding:14px;">
+                  <p style="font-size:12.5px;font-weight:600;margin-bottom:8px;">Suggest a new date/time to ${officeCancelDraft.repName}? (optional)</p>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <input id="cancelSuggestDate" type="date" style="flex:1;min-width:140px;margin-bottom:8px;">
+                    <input id="cancelSuggestTime" type="time" style="flex:1;min-width:110px;margin-bottom:8px;">
+                  </div>
+                  <div style="display:flex;gap:8px;">
+                    <button type="button" style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="finalizeCancelOfficeBooking(false)">Skip — cancel now</button>
+                    <button type="button" class="primary" style="flex:1;margin:0;" onclick="finalizeCancelOfficeBooking(true)">Cancel with this suggestion</button>
+                  </div>
+                </div>` : ''}
             </div>`).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
         </div>` : ''}
     </div>`;
@@ -3003,6 +3016,7 @@ window.selectCalendarDay = function(day) {
 window.openOfficeCalendar = function() {
   officeCalendarMonth = new Date();
   officeCalendarSelectedDay = null;
+  officeCancelDraft = null;
   setState({ screen: 'officeCalendar' });
   loadOfficeCalendarBookings();
 };
@@ -3019,11 +3033,13 @@ async function loadOfficeCalendarBookings() {
 window.changeOfficeCalendarMonth = function(delta) {
   officeCalendarMonth = new Date(officeCalendarMonth.getFullYear(), officeCalendarMonth.getMonth() + delta, 1);
   officeCalendarSelectedDay = null;
+  officeCancelDraft = null;
   render();
 };
 
 window.selectOfficeCalendarDay = function(day) {
   officeCalendarSelectedDay = day;
+  officeCancelDraft = null;
   render();
 };
 
@@ -3035,9 +3051,32 @@ window.cancelOfficeBooking = async function(bookingId, repName, timeLabel) {
     alert('A reason is required so the rep understands why the visit was cancelled.');
     return;
   }
+  officeCancelDraft = { bookingId, repName, timeLabel, reason: reason.trim() };
+  render();
+};
+
+window.finalizeCancelOfficeBooking = async function(withSuggestion) {
+  if (!officeCancelDraft) return;
+  const { bookingId, reason } = officeCancelDraft;
+
+  let suggestedTime = null;
+  if (withSuggestion) {
+    const dateVal = document.getElementById('cancelSuggestDate')?.value;
+    const timeVal = document.getElementById('cancelSuggestTime')?.value;
+    if (dateVal && timeVal) {
+      const parsed = new Date(`${dateVal}T${timeVal}`);
+      if (!isNaN(parsed.getTime())) suggestedTime = parsed.toISOString();
+    }
+    if (!suggestedTime) {
+      alert('Enter both a date and a time to send a suggestion, or use "Skip — cancel now" instead.');
+      return;
+    }
+  }
+
   try {
-    await api(`/api/bookings/${bookingId}/cancel`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
-    alert('Visit cancelled — the rep has been notified by email.');
+    await api(`/api/bookings/${bookingId}/cancel`, { method: 'POST', body: JSON.stringify({ reason, suggestedTime }) });
+    alert('Visit cancelled — the rep has been notified by email' + (suggestedTime ? ', including your suggested new time.' : '.'));
+    officeCancelDraft = null;
     loadOfficeCalendarBookings();
   } catch (err) {
     alert(err.message);

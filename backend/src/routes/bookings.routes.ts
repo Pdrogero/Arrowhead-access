@@ -278,19 +278,29 @@ router.post('/:bookingId/cancel', requireAuth, requireRole('office_admin', 'offi
     const reason = String(req.body.reason || '').trim();
     if (!reason) return res.status(400).json({ error: 'A cancellation reason is required so the rep understands why' });
 
+    let suggestedRescheduleAt: Date | null = null;
+    if (req.body.suggestedTime) {
+      const parsed = new Date(req.body.suggestedTime);
+      if (isNaN(parsed.getTime())) return res.status(400).json({ error: 'That suggested time is not valid' });
+      suggestedRescheduleAt = parsed;
+    }
+
     const [updatedBooking] = await prisma.$transaction([
       prisma.booking.update({
         where: { id: booking.id },
-        data: { status: 'CANCELLED', cancelReason: reason, decidedAt: new Date() },
+        data: { status: 'CANCELLED', cancelReason: reason, decidedAt: new Date(), suggestedRescheduleAt },
       }),
       prisma.slot.update({ where: { id: booking.slotId }, data: { status: 'CANCELLED' } }),
     ]);
 
     const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const suggestionHtml = suggestedRescheduleAt
+      ? `<p>The office would like to suggest rescheduling to <strong>${suggestedRescheduleAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong>. Log in to Arrowhead Access to request that time, or reply to arrange another.</p>`
+      : '';
     sendEmail({
       to: booking.rep.email,
       subject: `Your visit at ${booking.slot.location.name} on ${dateStr} was cancelled`,
-      html: `<p>Your visit at <strong>${booking.slot.location.name}</strong> on ${dateStr} has been cancelled by the office.</p><p><strong>Reason:</strong> ${reason}</p>`,
+      html: `<p>Your visit at <strong>${booking.slot.location.name}</strong> on ${dateStr} has been cancelled by the office.</p><p><strong>Reason:</strong> ${reason}</p>${suggestionHtml}`,
     }).catch(() => {});
 
     res.json(updatedBooking);
