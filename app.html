@@ -2751,6 +2751,7 @@ async function loadOfficeLedger() {
         ` : ''}
         ${s.status === 'CONFIRMED' && s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">⭐ Rate rep</button>` : ''}
         ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
+        ${s.status === 'OPEN' ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="removeOpenSlot('${s.id}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Remove</button>` : ''}
         ${s.eventType === 'LUNCH' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="toggleLunchEdit('${s.id}')">🍽 Edit lunch order</button>` : ''}
         ${s.eventType === 'LUNCH' ? `
           <div id="lunchEditBox-${s.id}" class="card" style="display:none;width:100%;margin-top:10px;padding:14px;">
@@ -3053,6 +3054,16 @@ window.selectOfficeCalendarDay = function(day) {
   officeCalendarSelectedDay = day;
   officeCancelDraft = null;
   render();
+};
+
+window.removeOpenSlot = async function(slotId, timeLabel) {
+  if (!confirm(`Remove the open slot at ${timeLabel}? Reps will no longer be able to book it.`)) return;
+  try {
+    await api(`/api/bookings/slots/${slotId}`, { method: 'DELETE' });
+    loadOfficeLedger();
+  } catch (err) {
+    alert(err.message);
+  }
 };
 
 window.cancelOfficeBooking = async function(bookingId, repName, timeLabel) {

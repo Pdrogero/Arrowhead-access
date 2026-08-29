@@ -230,6 +230,30 @@ router.post('/locations/:locationId/slots', requireAuth, requireRole('office_adm
   res.status(201).json(slot);
 });
 
+// --- Office staff: remove an open slot that hasn't been booked ------------
+router.delete('/slots/:slotId', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const slot = await prisma.slot.findUnique({ where: { id: req.params.slotId } });
+    if (!slot) return res.status(404).json({ error: 'Slot not found' });
+
+    try {
+      assertOwnsLocation(req, slot.locationId);
+    } catch (err) {
+      return res.status(403).json({ error: (err as Error).message });
+    }
+
+    if (slot.status !== 'OPEN') {
+      return res.status(409).json({ error: 'Only open, unbooked slots can be removed this way' });
+    }
+
+    await prisma.slot.delete({ where: { id: slot.id } });
+    res.json({ message: 'Removed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not remove this slot' });
+  }
+});
+
 // --- Office staff: approve or decline a request ---------------------------
 router.post('/:bookingId/decide', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {
