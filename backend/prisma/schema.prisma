@@ -53,6 +53,7 @@ enum BookingStatus {
   DECLINED
   COMPLETED
   NO_SHOW
+  CANCELLED
 }
 
 enum SubscriptionPlan {
@@ -354,6 +355,9 @@ model Booking {
   status      BookingStatus @default(REQUESTED)
   requestedAt DateTime      @default(now())
   decidedAt   DateTime?
+  // Set when an office cancels a confirmed visit — required so the rep
+  // gets a real explanation in the notification email.
+  cancelReason String?
 
   // Only meaningful for lunch-type slots — tracks the 1-day-out and
   // day-of reminder emails so the daily cron doesn't resend them.

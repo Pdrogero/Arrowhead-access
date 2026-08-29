@@ -58,6 +58,7 @@
     .chip.DECLINED{background:#FEE2E2;color:#991B1B;}
     .chip.PENDING{background:#FEF3E2;color:#92400E;}
     .chip.ACCEPTED{background:#EEF7F1;color:#2D6F5E;}
+    .chip.CANCELLED{background:#FEE2E2;color:#991B1B;}
     .empty{padding:20px;text-align:center;color:var(--slate);font-size:14px;}
     /* .time's fixed 150px width eats too much of a narrow phone screen,
        squeezing office/rep names into a cramped multi-line wrap next to a
@@ -137,6 +138,9 @@ const SPECIALTY_OPTIONS = ['PCP','Wound Care Centers','Podiatry','Vascular Surge
 let calendarMonth = new Date();
 let calendarBookings = [];
 let calendarSelectedDay = null;
+let officeCalendarMonth = new Date();
+let officeCalendarSlots = [];
+let officeCalendarSelectedDay = null;
 let openSlotsData = [];
 let browseOfficeRatings = {};
 let browseSearchQuery = '';
@@ -1027,6 +1031,64 @@ function screenCalendar() {
               <div class="time">${fmtTime(b.slot.startTime)}</div>
               <div class="mid"><div class="who">${b.slot.location.name}</div></div>
               <span class="chip ${b.status}">${b.status}</span>
+            </div>`).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
+        </div>` : ''}
+    </div>`;
+}
+
+function screenOfficeCalendar() {
+  const year = officeCalendarMonth.getFullYear();
+  const month = officeCalendarMonth.getMonth();
+  const monthLabel = officeCalendarMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const scheduled = officeCalendarSlots.filter(s => s.booking && ['REQUESTED', 'CONFIRMED'].includes(s.booking.status));
+  const slotsByDay = {};
+  scheduled.forEach(s => {
+    const d = new Date(s.startTime);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      const day = d.getDate();
+      (slotsByDay[day] = slotsByDay[day] || []).push(s);
+    }
+  });
+
+  let cells = '';
+  for (let i = 0; i < firstDay; i++) cells += `<div></div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const has = slotsByDay[day];
+    cells += `<button onclick="selectOfficeCalendarDay(${day})" style="aspect-ratio:1;border:1px solid var(--line);border-radius:8px;background:${has ? 'rgba(46,111,94,.12)' : '#fff'};font-size:13px;position:relative;cursor:pointer;">
+      ${day}${has ? `<div style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--teal);"></div>` : ''}
+    </button>`;
+  }
+
+  const daySlots = officeCalendarSelectedDay ? (slotsByDay[officeCalendarSelectedDay] || []) : [];
+
+  return `
+    <div class="wrap wide">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeOfficeCalendarMonth(-1)">‹</button>
+        <h1 style="margin:0;">${monthLabel}</h1>
+        <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeOfficeCalendarMonth(1)">›</button>
+      </div>
+      <p class="sub">Tap a day to see what's scheduled — lunches, breakfasts, and visits — and cancel one if you need to.</p>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;">
+        ${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
+        ${cells}
+      </div>
+      ${officeCalendarSelectedDay ? `
+        <p style="font-size:13px;font-weight:600;margin-bottom:8px;">${monthLabel.split(' ')[0]} ${officeCalendarSelectedDay}</p>
+        <div class="listcard">
+          ${daySlots.length ? daySlots.map(s => `
+            <div class="row" style="flex-wrap:wrap;">
+              <div class="time">${fmtTime(s.startTime)}</div>
+              <div class="mid">
+                <div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>
+                <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
+              </div>
+              <span class="chip ${s.booking.status}">${s.booking.status}</span>
+              ${s.booking.status === 'CONFIRMED' ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Cancel this visit</button>` : ''}
             </div>`).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
         </div>` : ''}
     </div>`;
@@ -2035,6 +2097,7 @@ function screenDashboardOffice() {
       <p class="sub">Your upcoming and pending visits at this location.</p>
       <div id="locationSwitcherBox" style="margin-bottom:16px;"></div>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'officeSettings'})">⚙️ Office Settings</button>
+      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="openOfficeCalendar()">📅 Calendar</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'postSlot'})">➕ Post an open slot</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
       <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'messages'})">💬 Messages</button>
@@ -2937,6 +3000,50 @@ window.selectCalendarDay = function(day) {
   render();
 };
 
+window.openOfficeCalendar = function() {
+  officeCalendarMonth = new Date();
+  officeCalendarSelectedDay = null;
+  setState({ screen: 'officeCalendar' });
+  loadOfficeCalendarBookings();
+};
+
+// Same reasoning as loadCalendarBookings above — kept out of the render()
+// dispatch table to avoid a fetch/render/fetch loop.
+async function loadOfficeCalendarBookings() {
+  try {
+    officeCalendarSlots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
+    render();
+  } catch (err) {}
+}
+
+window.changeOfficeCalendarMonth = function(delta) {
+  officeCalendarMonth = new Date(officeCalendarMonth.getFullYear(), officeCalendarMonth.getMonth() + delta, 1);
+  officeCalendarSelectedDay = null;
+  render();
+};
+
+window.selectOfficeCalendarDay = function(day) {
+  officeCalendarSelectedDay = day;
+  render();
+};
+
+window.cancelOfficeBooking = async function(bookingId, repName, timeLabel) {
+  if (!confirm(`Are you sure you want to cancel the visit with ${repName} at ${timeLabel}? The rep will be notified by email.`)) return;
+  const reason = prompt('Please provide a brief reason for the cancellation — this will be included in the email to the rep:');
+  if (reason === null) return;
+  if (!reason.trim()) {
+    alert('A reason is required so the rep understands why the visit was cancelled.');
+    return;
+  }
+  try {
+    await api(`/api/bookings/${bookingId}/cancel`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
+    alert('Visit cancelled — the rep has been notified by email.');
+    loadOfficeCalendarBookings();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 window.toggleCalendarSync = async function() {
   const box = document.getElementById('calendarSyncBox');
   if (!box) return;
@@ -3077,6 +3184,7 @@ function render() {
   else if (state.screen === 'attendance') { app.innerHTML = screenAttendance(); loadAttendees(); }
   else if (state.screen === 'reviewList') { app.innerHTML = screenReviewList(); loadReviewList(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
+  else if (state.screen === 'officeCalendar') { app.innerHTML = screenOfficeCalendar(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); loadLocationSwitcher(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
   else if (state.screen === 'visitHistory' && state.role === 'office') { app.innerHTML = screenVisitHistory(); loadOfficeHistory(); }

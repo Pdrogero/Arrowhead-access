@@ -256,6 +256,50 @@ router.post('/:bookingId/decide', requireAuth, requireRole('office_admin', 'offi
   }
 });
 
+// --- Office staff: cancel a confirmed visit, with a reason sent to the rep -
+router.post('/:bookingId/cancel', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.bookingId },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    try {
+      assertOwnsLocation(req, booking.slot.locationId);
+    } catch (err) {
+      return res.status(403).json({ error: (err as Error).message });
+    }
+
+    if (booking.status !== 'CONFIRMED') {
+      return res.status(409).json({ error: 'Only confirmed visits can be cancelled this way' });
+    }
+
+    const reason = String(req.body.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'A cancellation reason is required so the rep understands why' });
+
+    const [updatedBooking] = await prisma.$transaction([
+      prisma.booking.update({
+        where: { id: booking.id },
+        data: { status: 'CANCELLED', cancelReason: reason, decidedAt: new Date() },
+      }),
+      prisma.slot.update({ where: { id: booking.slotId }, data: { status: 'CANCELLED' } }),
+    ]);
+
+    const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    sendEmail({
+      to: booking.rep.email,
+      subject: `Your visit at ${booking.slot.location.name} on ${dateStr} was cancelled`,
+      html: `<p>Your visit at <strong>${booking.slot.location.name}</strong> on ${dateStr} has been cancelled by the office.</p><p><strong>Reason:</strong> ${reason}</p>`,
+    }).catch(() => {});
+
+    res.json(updatedBooking);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not cancel this visit' });
+  }
+});
+
 // --- Rep: view the attendee list logged for one of their own bookings -----
 router.get('/:bookingId/attendees', requireAuth, requireRole('rep'), async (req, res) => {
   try {
