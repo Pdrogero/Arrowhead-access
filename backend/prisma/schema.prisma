@@ -61,6 +61,11 @@ enum RescheduleDecision {
   DECLINED
 }
 
+enum CancelledBy {
+  OFFICE
+  REP
+}
+
 enum SubscriptionPlan {
   OFFICE
   REP
@@ -360,15 +365,18 @@ model Booking {
   status      BookingStatus @default(REQUESTED)
   requestedAt DateTime      @default(now())
   decidedAt   DateTime?
-  // Set when an office cancels a confirmed visit — required so the rep
-  // gets a real explanation in the notification email.
+  // Set when either side cancels a confirmed visit — required so the
+  // other side gets a real explanation in the notification email.
   cancelReason String?
-  // Optional alternative time the office proposes when cancelling — just
-  // a suggestion until the rep responds below.
+  // Which side cancelled — decides who owes a response to the suggested
+  // reschedule below (the other side).
+  cancelledBy CancelledBy?
+  // Optional alternative time the cancelling side proposes — just a
+  // suggestion until the other side responds below.
   suggestedRescheduleAt DateTime?
-  // The rep's answer to that suggestion. Accepting creates a brand new
-  // slot + booking (rescheduledBookingId points to it); declining just
-  // records their message for the office.
+  // The other side's answer to that suggestion. Accepting creates a
+  // brand new slot + booking (rescheduledBookingId points to it);
+  // declining just records their message.
   rescheduleResponse        RescheduleDecision?
   rescheduleResponseMessage String?
   rescheduleRespondedAt     DateTime?

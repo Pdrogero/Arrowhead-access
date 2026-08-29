@@ -142,6 +142,7 @@ let officeCalendarMonth = new Date();
 let officeCalendarSlots = [];
 let officeCalendarSelectedDay = null;
 let officeCancelDraft = null; // { bookingId, repName, timeLabel, reason } once a reason has been given
+let repCancelDraft = null; // { bookingId, officeName, timeLabel, reason } once a reason has been given
 let openSlotsData = [];
 let browseOfficeRatings = {};
 let browseSearchQuery = '';
@@ -708,6 +709,41 @@ function repNameLinkHtml(rep) {
   return `<span onclick="event.stopPropagation();viewRepProfile('${rep.id}','${safeName}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);">${label}</span>`;
 }
 
+// Shared inline "suggest a new time?" form shown after a cancel reason has
+// been given, on both the office side (cancelOfficeBooking/finalizeCancelOfficeBooking)
+// and the rep side (cancelRepBooking/finalizeCancelRepBooking).
+function cancelSuggestFormHtml(counterpartName, finalizeFnName) {
+  return `
+    <div class="card" style="width:100%;margin-top:10px;padding:14px;">
+      <p style="font-size:12.5px;font-weight:600;margin-bottom:8px;">Suggest a new date/time to ${counterpartName}? (optional)</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input id="cancelSuggestDate" type="date" style="flex:1;min-width:140px;margin-bottom:8px;">
+        <input id="cancelSuggestTime" type="time" style="flex:1;min-width:110px;margin-bottom:8px;">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="${finalizeFnName}(false)">Skip — cancel now</button>
+        <button type="button" class="primary" style="flex:1;margin:0;" onclick="${finalizeFnName}(true)">Cancel with this suggestion</button>
+      </div>
+    </div>`;
+}
+
+// A concrete "suggested reschedule" outcome, shown to whichever side is
+// NOT the one who needs to respond right now (the responder gets an
+// actionable accept/decline form instead, rendered separately).
+function rescheduleStatusHtml(booking, viewerIsOffice, counterpartLabel) {
+  if (!booking || booking.status !== 'CANCELLED' || !booking.suggestedRescheduleAt) return '';
+  const iSuggested = viewerIsOffice ? booking.cancelledBy === 'OFFICE' : booking.cancelledBy === 'REP';
+  const timeLabel = fmtTime(booking.suggestedRescheduleAt);
+  if (!booking.rescheduleResponse) {
+    if (!iSuggested) return ''; // the responder's actionable form covers this case
+    return `<div style="width:100%;margin-top:8px;font-size:12px;color:var(--slate);">Waiting for ${counterpartLabel} to respond to your suggested time of ${timeLabel}.</div>`;
+  }
+  const verb = booking.rescheduleResponse === 'ACCEPTED' ? 'accepted' : 'declined';
+  const who = iSuggested ? counterpartLabel : 'You';
+  const msgSuffix = booking.rescheduleResponse === 'DECLINED' && booking.rescheduleResponseMessage ? ` — "${booking.rescheduleResponseMessage}"` : '';
+  return `<div style="width:100%;margin-top:8px;font-size:12px;color:var(--slate);">${who} ${verb} the suggested reschedule to ${timeLabel}${msgSuffix}</div>`;
+}
+
 // Sensible starting times per event type, used to prefill the time fields
 // on both the Recurring Slots and Post an Open Slot forms so the office
 // doesn't have to pick times for the common cases. A location's own saved
@@ -1099,18 +1135,7 @@ function screenOfficeCalendar() {
               </div>
               <span class="chip ${s.booking.status}">${s.booking.status}</span>
               ${s.booking.status === 'CONFIRMED' && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Cancel this visit</button>` : ''}
-              ${officeCancelDraft && officeCancelDraft.bookingId === s.booking.id ? `
-                <div class="card" style="width:100%;margin-top:10px;padding:14px;">
-                  <p style="font-size:12.5px;font-weight:600;margin-bottom:8px;">Suggest a new date/time to ${officeCancelDraft.repName}? (optional)</p>
-                  <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <input id="cancelSuggestDate" type="date" style="flex:1;min-width:140px;margin-bottom:8px;">
-                    <input id="cancelSuggestTime" type="time" style="flex:1;min-width:110px;margin-bottom:8px;">
-                  </div>
-                  <div style="display:flex;gap:8px;">
-                    <button type="button" style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="finalizeCancelOfficeBooking(false)">Skip — cancel now</button>
-                    <button type="button" class="primary" style="flex:1;margin:0;" onclick="finalizeCancelOfficeBooking(true)">Cancel with this suggestion</button>
-                  </div>
-                </div>` : ''}
+              ${officeCancelDraft && officeCancelDraft.bookingId === s.booking.id ? cancelSuggestFormHtml(officeCancelDraft.repName, 'finalizeCancelOfficeBooking') : ''}
             </div>`).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
         </div>` : ''}
     </div>`;
@@ -2812,12 +2837,25 @@ async function loadOfficeLedger() {
         ${s.status === 'CONFIRMED' && s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">⭐ Rate rep</button>` : ''}
         ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
         ${s.status === 'OPEN' ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="removeOpenSlot('${s.id}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Remove</button>` : ''}
+        ${s.status === 'CONFIRMED' && s.eventType === 'LUNCH' && s.booking?.rep && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🔄 Cancel/Reschedule</button>` : ''}
+        ${officeCancelDraft && s.booking && officeCancelDraft.bookingId === s.booking.id ? cancelSuggestFormHtml(officeCancelDraft.repName, 'finalizeCancelOfficeBooking') : ''}
         ${s.eventType === 'LUNCH' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="toggleLunchEdit('${s.id}')">🍽 Edit lunch order</button>` : ''}
         ${s.eventType === 'LUNCH' ? `
           <div id="lunchEditBox-${s.id}" class="card" style="display:none;width:100%;margin-top:10px;padding:14px;">
             ${lunchDetailsFieldsHtml('lunchEdit' + s.id, s, { includeTime: true })}
             <button class="primary" style="margin-top:0;margin-bottom:0;" onclick="saveLunchDetails('${s.id}')">Save order details</button>
           </div>` : ''}
+        ${s.booking?.status === 'CANCELLED' && s.booking.cancelledBy === 'REP' && s.booking.suggestedRescheduleAt && !s.booking.rescheduleResponse ? `
+          <div class="card" style="width:100%;margin-top:8px;padding:14px;background:#FFF8F0;border:1px solid #F0D9B5;">
+            <p style="font-size:12.5px;font-weight:600;margin-bottom:4px;">📅 ${s.booking.rep.name} suggested rescheduling to ${fmtTime(s.booking.suggestedRescheduleAt)}</p>
+            ${s.booking.cancelReason ? `<p style="font-size:12px;color:var(--slate);margin-bottom:8px;">Cancellation reason: ${s.booking.cancelReason}</p>` : ''}
+            <textarea id="officeRescheduleMsg-${s.booking.id}" placeholder="Message to the rep (required if declining)..." style="width:100%;min-height:56px;margin-bottom:8px;"></textarea>
+            <div style="display:flex;gap:8px;">
+              <button style="flex:1;background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="respondToRepReschedule('${s.booking.id}','accept')">✓ Accept this time</button>
+              <button style="flex:1;background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="respondToRepReschedule('${s.booking.id}','decline')">✕ Decline</button>
+            </div>
+          </div>` : ''}
+        ${s.booking?.rep ? rescheduleStatusHtml(s.booking, true, s.booking.rep.name) : ''}
       </div>`).join('');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
@@ -2848,13 +2886,15 @@ async function loadMyBookings() {
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openAttendance('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime)}')">📝 Attendance</button>` : ''}
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>` : ''}
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="logConcurExpense('${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🧾 Log in Concur</button>` : ''}
+          ${b.status === 'CONFIRMED' && !(repCancelDraft && repCancelDraft.bookingId === b.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelRepBooking('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🔄 Cancel/Reschedule</button>` : ''}
         </div>
         ${b.status === 'CONFIRMED' && b.slot.eventType === 'LUNCH' ? `
           <div style="width:100%;display:flex;gap:8px;margin-top:8px;">
             <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🍽️ Order via ezCater</button>
             <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderCedarOlive('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🥙 Cedar & Olive</button>
           </div>` : ''}
-        ${b.status === 'CANCELLED' && b.suggestedRescheduleAt && !b.rescheduleResponse ? `
+        ${repCancelDraft && repCancelDraft.bookingId === b.id ? cancelSuggestFormHtml((b.slot.location.name || '').replace(/'/g, "\\'"), 'finalizeCancelRepBooking') : ''}
+        ${b.status === 'CANCELLED' && b.cancelledBy === 'OFFICE' && b.suggestedRescheduleAt && !b.rescheduleResponse ? `
           <div class="card" style="width:100%;margin-top:8px;padding:14px;background:#FFF8F0;border:1px solid #F0D9B5;">
             <p style="font-size:12.5px;font-weight:600;margin-bottom:4px;">📅 They'd like to reschedule you to ${fmtTime(b.suggestedRescheduleAt)}</p>
             ${b.cancelReason ? `<p style="font-size:12px;color:var(--slate);margin-bottom:8px;">Cancellation reason: ${b.cancelReason}</p>` : ''}
@@ -2864,8 +2904,7 @@ async function loadMyBookings() {
               <button style="flex:1;background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="respondToReschedule('${b.id}','decline')">✕ Decline</button>
             </div>
           </div>` : ''}
-        ${b.status === 'CANCELLED' && b.rescheduleResponse ? `
-          <div style="width:100%;margin-top:8px;font-size:12px;color:var(--slate);">You ${b.rescheduleResponse === 'ACCEPTED' ? 'accepted' : 'declined'} the suggested reschedule to ${fmtTime(b.suggestedRescheduleAt)}.</div>` : ''}
+        ${rescheduleStatusHtml(b, false, b.slot.location.name)}
       </div>`).join('');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
@@ -3160,7 +3199,48 @@ window.finalizeCancelOfficeBooking = async function(withSuggestion) {
     await api(`/api/bookings/${bookingId}/cancel`, { method: 'POST', body: JSON.stringify({ reason, suggestedTime }) });
     alert('Visit cancelled — the rep has been notified by email' + (suggestedTime ? ', including your suggested new time.' : '.'));
     officeCancelDraft = null;
-    loadOfficeCalendarBookings();
+    if (state.screen === 'officeCalendar') loadOfficeCalendarBookings();
+    else loadOfficeLedger();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.cancelRepBooking = async function(bookingId, officeName, timeLabel) {
+  if (!confirm(`Are you sure you want to cancel your visit at ${officeName} on ${timeLabel}? The office will be notified by email.`)) return;
+  const reason = prompt('Please provide a brief reason for the cancellation — this will be included in the email to the office:');
+  if (reason === null) return;
+  if (!reason.trim()) {
+    alert('A reason is required so the office understands why.');
+    return;
+  }
+  repCancelDraft = { bookingId, officeName, timeLabel, reason: reason.trim() };
+  render();
+};
+
+window.finalizeCancelRepBooking = async function(withSuggestion) {
+  if (!repCancelDraft) return;
+  const { bookingId, reason } = repCancelDraft;
+
+  let suggestedTime = null;
+  if (withSuggestion) {
+    const dateVal = document.getElementById('cancelSuggestDate')?.value;
+    const timeVal = document.getElementById('cancelSuggestTime')?.value;
+    if (dateVal && timeVal) {
+      const parsed = new Date(`${dateVal}T${timeVal}`);
+      if (!isNaN(parsed.getTime())) suggestedTime = parsed.toISOString();
+    }
+    if (!suggestedTime) {
+      alert('Enter both a date and a time to send a suggestion, or use "Skip — cancel now" instead.');
+      return;
+    }
+  }
+
+  try {
+    await api(`/api/bookings/${bookingId}/cancel-by-rep`, { method: 'POST', body: JSON.stringify({ reason, suggestedTime }) });
+    alert('Visit cancelled — the office has been notified by email' + (suggestedTime ? ', including your suggested new time.' : '.'));
+    repCancelDraft = null;
+    loadMyBookings();
   } catch (err) {
     alert(err.message);
   }
@@ -3253,6 +3333,23 @@ window.respondToReschedule = async function(bookingId, decision) {
   }
 };
 
+window.respondToRepReschedule = async function(bookingId, decision) {
+  const messageBox = document.getElementById(`officeRescheduleMsg-${bookingId}`);
+  const message = (messageBox?.value || '').trim();
+  if (decision === 'decline' && !message) {
+    alert('Please add a quick message so the rep knows why — required when declining.');
+    return;
+  }
+  if (decision === 'accept' && !confirm('Accept this new time? It will be confirmed on the calendar right away.')) return;
+  try {
+    await api(`/api/bookings/${bookingId}/reschedule/office-respond`, { method: 'POST', body: JSON.stringify({ decision, message }) });
+    alert(decision === 'accept' ? 'Reschedule accepted — the new visit is confirmed.' : 'Your response was sent to the rep.');
+    loadOfficeLedger();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 window.decideTransfer = async function(id, decision) {
   try {
     await api('/api/transfers/' + id + '/decide', { method: 'POST', body: JSON.stringify({ decision }) });
@@ -3300,6 +3397,8 @@ function render() {
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.style.display = state.screen === 'role' ? 'none' : 'block';
   document.body.classList.toggle('medical-bg', ['role', 'login', 'forgotPassword', 'resetPassword', 'terms', 'privacy'].includes(state.screen));
+  if (!['dashboard', 'officeCalendar'].includes(state.screen)) officeCancelDraft = null;
+  if (state.screen !== 'dashboard') repCancelDraft = null;
 
   if (state.screen === 'role') app.innerHTML = screenRole();
   else if (state.screen === 'terms') app.innerHTML = screenTerms();

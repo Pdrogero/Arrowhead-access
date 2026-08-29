@@ -312,7 +312,7 @@ router.post('/:bookingId/cancel', requireAuth, requireRole('office_admin', 'offi
     const [updatedBooking] = await prisma.$transaction([
       prisma.booking.update({
         where: { id: booking.id },
-        data: { status: 'CANCELLED', cancelReason: reason, decidedAt: new Date(), suggestedRescheduleAt },
+        data: { status: 'CANCELLED', cancelReason: reason, cancelledBy: 'OFFICE', decidedAt: new Date(), suggestedRescheduleAt },
       }),
       prisma.slot.update({ where: { id: booking.slotId }, data: { status: 'CANCELLED' } }),
     ]);
@@ -334,7 +334,66 @@ router.post('/:bookingId/cancel', requireAuth, requireRole('office_admin', 'offi
   }
 });
 
-// --- Rep: accept or decline a suggested reschedule time --------------------
+// --- Rep: cancel a confirmed visit, with a reason sent to the office -------
+router.post('/:bookingId/cancel-by-rep', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.bookingId },
+      include: { slot: { include: { location: true } } },
+    });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    try {
+      assertOwnsRep(req, booking.repId);
+    } catch (err) {
+      return res.status(403).json({ error: (err as Error).message });
+    }
+
+    if (booking.status !== 'CONFIRMED') {
+      return res.status(409).json({ error: 'Only confirmed visits can be cancelled this way' });
+    }
+
+    const reason = String(req.body.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'A cancellation reason is required so the office understands why' });
+
+    let suggestedRescheduleAt: Date | null = null;
+    if (req.body.suggestedTime) {
+      const parsed = new Date(req.body.suggestedTime);
+      if (isNaN(parsed.getTime())) return res.status(400).json({ error: 'That suggested time is not valid' });
+      suggestedRescheduleAt = parsed;
+    }
+
+    const rep = await prisma.rep.findUniqueOrThrow({ where: { id: booking.repId } });
+
+    const [updatedBooking] = await prisma.$transaction([
+      prisma.booking.update({
+        where: { id: booking.id },
+        data: { status: 'CANCELLED', cancelReason: reason, cancelledBy: 'REP', decidedAt: new Date(), suggestedRescheduleAt },
+      }),
+      prisma.slot.update({ where: { id: booking.slotId }, data: { status: 'CANCELLED' } }),
+    ]);
+
+    const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const suggestionHtml = suggestedRescheduleAt
+      ? `<p>${rep.name} would like to suggest rescheduling to <strong>${suggestedRescheduleAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong>. Log in to Arrowhead Access to accept or decline that time.</p>`
+      : '';
+    const staff = await prisma.staffUser.findMany({ where: { locationId: booking.slot.locationId } });
+    staff.forEach(s => {
+      sendEmail({
+        to: s.email,
+        subject: `${rep.name} cancelled their visit on ${dateStr}`,
+        html: `<p><strong>${rep.name}</strong> (${rep.companyName}) cancelled their visit at <strong>${booking.slot.location.name}</strong> on ${dateStr}.</p><p><strong>Reason:</strong> ${reason}</p>${suggestionHtml}`,
+      }).catch(() => {});
+    });
+
+    res.json(updatedBooking);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not cancel this visit' });
+  }
+});
+
+// --- Rep: accept or decline a reschedule the office suggested --------------
 router.post('/:bookingId/reschedule/respond', requireAuth, requireRole('rep'), async (req, res) => {
   try {
     const booking = await prisma.booking.findUnique({
@@ -349,7 +408,7 @@ router.post('/:bookingId/reschedule/respond', requireAuth, requireRole('rep'), a
       return res.status(403).json({ error: (err as Error).message });
     }
 
-    if (booking.status !== 'CANCELLED' || !booking.suggestedRescheduleAt) {
+    if (booking.status !== 'CANCELLED' || !booking.suggestedRescheduleAt || booking.cancelledBy !== 'OFFICE') {
       return res.status(409).json({ error: 'There is no suggested reschedule to respond to' });
     }
     if (booking.rescheduleResponse) {
@@ -410,6 +469,86 @@ router.post('/:bookingId/reschedule/respond', requireAuth, requireRole('rep'), a
     staff.forEach(s => {
       sendEmail({ to: s.email, subject, html }).catch(() => {});
     });
+
+    res.json(updatedBooking);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not save your response' });
+  }
+});
+
+// --- Office staff: accept or decline a reschedule the rep suggested --------
+router.post('/:bookingId/reschedule/office-respond', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.bookingId },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    try {
+      assertOwnsLocation(req, booking.slot.locationId);
+    } catch (err) {
+      return res.status(403).json({ error: (err as Error).message });
+    }
+
+    if (booking.status !== 'CANCELLED' || !booking.suggestedRescheduleAt || booking.cancelledBy !== 'REP') {
+      return res.status(409).json({ error: 'There is no suggested reschedule to respond to' });
+    }
+    if (booking.rescheduleResponse) {
+      return res.status(409).json({ error: 'You already responded to this suggestion' });
+    }
+
+    const decision = req.body.decision === 'accept' ? 'ACCEPTED' : req.body.decision === 'decline' ? 'DECLINED' : null;
+    if (!decision) return res.status(400).json({ error: "decision must be 'accept' or 'decline'" });
+
+    const message = String(req.body.message || '').trim();
+    if (decision === 'DECLINED' && !message) {
+      return res.status(400).json({ error: 'A message is required so the rep knows why' });
+    }
+
+    let newBooking = null;
+
+    if (decision === 'ACCEPTED') {
+      const duration = booking.slot.endTime.getTime() - booking.slot.startTime.getTime();
+      const newSlot = await prisma.slot.create({
+        data: {
+          locationId: booking.slot.locationId,
+          startTime: booking.suggestedRescheduleAt,
+          endTime: new Date(booking.suggestedRescheduleAt.getTime() + duration),
+          status: 'CONFIRMED',
+          eventType: booking.slot.eventType,
+        },
+      });
+      newBooking = await prisma.booking.create({
+        data: {
+          slotId: newSlot.id,
+          repId: booking.repId,
+          topic: booking.topic,
+          status: 'CONFIRMED',
+          decidedAt: new Date(),
+        },
+      });
+    }
+
+    const updatedBooking = await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        rescheduleResponse: decision,
+        rescheduleResponseMessage: message || null,
+        rescheduleRespondedAt: new Date(),
+        rescheduledBookingId: newBooking?.id || null,
+      },
+    });
+
+    const newDateStr = booking.suggestedRescheduleAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const subject = decision === 'ACCEPTED'
+      ? `${booking.slot.location.name} accepted your suggested reschedule to ${newDateStr}`
+      : `${booking.slot.location.name} declined your suggested reschedule to ${newDateStr}`;
+    const html = decision === 'ACCEPTED'
+      ? `<p><strong>${booking.slot.location.name}</strong> accepted your suggested reschedule to <strong>${newDateStr}</strong> — it's now on your calendar as confirmed.</p>${message ? `<p>Their message: "${message}"</p>` : ''}`
+      : `<p><strong>${booking.slot.location.name}</strong> declined your suggested reschedule to <strong>${newDateStr}</strong>.</p><p>Their message: "${message}"</p>`;
+    sendEmail({ to: booking.rep.email, subject, html }).catch(() => {});
 
     res.json(updatedBooking);
   } catch (err) {
