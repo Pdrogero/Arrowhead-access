@@ -923,7 +923,7 @@ function renderBrowseList(slots) {
         ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count, 'office', s.location.id, s.location.name)}
         ${lunchDetailsSummaryHtml(s)}
       </div>
-      <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
+      ${s.eventType === 'OFFICE_CLOSED' ? '' : `<button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>`}
     </div>`).join('')}</div>`;
 }
 
@@ -1010,7 +1010,7 @@ function renderBrowseCalendar(slots) {
               <div>${eventTypeChipHtml(s.eventType)}</div>
               ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count, 'office', s.location.id, s.location.name)}
             </div>
-            <button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>
+            ${s.eventType === 'OFFICE_CLOSED' ? '' : `<button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>`}
           </div>`).join('') : '<div class="empty">No open slots this day.</div>'}
       </div>` : ''}
   `;
@@ -2825,11 +2825,11 @@ async function loadOfficeLedger() {
       <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(s.startTime)}</div>
         <div class="mid">
-          ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">Open slot</div>`}
+          ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">${s.eventType === 'OFFICE_CLOSED' ? 'Not available for booking' : 'Open slot'}</div>`}
           <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
           ${lunchDetailsSummaryHtml(s)}
         </div>
-        <span class="chip ${s.status}">${s.status}</span>
+        ${s.eventType === 'OFFICE_CLOSED' ? '' : `<span class="chip ${s.status}">${s.status}</span>`}
         ${s.status === 'REQUESTED' && s.booking ? `
           <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','approve')">✓ Approve</button>
           <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>

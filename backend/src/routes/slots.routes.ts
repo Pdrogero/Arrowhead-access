@@ -219,7 +219,7 @@ router.post('/:id/claim', requireAuth, requireRole('rep'), requireActiveSubscrip
 
     const result = await prisma.$transaction(async (tx) => {
       const slot = await tx.slot.findUnique({ where: { id: req.params.id } });
-      if (!slot || slot.status !== 'OPEN') {
+      if (!slot || slot.status !== 'OPEN' || slot.eventType === 'OFFICE_CLOSED') {
         throw new Error('This slot is no longer available');
       }
 

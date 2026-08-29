@@ -70,7 +70,7 @@ export async function claimOpenSlot(params: {
 
   return prisma.$transaction(async (tx) => {
     const slot = await tx.slot.findUniqueOrThrow({ where: { id: slotId } });
-    if (slot.status !== SlotStatus.OPEN) {
+    if (slot.status !== SlotStatus.OPEN || slot.eventType === 'OFFICE_CLOSED') {
       throw new BookingError('This slot is no longer open.', 'SLOT_UNAVAILABLE');
     }
 
