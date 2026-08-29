@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
+import { sendEmail } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -31,7 +32,7 @@ router.get('/mine', requireAuth, requireRole('office_admin', 'office_staff'), as
 
     const locations = await prisma.location.findMany({
       where: { organizationId },
-      select: { id: true, name: true, address: true },
+      select: { id: true, name: true, address: true, managerEmail: true },
       orderBy: { name: 'asc' },
     });
     res.json(locations);
@@ -53,11 +54,25 @@ router.post('/', requireAuth, requireRole('office_admin'), async (req, res) => {
     const name = String(req.body.name || '').trim();
     const address = String(req.body.address || '').trim();
     const timezone = String(req.body.timezone || 'America/New_York').trim();
+    const managerEmail = String(req.body.managerEmail || '').trim().toLowerCase();
     if (!name || !address) return res.status(400).json({ error: 'name and address are required' });
+    if (managerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(managerEmail)) {
+      return res.status(400).json({ error: 'That manager email address does not look valid' });
+    }
 
     const location = await prisma.location.create({
-      data: { organizationId, name, address, timezone },
+      data: { organizationId, name, address, timezone, managerEmail: managerEmail || null },
     });
+
+    if (managerEmail) {
+      const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+      sendEmail({
+        to: managerEmail,
+        subject: `You've been added as the contact for ${location.name} on Arrowhead Access`,
+        html: `<p>Hi,</p><p>${org?.name || 'Your organization'} added <strong>${location.name}</strong> (${location.address}) as a location on Arrowhead Access, the platform used to manage sales rep visit scheduling — and listed you as the contact for it.</p><p>If you need your own login to manage this location, reach out to your office administrator, or contact us at legal@arrowheadaccess.com.</p><p>— Arrowhead Access</p>`,
+      }).catch(() => {});
+    }
+
     res.status(201).json(location);
   } catch (err) {
     console.error(err);

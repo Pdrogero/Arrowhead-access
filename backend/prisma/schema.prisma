@@ -108,6 +108,10 @@ model Location {
   organization                Organization @relation(fields: [organizationId], references: [id])
   name                        String
   address                     String
+  // Optional contact for this specific location — set when a location is
+  // added on behalf of a different manager than the org's main admin login,
+  // so that person gets notified a location was set up for them.
+  managerEmail                String?
   timezone                    String
   maxVisitsPerRepPerMonth     Int      @default(1)
   maxVisitsPerCompanyPerMonth Int      @default(2)
