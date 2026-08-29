@@ -156,6 +156,8 @@ let employeeRows = [];
 let recurringTemplates = [];
 let viewedOfficeStaff = null;
 let viewedOfficeStaffName = '';
+let viewedRepProfile = null;
+let viewedRepProfileName = '';
 let reviewBookingId = null;
 let reviewCounterpartName = '';
 let reviewRating = 0;
@@ -699,6 +701,13 @@ function addressLinkHtml(address) {
   return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;text-decoration-color:var(--line);" onclick="event.stopPropagation();">${address.replace(/</g, '&lt;')}</a>`;
 }
 
+function repNameLinkHtml(rep) {
+  if (!rep) return '';
+  const safeName = (rep.name || '').replace(/'/g, "\\'");
+  const label = rep.companyName ? `${rep.name} · ${rep.companyName}` : rep.name;
+  return `<span onclick="event.stopPropagation();viewRepProfile('${rep.id}','${safeName}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);">${label}</span>`;
+}
+
 // Sensible starting times per event type, used to prefill the time fields
 // on both the Recurring Slots and Post an Open Slot forms so the office
 // doesn't have to pick times for the common cases. A location's own saved
@@ -1085,7 +1094,7 @@ function screenOfficeCalendar() {
             <div class="row" style="flex-wrap:wrap;">
               <div class="time">${fmtTime(s.startTime)}</div>
               <div class="mid">
-                <div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>
+                <div class="who">${repNameLinkHtml(s.booking.rep)}</div>
                 <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
               </div>
               <span class="chip ${s.booking.status}">${s.booking.status}</span>
@@ -1476,6 +1485,57 @@ window.viewOfficeStaff = async function(locationId, locationName) {
     viewedOfficeStaff = await api(`/api/employees/location/${locationId}`);
     render();
   } catch (err) {}
+};
+
+function screenRepProfileView() {
+  const rep = viewedRepProfile;
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      ${rep === null ? '<div class="empty">Loading…</div>' : rep === false ? `<div class="msg err">Could not load ${viewedRepProfileName}'s profile.</div>` : `
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+          ${rep.profileImageUrl
+            ? `<img src="${rep.profileImageUrl}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+            : `<div style="width:64px;height:64px;border-radius:50%;background:var(--paper-raised,#E4EAE3);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--teal);flex-shrink:0;">${(rep.name || '?').charAt(0)}</div>`}
+          <div>
+            <h1 style="margin-bottom:2px;">${rep.name}</h1>
+            <p class="sub" style="margin:0;">${[rep.companyName, rep.title].filter(Boolean).join(' · ')}</p>
+          </div>
+        </div>
+        <div class="card">
+          ${rep.credentials ? `<p style="font-size:13px;margin-bottom:8px;"><strong>Credentials:</strong> ${rep.credentials}</p>` : ''}
+          ${rep.roleFunction ? `<p style="font-size:13px;margin-bottom:8px;"><strong>Role:</strong> ${rep.roleFunction}</p>` : ''}
+          ${rep.relationshipToCompany ? `<p style="font-size:13px;margin-bottom:8px;"><strong>Relationship:</strong> ${rep.relationshipToCompany}</p>` : ''}
+          ${rep.phone ? `<p style="font-size:13px;margin-bottom:8px;"><strong>Phone:</strong> ${rep.phone}</p>` : ''}
+          ${rep.mobilePhone ? `<p style="font-size:13px;margin-bottom:8px;"><strong>Mobile:</strong> ${rep.mobilePhone}</p>` : ''}
+          ${rep.specialties?.length ? `<p style="font-size:13px;margin-bottom:0;"><strong>Specialties:</strong> ${rep.specialties.join(', ')}</p>` : ''}
+          ${!rep.credentials && !rep.roleFunction && !rep.relationshipToCompany && !rep.phone && !rep.mobilePhone && !rep.specialties?.length ? '<p style="font-size:13px;color:var(--slate);margin:0;">No additional details on file.</p>' : ''}
+        </div>
+        <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Company &amp; products</p>
+        <div class="card">
+          ${rep.manufacturerCompany ? `<p style="font-size:13px;font-weight:600;margin-bottom:8px;">${rep.manufacturerCompany.name}</p>` : '<p style="font-size:13px;color:var(--slate);margin-bottom:0;">No manufacturer company listed.</p>'}
+          ${rep.products?.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${rep.products.map(p => `<span style="background:var(--paper-raised,#E4EAE3);border-radius:20px;padding:4px 10px;font-size:12px;">${p.name}</span>`).join('')}</div>` : ''}
+        </div>
+        ${rep.marketingMaterials?.length ? `
+        <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Shared materials</p>
+        <div class="listcard">
+          ${rep.marketingMaterials.map(m => `<div class="row"><div class="mid"><a href="${m.url}" target="_blank" rel="noopener noreferrer" style="color:var(--teal);text-decoration:underline;">${m.title}</a></div></div>`).join('')}
+        </div>` : ''}
+      `}
+    </div>`;
+}
+
+window.viewRepProfile = async function(repId, repName) {
+  viewedRepProfileName = repName;
+  viewedRepProfile = null;
+  setState({ screen: 'repProfileView' });
+  try {
+    viewedRepProfile = await api(`/api/profile/rep/${repId}`);
+    render();
+  } catch (err) {
+    viewedRepProfile = false;
+    render();
+  }
 };
 
 function screenReviewVisit() {
@@ -2740,7 +2800,7 @@ async function loadOfficeLedger() {
       <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(s.startTime)}</div>
         <div class="mid">
-          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">Open slot</div>`}
+          ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">Open slot</div>`}
           <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
           ${lunchDetailsSummaryHtml(s)}
         </div>
@@ -2842,7 +2902,7 @@ async function loadOfficeHistory() {
       <div class="row" style="flex-wrap:wrap;">
         <div class="time">${fmtTime(s.startTime)}</div>
         <div class="mid">
-          ${s.booking?.rep ? `<div class="who">${s.booking.rep.name} · ${s.booking.rep.companyName}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : ''}
+          ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : ''}
           <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
           ${lunchDetailsSummaryHtml(s)}
         </div>
@@ -3251,6 +3311,7 @@ function render() {
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
   else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); loadOfficePolicy(); loadRecurringTemplates(); }
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
+  else if (state.screen === 'repProfileView') { app.innerHTML = screenRepProfileView(); }
   else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }
   else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); loadRecurringTemplates().then(prefillPostSlotTimeForEventType); }

@@ -134,6 +134,47 @@ router.get('/rep', requireAuth, requireRole('rep'), async (req, res) => {
   }
 });
 
+// --- Office staff: view a rep's profile — only for reps who've actually ---
+// booked at this location, so it's not a way to browse the whole rep list.
+router.get('/rep/:repId', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const hasBookedHere = await prisma.booking.findFirst({
+      where: { repId: req.params.repId, slot: { locationId: staff.locationId } },
+    });
+    if (!hasBookedHere) {
+      return res.status(403).json({ error: 'You can only view profiles for reps who have booked at your location' });
+    }
+
+    const rep = await prisma.rep.findUnique({
+      where: { id: req.params.repId },
+      select: {
+        name: true,
+        companyName: true,
+        title: true,
+        roleFunction: true,
+        phone: true,
+        mobilePhone: true,
+        credentials: true,
+        relationshipToCompany: true,
+        specialties: true,
+        profileImageUrl: true,
+        verificationStatus: true,
+        manufacturerCompany: { select: { name: true } },
+        products: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
+        marketingMaterials: { select: { id: true, title: true, url: true }, orderBy: { createdAt: 'desc' } },
+      },
+    });
+    if (!rep) return res.status(404).json({ error: 'Rep not found' });
+    res.json(rep);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch this rep\'s profile' });
+  }
+});
+
 const MAX_PROFILE_IMAGE_LENGTH = 700_000; // ~500KB of actual image data once base64-decoded
 
 // --- Complete / update the logged-in rep's profile ------------------------
