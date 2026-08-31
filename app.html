@@ -2194,14 +2194,16 @@ function screenDashboardOffice() {
       <h1>This week's ledger</h1>
       <p class="sub">Your upcoming and pending rep visits and scheduled lunches at this location.</p>
       <div id="locationSwitcherBox" style="margin-bottom:16px;"></div>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'officeSettings'})">⚙️ Office Settings</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="openOfficeCalendar()">📅 Calendar</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'postSlot'})">➕ Post an open slot</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'messages'})">💬 Messages</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'literature'})">📄 Literature</button>
-      <button class="link" style="text-align:left;margin-bottom:10px;" onclick="setState({screen:'visitHistory'})">📜 Visit History</button>
-      <a href="mailto:legal@arrowheadaccess.com?subject=Arrowhead%20Access%20Support%20Request" style="display:block;width:100%;background:none;border:none;color:var(--teal);font-size:12px;text-align:left;margin-bottom:10px;text-decoration:none;cursor:pointer;">❓ Help</a>
+      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,auto);grid-auto-flow:column;gap:2px 20px;margin-bottom:16px;">
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'officeSettings'})">⚙️ Office Settings</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="openOfficeCalendar()">📅 Calendar</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'postSlot'})">➕ Post an open slot</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'messages'})">💬 Messages</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'literature'})">📄 Literature</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'visitHistory'})">📜 Visit History</button>
+        <a href="mailto:legal@arrowheadaccess.com?subject=Arrowhead%20Access%20Support%20Request" style="display:block;width:100%;background:none;border:none;color:var(--teal);font-size:12px;text-align:left;text-decoration:none;cursor:pointer;">❓ Help</a>
+      </div>
       <div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
