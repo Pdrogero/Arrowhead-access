@@ -127,6 +127,9 @@ model Location {
   maxVisitsPerRepPerMonth     Int      @default(1)
   maxVisitsPerCompanyPerMonth Int      @default(2)
   createdAt                   DateTime @default(now())
+  // "2026-09" style key for the month the new-month schedule-setup email
+  // was last sent, so the daily cron only sends it once per month.
+  lastMonthlyReminderMonth    String?
 
   staff  StaffUser[]
   slots  Slot[]
@@ -267,6 +270,9 @@ model Rep {
   renewalReminder30dSent Boolean           @default(false)
   renewalReminder7dSent  Boolean           @default(false)
   renewalReminder1dSent  Boolean           @default(false)
+  // "2026-09" style key for the month the new-month booking-reminder email
+  // was last sent, so the daily cron only sends it once per month.
+  lastMonthlyReminderMonth String?
 
   // Private token embedded in this rep's calendar subscription URL, so
   // Google/Apple Calendar can fetch their bookings.ics feed without logging in.

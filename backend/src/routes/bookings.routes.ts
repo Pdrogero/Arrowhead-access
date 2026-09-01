@@ -667,4 +667,64 @@ router.post('/check-lunch-reminders', async (req, res) => {
   }
 });
 
+// --- Monthly new-month reminder, called by the same daily scheduled -------
+// trigger — a no-op on every day except the 1st. Nudges offices to set up
+// their lunch schedule for the new month, and reps to book their visits,
+// each with a link back into the app.
+router.post('/check-monthly-schedule-reminders', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const now = new Date();
+  if (now.getDate() !== 1) {
+    return res.json({ skipped: true, reason: 'Not the 1st of the month' });
+  }
+
+  try {
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthLabel = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    const appUrl = process.env.APP_URL;
+
+    const locations = await prisma.location.findMany({
+      where: { OR: [{ lastMonthlyReminderMonth: null }, { lastMonthlyReminderMonth: { not: monthKey } }] },
+      include: { staff: true },
+    });
+    let officeRemindersSent = 0;
+    for (const location of locations) {
+      for (const staff of location.staff) {
+        sendEmail({
+          to: staff.email,
+          subject: `Set up your ${monthLabel} lunch schedule on Arrowhead Access`,
+          html: `<p>A new month has started — now's a good time to set up your lunch schedule and open slots for <strong>${monthLabel}</strong> so reps know when they're welcome to visit.</p><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to post open slots or set up recurring lunches.</p>`,
+        }).catch(() => {});
+      }
+      await prisma.location.update({ where: { id: location.id }, data: { lastMonthlyReminderMonth: monthKey } });
+      officeRemindersSent++;
+    }
+
+    const reps = await prisma.rep.findMany({
+      where: {
+        OR: [{ lastMonthlyReminderMonth: null }, { lastMonthlyReminderMonth: { not: monthKey } }],
+        verificationStatus: 'VERIFIED',
+      },
+    });
+    let repRemindersSent = 0;
+    for (const rep of reps) {
+      sendEmail({
+        to: rep.email,
+        subject: `Book your ${monthLabel} visits on Arrowhead Access`,
+        html: `<p>A new month has started — now's a good time to book your visits for <strong>${monthLabel}</strong> before the best times get taken.</p><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to browse open slots and book now.</p>`,
+      }).catch(() => {});
+      await prisma.rep.update({ where: { id: rep.id }, data: { lastMonthlyReminderMonth: monthKey } });
+      repRemindersSent++;
+    }
+
+    res.json({ officeRemindersSent, repRemindersSent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check monthly schedule reminders' });
+  }
+});
+
 export default router;
