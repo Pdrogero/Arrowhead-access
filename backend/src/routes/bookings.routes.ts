@@ -7,7 +7,7 @@ import { requireAuth, requireRole, requireVerifiedRep } from '../auth/auth.guard
 import { assertOwnsLocation, assertOwnsRep } from '../auth/scoping';
 import { claimOpenSlot, requestNewSlot, decideBooking, BookingError } from '../booking/booking.service';
 import { PrismaClient } from '@prisma/client';
-import { sendEmail } from '../email';
+import { sendEmail, emailLogoHeader } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -696,7 +696,7 @@ router.post('/check-monthly-schedule-reminders', async (req, res) => {
         sendEmail({
           to: staff.email,
           subject: `Set up your ${monthLabel} lunch schedule on Arrowhead Access`,
-          html: `<p>A new month has started — now's a good time to set up your lunch schedule and open slots for <strong>${monthLabel}</strong> so reps know when they're welcome to visit.</p><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to post open slots or set up recurring lunches.</p>`,
+          html: `${emailLogoHeader()}<p>A new month has started — now's a good time to set up your lunch schedule and open slots for <strong>${monthLabel}</strong> so reps know when they're welcome to visit.</p><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to post open slots or set up recurring lunches.</p>`,
         }).catch(() => {});
       }
       await prisma.location.update({ where: { id: location.id }, data: { lastMonthlyReminderMonth: monthKey } });
@@ -714,7 +714,7 @@ router.post('/check-monthly-schedule-reminders', async (req, res) => {
       sendEmail({
         to: rep.email,
         subject: `Book your ${monthLabel} visits on Arrowhead Access`,
-        html: `<p>A new month has started — now's a good time to book your visits for <strong>${monthLabel}</strong> before the best times get taken.</p><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to browse open slots and book now.</p>`,
+        html: `${emailLogoHeader()}<p>A new month has started — now's a good time to book your visits for <strong>${monthLabel}</strong> before the best times get taken.</p><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to browse open slots and book now.</p>`,
       }).catch(() => {});
       await prisma.rep.update({ where: { id: rep.id }, data: { lastMonthlyReminderMonth: monthKey } });
       repRemindersSent++;
