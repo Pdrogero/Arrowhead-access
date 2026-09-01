@@ -469,11 +469,16 @@ function screenProfile() {
           <div id="addCompanyErr"></div>
           <button type="button" class="primary" style="margin-bottom:0;" onclick="createCompany()">Add this company</button>
         </div>
-        <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Specialties of interest</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <label style="font-size:13px;font-weight:600;">Specialties of interest</label>
+          <button type="button" id="specialtiesToggleBtn" onclick="toggleSpecialtiesCollapse()" style="background:none;border:none;color:var(--teal);font-size:12px;font-weight:600;cursor:pointer;padding:0;">▾ Collapse</button>
+        </div>
         <div id="specialtiesBox" style="border:1px solid var(--line);border-radius:8px;padding:12px;">
-          ${SPECIALTY_OPTIONS.map(s => `
-            <label style="display:flex;align-items:center;font-size:13px;margin-bottom:8px;"><input type="checkbox" class="specialty" value="${s}" style="margin-right:6px;"> ${s}</label>
-          `).join('')}
+          <div id="specialtiesListWrap" style="max-height:280px;overflow-y:auto;">
+            ${SPECIALTY_OPTIONS.map(s => `
+              <label style="display:flex;align-items:center;font-size:13px;margin-bottom:8px;"><input type="checkbox" class="specialty" value="${s}" style="margin-right:6px;"> ${s}</label>
+            `).join('')}
+          </div>
         </div>
         <button type="button" onclick="showAddSpecialty()" style="display:block;background:none;border:none;color:var(--teal);font-size:13px;font-weight:700;padding:0;margin:8px 0 0;cursor:pointer;">+ Specialty not listed?</button>
         <div id="addSpecialtyBox" style="display:none;margin-top:8px;">
@@ -2467,7 +2472,7 @@ function showAddCompany() {
 }
 
 function addSpecialtyCheckbox(name, checked) {
-  const box = document.getElementById('specialtiesBox');
+  const box = document.getElementById('specialtiesListWrap');
   const label = document.createElement('label');
   label.style.cssText = 'display:flex;align-items:center;font-size:13px;margin-bottom:8px;';
   const input = document.createElement('input');
@@ -2480,6 +2485,15 @@ function addSpecialtyCheckbox(name, checked) {
   label.appendChild(document.createTextNode(' ' + name));
   box.appendChild(label);
 }
+
+window.toggleSpecialtiesCollapse = function() {
+  const wrap = document.getElementById('specialtiesListWrap');
+  const btn = document.getElementById('specialtiesToggleBtn');
+  if (!wrap || !btn) return;
+  const collapsed = wrap.style.display === 'none';
+  wrap.style.display = collapsed ? '' : 'none';
+  btn.textContent = collapsed ? '▾ Collapse' : '▸ Expand';
+};
 
 window.showAddSpecialty = function() {
   document.getElementById('addSpecialtyBox').style.display = 'block';
