@@ -16,7 +16,7 @@ import { Router } from 'express';
 import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
-import { sendEmail } from '../email';
+import { sendEmail, emailLogoHeader } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -199,7 +199,7 @@ router.post('/check-renewals', async (req, res) => {
           await sendEmail({
             to: rep.email,
             subject: `Your ${cycleLabel} subscription renews ${r.label}`,
-            html: `<p>Your Arrowhead Access ${cycleLabel} subscription is set to renew on <strong>${dateStr}</strong>.</p>`,
+            html: `${emailLogoHeader()}<p>Your Arrowhead Access ${cycleLabel} subscription is set to renew on <strong>${dateStr}</strong>.</p>`,
           });
           await prisma.rep.update({ where: { id: rep.id }, data: { [r.field]: true } });
           remindersSent++;

@@ -6,7 +6,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireActiveSubscription } from '../auth/auth.guard';
-import { sendEmail } from '../email';
+import { sendEmail, emailLogoHeader } from '../email';
 import { findPhiSignal } from '../phiFilter';
 
 const prisma = new PrismaClient();
@@ -135,14 +135,14 @@ router.post('/', requireAuth, requireActiveSubscription, async (req, res) => {
           sendEmail({
             to: staff.email,
             subject: `New message from ${full.rep.name}`,
-            html: `<p><strong>${full.rep.name}</strong> (${full.rep.companyName}) sent you a message: "${body}"</p>`,
+            html: `${emailLogoHeader()}<p><strong>${full.rep.name}</strong> (${full.rep.companyName}) sent you a message: "${body}"</p>`,
           }).catch(() => {});
         });
       } else {
         sendEmail({
           to: full.rep.email,
           subject: `New message from ${full.location.name}`,
-          html: `<p><strong>${full.location.name}</strong> sent you a message: "${body}"</p>`,
+          html: `${emailLogoHeader()}<p><strong>${full.location.name}</strong> sent you a message: "${body}"</p>`,
         }).catch(() => {});
       }
     }
@@ -181,14 +181,14 @@ router.post('/check-unread-reminders', async (req, res) => {
           await sendEmail({
             to: staff.email,
             subject: `Reminder: unread message from ${conversation.rep.name}`,
-            html: `<p>You still have an unread message from <strong>${conversation.rep.name}</strong> (${conversation.rep.companyName}) sent over a day ago: "${message.body}"</p>`,
+            html: `${emailLogoHeader()}<p>You still have an unread message from <strong>${conversation.rep.name}</strong> (${conversation.rep.companyName}) sent over a day ago: "${message.body}"</p>`,
           }).catch(() => {});
         }
       } else {
         await sendEmail({
           to: conversation.rep.email,
           subject: `Reminder: unread message from ${conversation.location.name}`,
-          html: `<p>You still have an unread message from <strong>${conversation.location.name}</strong> sent over a day ago: "${message.body}"</p>`,
+          html: `${emailLogoHeader()}<p>You still have an unread message from <strong>${conversation.location.name}</strong> sent over a day ago: "${message.body}"</p>`,
         }).catch(() => {});
       }
       await prisma.message.update({ where: { id: message.id }, data: { reminderSent: true } });

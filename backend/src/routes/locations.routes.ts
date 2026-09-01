@@ -8,7 +8,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
-import { sendEmail } from '../email';
+import { sendEmail, emailLogoHeader } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -69,7 +69,7 @@ router.post('/', requireAuth, requireRole('office_admin'), async (req, res) => {
       sendEmail({
         to: managerEmail,
         subject: `You've been added as the contact for ${location.name} on Arrowhead Access`,
-        html: `<p>Hi,</p><p>${org?.name || 'Your organization'} added <strong>${location.name}</strong> (${location.address}) as a location on Arrowhead Access, the platform used to manage sales rep visit scheduling — and listed you as the contact for it.</p><p>If you need your own login to manage this location, reach out to your office administrator, or contact us at legal@arrowheadaccess.com.</p><p>— Arrowhead Access</p>`,
+        html: `${emailLogoHeader()}<p>Hi,</p><p>${org?.name || 'Your organization'} added <strong>${location.name}</strong> (${location.address}) as a location on Arrowhead Access, the platform used to manage sales rep visit scheduling — and listed you as the contact for it.</p><p>If you need your own login to manage this location, reach out to your office administrator, or contact us at legal@arrowheadaccess.com.</p>`,
       }).catch(() => {});
     }
 

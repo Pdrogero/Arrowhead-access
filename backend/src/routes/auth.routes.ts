@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { JwtPayload } from '../auth/auth.types';
-import { sendEmail } from '../email';
+import { sendEmail, emailLogoHeader } from '../email';
 import { requireAuth, requireRole } from '../auth/auth.guard';
 import { verifyTurnstile } from '../turnstile';
 
@@ -74,7 +74,7 @@ router.post('/rep/signup', async (req, res) => {
     sendEmail({
       to: rep.email,
       subject: 'Welcome to Arrowhead Access',
-      html: `<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p>${claimedTransfers.count ? `<p>You also have ${claimedTransfers.count} pending visit transfer${claimedTransfers.count > 1 ? 's' : ''} waiting for you under Transfers.</p>` : ''}<p>— Arrowhead Access</p>`,
+      html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p>${claimedTransfers.count ? `<p>You also have ${claimedTransfers.count} pending visit transfer${claimedTransfers.count > 1 ? 's' : ''} waiting for you under Transfers.</p>` : ''}`,
     }).catch(() => {});
 
     res.status(201).json({
@@ -256,7 +256,7 @@ router.post('/office/signup', async (req, res) => {
         sendEmail({
           to: m.rep.email,
           subject: `${result.location.name} just joined Arrowhead Access`,
-          html: `<p>Good news — <strong>${result.location.name}</strong>, the office you asked to be notified about, just joined Arrowhead Access. You can now find them and book a visit.</p>`,
+          html: `${emailLogoHeader()}<p>Good news — <strong>${result.location.name}</strong>, the office you asked to be notified about, just joined Arrowhead Access. You can now find them and book a visit.</p>`,
         }).catch(() => {});
       });
     }
@@ -271,7 +271,7 @@ router.post('/office/signup', async (req, res) => {
     sendEmail({
       to: result.staff.email,
       subject: 'Welcome to Arrowhead Access',
-      html: `<p>Hi,</p><p>Your Arrowhead Access office account for <strong>${result.location.name}</strong> is set up. You can now post open slots, review visit requests, and manage your office's availability for sales reps.</p><p>— Arrowhead Access</p>`,
+      html: `${emailLogoHeader()}<p>Hi,</p><p>Your Arrowhead Access office account for <strong>${result.location.name}</strong> is set up. You can now post open slots, review visit requests, and manage your office's availability for sales reps.</p>`,
     }).catch(() => {});
 
     res.status(201).json({
@@ -316,7 +316,7 @@ router.post('/forgot-password', async (req, res) => {
       await sendEmail({
         to: email,
         subject: 'Reset your Arrowhead Access password',
-        html: `<p>Someone requested a password reset for this account. Click below to choose a new password — this link expires in 30 minutes.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
+        html: `${emailLogoHeader()}<p>Someone requested a password reset for this account. Click below to choose a new password — this link expires in 30 minutes.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
       });
     }
 

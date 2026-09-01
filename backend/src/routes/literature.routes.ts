@@ -10,7 +10,7 @@ import { Router } from 'express';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole, requireActiveSubscription } from '../auth/auth.guard';
-import { sendEmail } from '../email';
+import { sendEmail, emailLogoHeader } from '../email';
 import { put } from '@vercel/blob';
 import multer from 'multer';
 
@@ -121,7 +121,7 @@ router.post('/', requireAuth, requireRole('rep'), requireActiveSubscription, asy
       sendEmail({
         to: staff.email,
         subject: `${item.rep.name} shared literature for you to review`,
-        html: `<p><strong>${item.rep.name}</strong> (${item.rep.companyName}) sent "${item.title}" for your review. Log in to accept or decline it.</p>`,
+        html: `${emailLogoHeader()}<p><strong>${item.rep.name}</strong> (${item.rep.companyName}) sent "${item.title}" for your review. Log in to accept or decline it.</p>`,
       }).catch(() => {});
     });
 
@@ -188,7 +188,7 @@ router.post('/:id/decide', requireAuth, requireRole('office_admin', 'office_staf
     sendEmail({
       to: item.rep.email,
       subject: decision === 'ACCEPTED' ? `Your literature was accepted` : `Your literature was declined`,
-      html: `<p>"${item.title}" was ${decision === 'ACCEPTED' ? 'accepted' : 'declined'}.</p>`,
+      html: `${emailLogoHeader()}<p>"${item.title}" was ${decision === 'ACCEPTED' ? 'accepted' : 'declined'}.</p>`,
     }).catch(() => {});
 
     res.json(updated);

@@ -222,7 +222,7 @@ router.post('/locations/:locationId/slots', requireAuth, requireRole('office_adm
       sendEmail({
         to: rep.email,
         subject: `New open slot at ${slot.location.name}`,
-        html: `<p><strong>${slot.location.name}</strong>, a location you've visited before, just posted a new open slot on ${dateStr}. Log in to claim it before someone else does.</p>`,
+        html: `${emailLogoHeader()}<p><strong>${slot.location.name}</strong>, a location you've visited before, just posted a new open slot on ${dateStr}. Log in to claim it before someone else does.</p>`,
       }).catch(() => {});
     }
   }
@@ -270,7 +270,7 @@ router.post('/:bookingId/decide', requireAuth, requireRole('office_admin', 'offi
       sendEmail({
         to: full.rep.email,
         subject: approved ? 'Your visit request was approved' : 'Your visit request was declined',
-        html: `<p>Your visit request at <strong>${full.slot.location.name}</strong> on ${dateStr} was ${approved ? 'approved' : 'declined'}.</p>`,
+        html: `${emailLogoHeader()}<p>Your visit request at <strong>${full.slot.location.name}</strong> on ${dateStr} was ${approved ? 'approved' : 'declined'}.</p>`,
       }).catch(() => {});
     }
 
@@ -324,7 +324,7 @@ router.post('/:bookingId/cancel', requireAuth, requireRole('office_admin', 'offi
     sendEmail({
       to: booking.rep.email,
       subject: `Your visit at ${booking.slot.location.name} on ${dateStr} was cancelled`,
-      html: `<p>Your visit at <strong>${booking.slot.location.name}</strong> on ${dateStr} has been cancelled by the office.</p><p><strong>Reason:</strong> ${reason}</p>${suggestionHtml}`,
+      html: `${emailLogoHeader()}<p>Your visit at <strong>${booking.slot.location.name}</strong> on ${dateStr} has been cancelled by the office.</p><p><strong>Reason:</strong> ${reason}</p>${suggestionHtml}`,
     }).catch(() => {});
 
     res.json(updatedBooking);
@@ -382,7 +382,7 @@ router.post('/:bookingId/cancel-by-rep', requireAuth, requireRole('rep'), async 
       sendEmail({
         to: s.email,
         subject: `${rep.name} cancelled their visit on ${dateStr}`,
-        html: `<p><strong>${rep.name}</strong> (${rep.companyName}) cancelled their visit at <strong>${booking.slot.location.name}</strong> on ${dateStr}.</p><p><strong>Reason:</strong> ${reason}</p>${suggestionHtml}`,
+        html: `${emailLogoHeader()}<p><strong>${rep.name}</strong> (${rep.companyName}) cancelled their visit at <strong>${booking.slot.location.name}</strong> on ${dateStr}.</p><p><strong>Reason:</strong> ${reason}</p>${suggestionHtml}`,
       }).catch(() => {});
     });
 
@@ -463,9 +463,9 @@ router.post('/:bookingId/reschedule/respond', requireAuth, requireRole('rep'), a
     const subject = decision === 'ACCEPTED'
       ? `${rep.name} accepted your suggested reschedule to ${newDateStr}`
       : `${rep.name} declined your suggested reschedule to ${newDateStr}`;
-    const html = decision === 'ACCEPTED'
+    const html = emailLogoHeader() + (decision === 'ACCEPTED'
       ? `<p><strong>${rep.name}</strong> (${rep.companyName}) accepted your suggested reschedule to <strong>${newDateStr}</strong> — it's now on the calendar as confirmed.</p>${message ? `<p>Their message: "${message}"</p>` : ''}`
-      : `<p><strong>${rep.name}</strong> (${rep.companyName}) declined your suggested reschedule to <strong>${newDateStr}</strong>.</p><p>Their message: "${message}"</p>`;
+      : `<p><strong>${rep.name}</strong> (${rep.companyName}) declined your suggested reschedule to <strong>${newDateStr}</strong>.</p><p>Their message: "${message}"</p>`);
     staff.forEach(s => {
       sendEmail({ to: s.email, subject, html }).catch(() => {});
     });
@@ -545,9 +545,9 @@ router.post('/:bookingId/reschedule/office-respond', requireAuth, requireRole('o
     const subject = decision === 'ACCEPTED'
       ? `${booking.slot.location.name} accepted your suggested reschedule to ${newDateStr}`
       : `${booking.slot.location.name} declined your suggested reschedule to ${newDateStr}`;
-    const html = decision === 'ACCEPTED'
+    const html = emailLogoHeader() + (decision === 'ACCEPTED'
       ? `<p><strong>${booking.slot.location.name}</strong> accepted your suggested reschedule to <strong>${newDateStr}</strong> — it's now on your calendar as confirmed.</p>${message ? `<p>Their message: "${message}"</p>` : ''}`
-      : `<p><strong>${booking.slot.location.name}</strong> declined your suggested reschedule to <strong>${newDateStr}</strong>.</p><p>Their message: "${message}"</p>`;
+      : `<p><strong>${booking.slot.location.name}</strong> declined your suggested reschedule to <strong>${newDateStr}</strong>.</p><p>Their message: "${message}"</p>`);
     sendEmail({ to: booking.rep.email, subject, html }).catch(() => {});
 
     res.json(updatedBooking);
@@ -645,7 +645,7 @@ router.post('/check-lunch-reminders', async (req, res) => {
         await sendEmail({
           to: booking.rep.email,
           subject: `Reminder: lunch at ${booking.slot.location.name} tomorrow`,
-          html: `<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> tomorrow, ${dateStr}.</p>`,
+          html: `${emailLogoHeader()}<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> tomorrow, ${dateStr}.</p>`,
         });
         await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminder1dSent: true } });
         remindersSent++;
@@ -653,7 +653,7 @@ router.post('/check-lunch-reminders', async (req, res) => {
         await sendEmail({
           to: booking.rep.email,
           subject: `Reminder: lunch at ${booking.slot.location.name} today`,
-          html: `<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> today, ${dateStr}.</p>`,
+          html: `${emailLogoHeader()}<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> today, ${dateStr}.</p>`,
         });
         await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminderDaySent: true } });
         remindersSent++;

@@ -6,7 +6,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
-import { sendEmail } from '../email';
+import { sendEmail, emailLogoHeader } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -58,14 +58,14 @@ router.post('/', requireAuth, requireRole('rep'), async (req, res) => {
       sendEmail({
         to: toRepEmail,
         subject: `${fromRep.name} wants to transfer a visit to you`,
-        html: `<p><strong>${fromRep.name}</strong> (${fromRep.companyName}) wants to transfer their visit at <strong>${transfer.booking.slot.location.name}</strong> on ${dateStr} to you. Log in to accept or decline it.</p>`,
+        html: `${emailLogoHeader()}<p><strong>${fromRep.name}</strong> (${fromRep.companyName}) wants to transfer their visit at <strong>${transfer.booking.slot.location.name}</strong> on ${dateStr} to you. Log in to accept or decline it.</p>`,
       }).catch(() => {});
     } else {
       const signupUrl = `${process.env.APP_URL}/app.html?transfer=1&email=${encodeURIComponent(toRepEmail)}`;
       sendEmail({
         to: toRepEmail,
         subject: `${fromRep.name} wants to transfer a visit to you on Arrowhead Access`,
-        html: `<p><strong>${fromRep.name}</strong> (${fromRep.companyName}) wants to transfer their visit at <strong>${transfer.booking.slot.location.name}</strong> on ${dateStr} to you on Arrowhead Access.</p><p>You don't have an account yet — <a href="${signupUrl}">sign up with this email address</a> to review and accept it.</p>`,
+        html: `${emailLogoHeader()}<p><strong>${fromRep.name}</strong> (${fromRep.companyName}) wants to transfer their visit at <strong>${transfer.booking.slot.location.name}</strong> on ${dateStr} to you on Arrowhead Access.</p><p>You don't have an account yet — <a href="${signupUrl}">sign up with this email address</a> to review and accept it.</p>`,
       }).catch(() => {});
     }
 
@@ -137,7 +137,7 @@ router.post('/:id/decide', requireAuth, requireRole('rep'), async (req, res) => 
       sendEmail({
         to: full.fromRep.email,
         subject: accepted ? `${full.toRep.name} accepted your transfer` : `${full.toRep.name} declined your transfer`,
-        html: `<p><strong>${full.toRep.name}</strong> ${accepted ? 'accepted' : 'declined'} the visit transfer for <strong>${full.booking.slot.location.name}</strong> on ${dateStr}.</p>`,
+        html: `${emailLogoHeader()}<p><strong>${full.toRep.name}</strong> ${accepted ? 'accepted' : 'declined'} the visit transfer for <strong>${full.booking.slot.location.name}</strong> on ${dateStr}.</p>`,
       }).catch(() => {});
     }
 
