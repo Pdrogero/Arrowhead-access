@@ -2952,7 +2952,7 @@ async function loadMyBookings() {
         <span class="chip ${b.status}">${b.status}</span>
         <div style="width:100%;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px;">
           <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
-          <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message</button>
+          <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message Office</button>
           ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openAttendance('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime)}')">📝 Attendance</button>` : ''}
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>` : ''}
@@ -2960,9 +2960,12 @@ async function loadMyBookings() {
           ${b.status === 'CONFIRMED' && !(repCancelDraft && repCancelDraft.bookingId === b.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelRepBooking('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🔄 Cancel/Reschedule</button>` : ''}
         </div>
         ${b.status === 'CONFIRMED' && b.slot.eventType === 'LUNCH' ? `
-          <div style="width:100%;display:flex;gap:8px;margin-top:8px;">
-            <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🍽️ Order via ezCater</button>
-            <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="orderCedarOlive('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🥙 Cedar & Olive</button>
+          <div style="width:100%;margin-top:8px;">
+            <p style="font-size:11.5px;font-weight:600;color:#B5651D;margin:0 0 6px;">Need help ordering food, try here!</p>
+            <div style="display:flex;gap:8px;">
+              <button style="flex:1;background:#FFF1DE;color:#B5651D;border:1px solid #F3D9B1;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:700;cursor:pointer;" onclick="orderLunch('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🍽️ Order via ezCater</button>
+              <button style="flex:1;background:#FFF1DE;color:#B5651D;border:1px solid #F3D9B1;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:700;cursor:pointer;" onclick="orderCedarOlive('${(b.slot.location.address || '').replace(/'/g, "\\'")}')">🥙 Cedar & Olive</button>
+            </div>
           </div>` : ''}
         ${repCancelDraft && repCancelDraft.bookingId === b.id ? cancelSuggestFormHtml((b.slot.location.name || '').replace(/'/g, "\\'"), 'finalizeCancelRepBooking') : ''}
         ${b.status === 'CANCELLED' && b.cancelledBy === 'OFFICE' && b.suggestedRescheduleAt && !b.rescheduleResponse ? `
@@ -2993,7 +2996,7 @@ async function loadRepHistory() {
         <div class="time">${fmtTime(b.slot.startTime)}</div>
         <div class="mid"><div class="who">${b.slot.location.name}</div><div style="margin-top:4px;">${eventTypeChipHtml(b.slot.eventType)}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count, 'office', b.slot.location.id, b.slot.location.name)}${lunchDetailsSummaryHtml(b.slot)}</div>
         <span class="chip ${b.status}">${b.status}</span>
-        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message</button>
+        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message Office</button>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>
       </div>`).join('');
   } catch (err) {
