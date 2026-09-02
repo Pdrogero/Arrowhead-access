@@ -164,6 +164,8 @@ let attendanceLocationName = '';
 let attendanceDateStr = '';
 let attendeeRows = [];
 let employeeRows = [];
+let officeLocationsData = [];
+let editingLocationId = null;
 let recurringTemplates = [];
 let viewedOfficeStaff = null;
 let viewedOfficeStaffName = '';
@@ -1587,19 +1589,65 @@ async function loadLocationsSettings() {
   const addBtn = document.querySelector('[onclick="showAddLocation()"]');
   if (addBtn) addBtn.style.display = isAdmin ? 'block' : 'none';
   try {
-    const locations = await api('/api/locations/mine');
-    box.innerHTML = locations.map(l => `
-      <div class="row">
-        <div class="mid">
-          <div class="who">${l.name}${l.id === state.me.locationId ? ' <span style="color:var(--teal);font-weight:600;">(current)</span>' : ''}</div>
-          <div class="what">${l.address}</div>
-          ${l.managerEmail ? `<div class="what" style="color:var(--slate);">Manager: ${l.managerEmail}</div>` : ''}
-        </div>
-      </div>`).join('');
+    officeLocationsData = await api('/api/locations/mine');
+    renderLocationsList();
   } catch (err) {
     box.innerHTML = `<div class="msg err">${err.message}</div>`;
   }
 }
+
+function renderLocationsList() {
+  const box = document.getElementById('locationsListBox');
+  if (!box) return;
+  box.innerHTML = officeLocationsData.map(l => {
+    const isCurrent = l.id === state.me.locationId;
+    if (l.id === editingLocationId) {
+      return `
+        <div class="row" style="flex-wrap:wrap;">
+          <div class="mid" style="width:100%;">
+            <input id="editLocationName" type="text" placeholder="Location name" value="${(l.name || '').replace(/"/g, '&quot;')}" style="margin-bottom:8px;">
+            <input id="editLocationAddress" type="text" placeholder="Address" value="${(l.address || '').replace(/"/g, '&quot;')}" style="margin-bottom:8px;">
+            <input id="editLocationPhone" type="tel" placeholder="Phone (optional, shown to reps)" value="${(l.phone || '').replace(/"/g, '&quot;')}" style="margin-bottom:8px;">
+            <div id="editLocationErr"></div>
+            <div style="display:flex;gap:8px;">
+              <button class="primary" style="margin-bottom:0;flex:1;" onclick="saveLocationEdit('${l.id}')">Save</button>
+              <button type="button" style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;" onclick="cancelEditLocation()">Cancel</button>
+            </div>
+          </div>
+        </div>`;
+    }
+    return `
+      <div class="row">
+        <div class="mid">
+          <div class="who">${l.name}${isCurrent ? ' <span style="color:var(--teal);font-weight:600;">(current)</span>' : ''}</div>
+          <div class="what">${l.address}</div>
+          ${l.phone ? `<div class="what" style="color:var(--slate);">Phone: ${l.phone}</div>` : ''}
+          ${l.managerEmail ? `<div class="what" style="color:var(--slate);">Manager: ${l.managerEmail}</div>` : ''}
+        </div>
+        ${isCurrent ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="editingLocationId='${l.id}';renderLocationsList()">✏️ Edit</button>` : ''}
+      </div>`;
+  }).join('');
+}
+
+window.cancelEditLocation = function() {
+  editingLocationId = null;
+  renderLocationsList();
+};
+
+window.saveLocationEdit = async function(locationId) {
+  const name = document.getElementById('editLocationName').value.trim();
+  const address = document.getElementById('editLocationAddress').value.trim();
+  const phone = document.getElementById('editLocationPhone').value.trim();
+  const errBox = document.getElementById('editLocationErr');
+  if (!name || !address) { errBox.innerHTML = '<div class="msg err">Name and address are required</div>'; return; }
+  try {
+    await api(`/api/locations/${locationId}`, { method: 'PATCH', body: JSON.stringify({ name, address, phone }) });
+    editingLocationId = null;
+    await loadLocationsSettings();
+  } catch (err) {
+    errBox.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+};
 
 window.showAddLocation = function() {
   document.getElementById('addLocationBox').style.display = 'block';
@@ -1679,7 +1727,8 @@ function screenOfficeDetail() {
           <h1 style="margin-bottom:0;">${o.name}</h1>
           ${favoriteStarHtml(o.id)}
         </div>
-        <p class="what" style="margin-bottom:8px;">${addressLinkHtml(o.address)}</p>
+        <p class="what" style="margin-bottom:4px;">${addressLinkHtml(o.address)}</p>
+        ${o.phone ? `<p class="what" style="margin-bottom:8px;"><a href="tel:${o.phone.replace(/[^\d+]/g, '')}" style="color:var(--teal);text-decoration:none;">📞 ${o.phone}</a></p>` : ''}
         <div id="officeDetailRatingBox" style="margin-bottom:16px;"></div>
 
         <iframe src="https://maps.google.com/maps?q=${encodeURIComponent(o.address)}&output=embed" style="width:100%;height:200px;border:0;border-radius:10px;margin-bottom:16px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>

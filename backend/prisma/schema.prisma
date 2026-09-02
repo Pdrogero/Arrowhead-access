@@ -123,6 +123,9 @@ model Location {
   // added on behalf of a different manager than the org's main admin login,
   // so that person gets notified a location was set up for them.
   managerEmail                String?
+  // Contact number shown to reps on the office detail screen — optional,
+  // since existing locations predate this field.
+  phone                       String?
   timezone                    String
   maxVisitsPerRepPerMonth     Int      @default(1)
   maxVisitsPerCompanyPerMonth Int      @default(2)

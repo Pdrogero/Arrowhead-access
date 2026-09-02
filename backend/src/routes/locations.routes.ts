@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
+import { assertOwnsLocation } from '../auth/scoping';
 import { sendEmail, emailLogoHeader } from '../email';
 
 const prisma = new PrismaClient();
@@ -32,13 +33,40 @@ router.get('/mine', requireAuth, requireRole('office_admin', 'office_staff'), as
 
     const locations = await prisma.location.findMany({
       where: { organizationId },
-      select: { id: true, name: true, address: true, managerEmail: true },
+      select: { id: true, name: true, address: true, phone: true, managerEmail: true },
       orderBy: { name: 'asc' },
     });
     res.json(locations);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not fetch locations' });
+  }
+});
+
+// --- Office staff: update the location their login is currently scoped ----
+// to (name, address, phone) — a multi-location office switches to another
+// location first (POST /api/auth/switch-location) to edit that one instead.
+router.patch('/:locationId', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    assertOwnsLocation(req, req.params.locationId);
+  } catch (err) {
+    return res.status(403).json({ error: (err as Error).message });
+  }
+
+  try {
+    const name = String(req.body.name || '').trim();
+    const address = String(req.body.address || '').trim();
+    const phone = String(req.body.phone || '').trim();
+    if (!name || !address) return res.status(400).json({ error: 'name and address are required' });
+
+    const location = await prisma.location.update({
+      where: { id: req.params.locationId },
+      data: { name, address, phone: phone || null },
+    });
+    res.json(location);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not update this location' });
   }
 });
 
@@ -161,6 +189,7 @@ router.get('/:locationId/detail', requireAuth, requireRole('rep'), async (req, r
       id: location.id,
       name: location.name,
       address: location.address,
+      phone: location.phone,
       policy: policy ? {
         confirmationDeadline: policy.confirmationDeadline,
         closedDays: policy.closedDays,
