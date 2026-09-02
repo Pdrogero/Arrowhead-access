@@ -138,6 +138,42 @@ router.delete('/:locationId/favorite', requireAuth, requireRole('rep'), async (r
   }
 });
 
+// --- Rep: a single office's detail — address (for a map), standing visit --
+// policy/notes, and this rep's own booking history at that office. Powers
+// the office-detail screen reached by tapping an office name anywhere.
+router.get('/:locationId/detail', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const location = await prisma.location.findUnique({ where: { id: req.params.locationId } });
+    if (!location) return res.status(404).json({ error: 'Office not found' });
+
+    const policy = await prisma.officePolicy.findUnique({ where: { locationId: location.id } });
+
+    const repId = req.user!.sub;
+    const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    const pastBookingStatuses = ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] as const;
+    const [totalBookings, bookingsPastYear, upcomingBookings] = await Promise.all([
+      prisma.booking.count({ where: { repId, status: { in: [...pastBookingStatuses] }, slot: { locationId: location.id } } }),
+      prisma.booking.count({ where: { repId, status: { in: [...pastBookingStatuses] }, slot: { locationId: location.id }, requestedAt: { gte: oneYearAgo } } }),
+      prisma.booking.count({ where: { repId, status: { in: ['CONFIRMED', 'REQUESTED'] }, slot: { locationId: location.id, startTime: { gte: new Date() } } } }),
+    ]);
+
+    res.json({
+      id: location.id,
+      name: location.name,
+      address: location.address,
+      policy: policy ? {
+        confirmationDeadline: policy.confirmationDeadline,
+        closedDays: policy.closedDays,
+        generalAllergyNotes: policy.generalAllergyNotes,
+      } : null,
+      myStats: { totalBookings, bookingsPastYear, upcomingBookings },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load office detail' });
+  }
+});
+
 // --- Rep: search all offices on the platform by name, regardless of ------
 // whether they currently have any open slots posted.
 router.get('/search', requireAuth, requireRole('rep'), async (req, res) => {
