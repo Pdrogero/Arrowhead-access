@@ -7,15 +7,20 @@
 // run and confirmed — it has no place in the app after go-live.
 
 import { Router } from 'express';
-import { runPreLaunchCleanup } from '../adminCleanup';
+import { runPreLaunchCleanup, lookupRepsByEmail, deleteRepById } from '../adminCleanup';
 
 const router = Router();
 
-router.get('/cleanup', async (req, res) => {
+function checkSecret(req: any, res: any): boolean {
   if (!process.env.CRON_SECRET || req.query.secret !== process.env.CRON_SECRET) {
-    return res.status(401).send('Unauthorized');
+    res.status(401).send('Unauthorized');
+    return false;
   }
+  return true;
+}
 
+router.get('/cleanup', async (req, res) => {
+  if (!checkSecret(req, res)) return;
   const confirm = req.query.confirm === '1';
   try {
     const output = await runPreLaunchCleanup(confirm);
@@ -23,6 +28,33 @@ router.get('/cleanup', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).type('text/plain').send(`Cleanup failed:\n${err}`);
+  }
+});
+
+router.get('/rep-lookup', async (req, res) => {
+  if (!checkSecret(req, res)) return;
+  const email = String(req.query.email || '');
+  if (!email) return res.status(400).type('text/plain').send('Missing ?email=');
+  try {
+    const output = await lookupRepsByEmail(email);
+    res.type('text/plain').send(output);
+  } catch (err) {
+    console.error(err);
+    res.status(500).type('text/plain').send(`Lookup failed:\n${err}`);
+  }
+});
+
+router.get('/delete-rep', async (req, res) => {
+  if (!checkSecret(req, res)) return;
+  const repId = String(req.query.repId || '');
+  if (!repId) return res.status(400).type('text/plain').send('Missing ?repId=');
+  const confirm = req.query.confirm === '1';
+  try {
+    const output = await deleteRepById(repId, confirm);
+    res.type('text/plain').send(output);
+  } catch (err) {
+    console.error(err);
+    res.status(500).type('text/plain').send(`Delete failed:\n${err}`);
   }
 });
 

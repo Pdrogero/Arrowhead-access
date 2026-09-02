@@ -119,3 +119,102 @@ export async function runPreLaunchCleanup(confirm: boolean): Promise<string> {
   }
   return out.join('\n');
 }
+
+// --- One-off: find every rep account matching an email case-insensitively -
+// (duplicate case-variant signups aren't possible going forward, but a few
+// predate that protection) so it's clear which row actually has activity
+// before picking one to delete with deleteRepById below.
+export async function lookupRepsByEmail(email: string): Promise<string> {
+  const out: string[] = [];
+  try {
+    const reps = await prisma.rep.findMany({ where: { email: { equals: email, mode: 'insensitive' } } });
+    if (!reps.length) {
+      out.push(`No rep account found matching "${email}".`);
+      return out.join('\n');
+    }
+    out.push(`${reps.length} rep account(s) match "${email}" (case-insensitive):\n`);
+    for (const rep of reps) {
+      const [bookingCount, conversationCount, literatureCount, transferCount] = await Promise.all([
+        prisma.booking.count({ where: { repId: rep.id } }),
+        prisma.conversation.count({ where: { repId: rep.id } }),
+        prisma.literatureItem.count({ where: { repId: rep.id } }),
+        prisma.bookingTransfer.count({ where: { OR: [{ fromRepId: rep.id }, { toRepId: rep.id }] } }),
+      ]);
+      out.push(`repId: ${rep.id}`);
+      out.push(`  email (as stored): ${rep.email}`);
+      out.push(`  name: ${rep.name}`);
+      out.push(`  created: ${rep.createdAt.toISOString().slice(0, 10)}`);
+      out.push(`  verificationStatus: ${rep.verificationStatus}  isFoundingRep: ${rep.isFoundingRep}`);
+      out.push(`  subscriptionStatus: ${rep.subscriptionStatus}  stripeCustomerId: ${rep.stripeCustomerId || '(none)'}`);
+      out.push(`  bookings: ${bookingCount}  conversations: ${conversationCount}  literature items: ${literatureCount}  transfers: ${transferCount}`);
+      out.push('');
+    }
+    out.push('Pass the repId of the one you want to REMOVE to /api/admin/delete-rep?repId=...');
+  } finally {
+    await prisma.$disconnect();
+  }
+  return out.join('\n');
+}
+
+// --- One-off: fully delete a single rep account and everything it owns ----
+// (bookings, transfers it sent/received, conversations+messages,
+// literature, verification requests) — used to clear out a stray
+// duplicate account. SAFE BY DEFAULT: confirm=false only reports what
+// would be deleted.
+export async function deleteRepById(repId: string, confirm: boolean): Promise<string> {
+  const out: string[] = [];
+  try {
+    const rep = await prisma.rep.findUnique({ where: { id: repId } });
+    if (!rep) {
+      out.push(`No rep found with id "${repId}".`);
+      return out.join('\n');
+    }
+
+    const bookings = await prisma.booking.findMany({ where: { repId }, select: { id: true, slotId: true } });
+    const bookingIds = bookings.map(b => b.id);
+    const slotIds = bookings.map(b => b.slotId);
+    const conversations = await prisma.conversation.findMany({ where: { repId }, select: { id: true } });
+    const conversationIds = conversations.map(c => c.id);
+
+    const [transferCount, messageCount, reviewCount, attendeeCount, literatureCount, verificationRequestCount] = await Promise.all([
+      prisma.bookingTransfer.count({ where: { OR: [{ fromRepId: repId }, { toRepId: repId }] } }),
+      prisma.message.count({ where: { conversationId: { in: conversationIds } } }),
+      prisma.visitReview.count({ where: { bookingId: { in: bookingIds } } }),
+      prisma.visitAttendee.count({ where: { bookingId: { in: bookingIds } } }),
+      prisma.literatureItem.count({ where: { repId } }),
+      prisma.verificationRequest.count({ where: { repId } }),
+    ]);
+
+    out.push(`Rep found: "${rep.name}" <${rep.email}> (${repId}), created ${rep.createdAt.toISOString().slice(0, 10)}`);
+    out.push('Will delete:');
+    out.push(`  ${bookingIds.length} bookings, ${reviewCount} reviews, ${attendeeCount} attendees, ${transferCount} transfers (sent or received)`);
+    out.push(`  ${conversationIds.length} conversations, ${messageCount} messages`);
+    out.push(`  ${literatureCount} literature items, ${verificationRequestCount} verification requests`);
+    out.push('  Plus this rep\'s saved marketing materials and office-interest requests (cascade automatically).');
+
+    if (!confirm) {
+      out.push('  (dry run — pass confirm=1 to actually delete)');
+      return out.join('\n');
+    }
+
+    await prisma.$transaction([
+      prisma.message.deleteMany({ where: { conversationId: { in: conversationIds } } }),
+      prisma.visitReview.deleteMany({ where: { bookingId: { in: bookingIds } } }),
+      prisma.visitAttendee.deleteMany({ where: { bookingId: { in: bookingIds } } }),
+      prisma.bookingTransfer.deleteMany({ where: { OR: [{ fromRepId: repId }, { toRepId: repId }] } }),
+      prisma.booking.deleteMany({ where: { id: { in: bookingIds } } }),
+      // Reopen the slots those bookings held so they don't sit orphaned
+      // showing CONFIRMED/REQUESTED with no booking behind them.
+      prisma.slot.updateMany({ where: { id: { in: slotIds } }, data: { status: 'OPEN' } }),
+      prisma.conversation.deleteMany({ where: { id: { in: conversationIds } } }),
+      prisma.literatureItem.deleteMany({ where: { repId } }), // attachments cascade automatically
+      prisma.verificationRequest.deleteMany({ where: { repId } }),
+      prisma.rep.delete({ where: { id: repId } }), // marketing materials + office-interest requests cascade
+    ]);
+
+    out.push('  Done — rep account deleted.');
+  } finally {
+    await prisma.$disconnect();
+  }
+  return out.join('\n');
+}
