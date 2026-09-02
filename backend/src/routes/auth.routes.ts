@@ -267,6 +267,21 @@ router.post('/office/signup', async (req, res) => {
       });
     }
 
+    // Every other rep also hears about it — just with generic copy instead
+    // of "the office you asked about", since they didn't specifically ask.
+    const matchedRepIds = new Set(matches.map(m => m.rep.id));
+    const otherReps = await prisma.rep.findMany({
+      where: { id: { notIn: [...matchedRepIds] } },
+      select: { email: true },
+    });
+    otherReps.forEach(rep => {
+      sendEmail({
+        to: rep.email,
+        subject: `${result.location.name} just joined Arrowhead Access`,
+        html: `${emailLogoHeader()}<p><strong>${result.location.name}</strong> just joined Arrowhead Access. Log in to check out their open slots and book a visit.</p>`,
+      }).catch(() => {});
+    });
+
     const token = signToken({
       sub: result.staff.id,
       role: 'office_admin',
