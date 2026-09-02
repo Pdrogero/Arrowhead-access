@@ -81,7 +81,13 @@ router.post('/rep/signup', async (req, res) => {
       token,
       rep: { id: rep.id, name: rep.name, email: rep.email, verificationStatus: rep.verificationStatus },
     });
-  } catch (err) {
+  } catch (err: any) {
+    // The pre-check above can't catch two signups for the same email
+    // landing at the same instant — the database's own unique constraint
+    // on email (Prisma error P2002) is the real backstop for that race.
+    if (err?.code === 'P2002') {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
     console.error(err);
     res.status(500).json({ error: 'Unexpected server error during signup' });
   }
@@ -283,7 +289,11 @@ router.post('/office/signup', async (req, res) => {
         locationId: result.location.id,
       },
     });
-  } catch (err) {
+  } catch (err: any) {
+    // Same race-condition backstop as rep signup above.
+    if (err?.code === 'P2002') {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
     console.error(err);
     res.status(500).json({ error: 'Unexpected server error during office signup' });
   }
