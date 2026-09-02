@@ -300,6 +300,10 @@ model OfficeInterestRequest {
   repId      String
   rep        Rep      @relation(fields: [repId], references: [id], onDelete: Cascade)
   officeName String
+  // Filled in when the rep picked a suggestion from the address-lookup
+  // autocomplete instead of just typing a bare name — gives whoever
+  // follows up on this request a real address to go on.
+  address    String?
   notified   Boolean  @default(false)
   createdAt  DateTime @default(now())
 

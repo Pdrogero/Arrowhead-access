@@ -110,15 +110,50 @@ router.get('/search', requireAuth, requireRole('rep'), async (req, res) => {
 router.post('/notify-me', requireAuth, requireRole('rep'), async (req, res) => {
   try {
     const officeName = String(req.body.officeName || '').trim();
+    const address = String(req.body.address || '').trim();
     if (!officeName) return res.status(400).json({ error: 'officeName is required' });
 
     const request = await prisma.officeInterestRequest.create({
-      data: { repId: req.user!.sub, officeName },
+      data: { repId: req.user!.sub, officeName, address: address || null },
     });
     res.status(201).json(request);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not save notify request' });
+  }
+});
+
+// --- Rep: real-world business/address lookup, used to help fill in the ---
+// notify-me name+address when an office isn't on the platform yet. Proxies
+// OpenStreetMap's free Nominatim geocoder (no API key needed) — proxied
+// server-side rather than called from the browser so we can set the
+// identifying User-Agent their usage policy requires, and so a hiccup on
+// their end never surfaces raw third-party errors to the rep.
+router.get('/geo-search', requireAuth, requireRole('rep'), async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 3) return res.json([]);
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`;
+    const geoRes = await fetch(url, {
+      headers: { 'User-Agent': 'ArrowheadAccess/1.0 (legal@arrowheadaccess.com)' },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!geoRes.ok) return res.json([]);
+
+    const results = (await geoRes.json()) as Array<{ name?: string; display_name?: string }>;
+    const suggestions = results
+      .map(r => ({
+        name: r.name || (r.display_name || '').split(',')[0].trim(),
+        address: r.display_name || '',
+      }))
+      .filter(s => s.name && s.address);
+
+    res.json(suggestions);
+  } catch (err) {
+    // Best-effort only — never let a geocoding hiccup block the notify-me
+    // flow, the rep can still just type the name in by hand.
+    res.json([]);
   }
 });
 

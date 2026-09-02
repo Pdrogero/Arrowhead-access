@@ -1000,11 +1000,16 @@ async function loadOfficeSearchFallback(query) {
     } else {
       box.innerHTML = `
         <div style="margin-top:8px;"><strong>${query.replace(/</g, '&lt;')}</strong> isn't on Arrowhead Access yet.</div>
+        <div style="position:relative;margin-top:8px;">
+          <input type="text" id="notifyMeNameInput" placeholder="Office name" autocomplete="off" value="${query.replace(/"/g, '&quot;')}" oninput="filterNotifyMeGeoSuggestions(this.value)" onblur="setTimeout(hideNotifyMeGeoSuggestions, 150)" style="margin-bottom:0;width:100%;">
+          <div id="notifyMeGeoSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.08);max-height:220px;overflow-y:auto;"></div>
+        </div>
+        <input type="text" id="notifyMeAddressInput" placeholder="Address (optional — pick a suggestion above to fill this in)" autocomplete="off" style="margin-top:6px;">
         <label style="display:flex;align-items:center;margin-top:8px;">
           <input type="checkbox" id="notifyMeCheckbox" style="margin-right:8px;">
           Notify me when they join
         </label>
-        <button class="primary" style="margin-top:8px;width:auto;padding:8px 16px;" onclick="submitNotifyMe('${query.replace(/'/g, "\\'")}')">Save</button>
+        <button class="primary" style="margin-top:8px;width:auto;padding:8px 16px;" onclick="submitNotifyMe()">Save</button>
         <div id="notifyMeStatus" style="margin-top:6px;"></div>`;
     }
   } catch (err) {
@@ -1012,12 +1017,57 @@ async function loadOfficeSearchFallback(query) {
   }
 }
 
-window.submitNotifyMe = async function(officeName) {
+let notifyMeGeoDebounceTimer = null;
+
+window.filterNotifyMeGeoSuggestions = function(value) {
+  clearTimeout(notifyMeGeoDebounceTimer);
+  const query = value.trim();
+  if (query.length < 3) { window.hideNotifyMeGeoSuggestions(); return; }
+  notifyMeGeoDebounceTimer = setTimeout(() => loadNotifyMeGeoSuggestions(query), 400);
+};
+
+async function loadNotifyMeGeoSuggestions(query) {
+  try {
+    const results = await api('/api/locations/geo-search?q=' + encodeURIComponent(query));
+    // Ignore a stale response if the rep kept typing after this request went out.
+    if (document.getElementById('notifyMeNameInput')?.value.trim() !== query) return;
+    const box = document.getElementById('notifyMeGeoSuggestions');
+    if (!box) return;
+    if (!results.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = results.map(r => `
+      <button type="button" onmousedown="selectNotifyMeGeoSuggestion('${r.name.replace(/'/g, "\\'")}', '${r.address.replace(/'/g, "\\'")}')" style="display:block;width:100%;text-align:left;background:none;border:none;padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--line);">
+        <div style="font-weight:600;">${r.name}</div>
+        <div style="font-size:11px;color:var(--slate);">${r.address}</div>
+      </button>
+    `).join('');
+    box.style.display = 'block';
+  } catch (err) {
+    window.hideNotifyMeGeoSuggestions();
+  }
+}
+
+window.hideNotifyMeGeoSuggestions = function() {
+  const box = document.getElementById('notifyMeGeoSuggestions');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+};
+
+window.selectNotifyMeGeoSuggestion = function(name, address) {
+  const nameInput = document.getElementById('notifyMeNameInput');
+  const addressInput = document.getElementById('notifyMeAddressInput');
+  if (nameInput) nameInput.value = name;
+  if (addressInput) addressInput.value = address;
+  window.hideNotifyMeGeoSuggestions();
+};
+
+window.submitNotifyMe = async function() {
   const checkbox = document.getElementById('notifyMeCheckbox');
   const status = document.getElementById('notifyMeStatus');
+  const officeName = document.getElementById('notifyMeNameInput').value.trim();
+  const address = document.getElementById('notifyMeAddressInput').value.trim();
+  if (!officeName) { status.innerHTML = '<span style="color:#C23C3C;">Enter the office name first.</span>'; return; }
   if (!checkbox.checked) { status.innerHTML = '<span style="color:#C23C3C;">Check the box first.</span>'; return; }
   try {
-    await api('/api/locations/notify-me', { method: 'POST', body: JSON.stringify({ officeName }) });
+    await api('/api/locations/notify-me', { method: 'POST', body: JSON.stringify({ officeName, address }) });
     status.innerHTML = '<span style="color:var(--teal-dark);">✓ We\'ll email you when they join.</span>';
   } catch (err) {
     status.innerHTML = `<span style="color:#C23C3C;">${err.message}</span>`;
