@@ -110,6 +110,7 @@ router.get('/rep', requireAuth, requireRole('rep'), async (req, res) => {
     const rep = await prisma.rep.findUnique({
       where: { id: req.user!.sub },
       select: {
+        id: true,
         name: true,
         email: true,
         title: true,
@@ -123,6 +124,7 @@ router.get('/rep', requireAuth, requireRole('rep'), async (req, res) => {
         specialties: true,
         manufacturerCompanyId: true,
         profileImageUrl: true,
+        verificationStatus: true,
         products: { select: { id: true, name: true } },
       },
     });
