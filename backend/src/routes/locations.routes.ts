@@ -248,28 +248,35 @@ router.post('/notify-me', requireAuth, requireRole('rep'), async (req, res) => {
 
 // --- Rep: real-world business/address lookup, used to help fill in the ---
 // notify-me name+address when an office isn't on the platform yet. Proxies
-// Google's Places Autocomplete API — chosen over the free OpenStreetMap
-// option after it failed to find small private practices (e.g. "Superior
-// Podiatry") that Google's business index does have. Proxied server-side
-// so the API key never reaches the browser, and so a hiccup on Google's
-// end never surfaces a raw third-party error to the rep.
+// Google's Places API (New) Autocomplete — chosen over the free
+// OpenStreetMap option after it failed to find small private practices
+// (e.g. "Superior Podiatry") that Google's business index does have.
+// Proxied server-side so the API key never reaches the browser, and so a
+// hiccup on Google's end never surfaces a raw third-party error to the rep.
 router.get('/geo-search', requireAuth, requireRole('rep'), async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 3) return res.json([]);
   if (!process.env.GOOGLE_PLACES_API_KEY) return res.json([]);
 
   try {
-    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}&types=establishment&key=${process.env.GOOGLE_PLACES_API_KEY}`;
-    const geoRes = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    const geoRes = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY,
+      },
+      body: JSON.stringify({ input: q }),
+      signal: AbortSignal.timeout(4000),
+    });
     if (!geoRes.ok) return res.json([]);
 
     const data = (await geoRes.json()) as {
-      predictions?: Array<{ structured_formatting?: { main_text?: string; secondary_text?: string } }>;
+      suggestions?: Array<{ placePrediction?: { structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } } } }>;
     };
-    const suggestions = (data.predictions || [])
-      .map(p => ({
-        name: p.structured_formatting?.main_text || '',
-        address: p.structured_formatting?.secondary_text || '',
+    const suggestions = (data.suggestions || [])
+      .map(s => ({
+        name: s.placePrediction?.structuredFormat?.mainText?.text || '',
+        address: s.placePrediction?.structuredFormat?.secondaryText?.text || '',
       }))
       .filter(s => s.name && s.address)
       .slice(0, 5);
