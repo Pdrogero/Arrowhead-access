@@ -80,6 +80,64 @@ router.post('/', requireAuth, requireRole('office_admin'), async (req, res) => {
   }
 });
 
+// --- Rep: their saved shortlist of favorite offices, shown on profile -----
+router.get('/favorites', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const favorites = await prisma.favoriteLocation.findMany({
+      where: { repId: req.user!.sub },
+      include: {
+        location: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            _count: { select: { slots: { where: { status: 'OPEN', startTime: { gte: new Date() } } } } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(favorites.map(f => ({
+      id: f.location.id,
+      name: f.location.name,
+      address: f.location.address,
+      openSlotCount: f.location._count.slots,
+    })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load favorite offices' });
+  }
+});
+
+router.post('/:locationId/favorite', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const location = await prisma.location.findUnique({ where: { id: req.params.locationId } });
+    if (!location) return res.status(404).json({ error: 'Office not found' });
+
+    await prisma.favoriteLocation.upsert({
+      where: { repId_locationId: { repId: req.user!.sub, locationId: req.params.locationId } },
+      create: { repId: req.user!.sub, locationId: req.params.locationId },
+      update: {},
+    });
+    res.status(201).json({ favorited: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not favorite this office' });
+  }
+});
+
+router.delete('/:locationId/favorite', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    await prisma.favoriteLocation.deleteMany({
+      where: { repId: req.user!.sub, locationId: req.params.locationId },
+    });
+    res.json({ favorited: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not unfavorite this office' });
+  }
+});
+
 // --- Rep: search all offices on the platform by name, regardless of ------
 // whether they currently have any open slots posted.
 router.get('/search', requireAuth, requireRole('rep'), async (req, res) => {

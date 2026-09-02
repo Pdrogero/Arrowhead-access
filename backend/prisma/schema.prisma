@@ -138,6 +138,22 @@ model Location {
   employees OfficeEmployee[]
   conversations Conversation[]
   literatureItems LiteratureItem[]
+  favoritedBy FavoriteLocation[]
+}
+
+// A rep's saved shortlist of offices they like, shown on their profile —
+// separate from booking history, since they may want to favorite an office
+// before ever booking there.
+model FavoriteLocation {
+  id         String   @id @default(cuid())
+  repId      String
+  rep        Rep      @relation(fields: [repId], references: [id], onDelete: Cascade)
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([repId, locationId])
+  @@index([repId])
 }
 
 // A simple staff directory the office maintains, visible to reps who've
@@ -291,6 +307,7 @@ model Rep {
   literatureItems      LiteratureItem[]
   marketingMaterials   RepMarketingMaterial[]
   officeInterestRequests OfficeInterestRequest[]
+  favoriteLocations    FavoriteLocation[]
 }
 
 // A rep searched for an office that isn't on Arrowhead Access yet (or has
