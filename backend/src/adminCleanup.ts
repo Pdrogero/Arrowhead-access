@@ -1,8 +1,10 @@
 // src/adminCleanup.ts
 // Shared logic for the one-off pre-launch cleanup: removes the demo office
-// (Meridian Family Practice) and everything hanging off it, and resets
-// isFoundingRep back to false on every existing rep account so testing/dev
-// signups don't eat into the real 30-spot founding-rep pool.
+// organization (Meridian Family Practice) — every Location under it, not
+// just the original seeded one, since testing added at least one more via
+// the location-switcher feature — and everything hanging off them, and
+// resets isFoundingRep back to false on every existing rep account so
+// testing/dev signups don't eat into the real 30-spot founding-rep pool.
 //
 // Used by both scripts/pre-launch-cleanup.ts (run from a shell) and the
 // temporary /api/admin/cleanup route (for environments with no shell access).
@@ -11,41 +13,41 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const DEMO_LOCATION_ID = 'demo-office-location';
 const DEMO_ORG_ID = 'demo-office-org';
 const DEMO_DOMAIN = 'meridianpharma.com';
 
 async function cleanupDemoOffice(confirm: boolean, out: string[]) {
-  const location = await prisma.location.findUnique({ where: { id: DEMO_LOCATION_ID } });
-  if (!location) {
-    out.push('No demo office found (id "demo-office-location") — nothing to delete, already cleaned up.\n');
+  const locations = await prisma.location.findMany({ where: { organizationId: DEMO_ORG_ID } });
+  if (!locations.length) {
+    out.push('No demo office locations found under org "demo-office-org" — nothing to delete, already cleaned up.\n');
     return;
   }
 
-  const slots = await prisma.slot.findMany({ where: { locationId: DEMO_LOCATION_ID }, select: { id: true } });
+  const locationIds = locations.map(l => l.id);
+  const slots = await prisma.slot.findMany({ where: { locationId: { in: locationIds } }, select: { id: true } });
   const slotIds = slots.map(s => s.id);
   const bookings = await prisma.booking.findMany({ where: { slotId: { in: slotIds } }, select: { id: true } });
   const bookingIds = bookings.map(b => b.id);
-  const conversations = await prisma.conversation.findMany({ where: { locationId: DEMO_LOCATION_ID }, select: { id: true } });
+  const conversations = await prisma.conversation.findMany({ where: { locationId: { in: locationIds } }, select: { id: true } });
   const conversationIds = conversations.map(c => c.id);
 
   const [literatureCount, employeeCount, staffCount, templateCount, messageCount, reviewCount, attendeeCount, transferCount] = await Promise.all([
-    prisma.literatureItem.count({ where: { locationId: DEMO_LOCATION_ID } }),
-    prisma.officeEmployee.count({ where: { locationId: DEMO_LOCATION_ID } }),
-    prisma.staffUser.count({ where: { locationId: DEMO_LOCATION_ID } }),
-    prisma.recurringSlotTemplate.count({ where: { locationId: DEMO_LOCATION_ID } }),
+    prisma.literatureItem.count({ where: { locationId: { in: locationIds } } }),
+    prisma.officeEmployee.count({ where: { locationId: { in: locationIds } } }),
+    prisma.staffUser.count({ where: { locationId: { in: locationIds } } }),
+    prisma.recurringSlotTemplate.count({ where: { locationId: { in: locationIds } } }),
     prisma.message.count({ where: { conversationId: { in: conversationIds } } }),
     prisma.visitReview.count({ where: { bookingId: { in: bookingIds } } }),
     prisma.visitAttendee.count({ where: { bookingId: { in: bookingIds } } }),
     prisma.bookingTransfer.count({ where: { bookingId: { in: bookingIds } } }),
   ]);
 
-  out.push(`Demo office found: "${location.name}" (${DEMO_LOCATION_ID})`);
+  out.push(`Demo office org found: ${locations.length} location(s) — ${locations.map(l => `"${l.name}" (${l.id})`).join(', ')}`);
   out.push('Will delete:');
   out.push(`  ${slotIds.length} slots, ${bookingIds.length} bookings, ${reviewCount} reviews, ${attendeeCount} attendees, ${transferCount} transfers`);
   out.push(`  ${conversationIds.length} conversations, ${messageCount} messages`);
   out.push(`  ${literatureCount} literature items, ${employeeCount} staff-directory entries, ${templateCount} recurring templates`);
-  out.push(`  ${staffCount} staff login(s), the Location, the Organization, and the "${DEMO_DOMAIN}" known-manufacturer-domain entry`);
+  out.push(`  ${staffCount} staff login(s), all ${locations.length} Location(s), the Organization, and the "${DEMO_DOMAIN}" known-manufacturer-domain entry`);
 
   const [orgRepCount, orgSubCount] = await Promise.all([
     prisma.rep.count({ where: { organizationId: DEMO_ORG_ID } }),
@@ -68,13 +70,13 @@ async function cleanupDemoOffice(confirm: boolean, out: string[]) {
     prisma.bookingTransfer.deleteMany({ where: { bookingId: { in: bookingIds } } }),
     prisma.booking.deleteMany({ where: { id: { in: bookingIds } } }),
     prisma.conversation.deleteMany({ where: { id: { in: conversationIds } } }),
-    prisma.literatureItem.deleteMany({ where: { locationId: DEMO_LOCATION_ID } }), // attachments cascade automatically
-    prisma.slot.deleteMany({ where: { locationId: DEMO_LOCATION_ID } }),
-    prisma.officeEmployee.deleteMany({ where: { locationId: DEMO_LOCATION_ID } }),
-    prisma.officePolicy.deleteMany({ where: { locationId: DEMO_LOCATION_ID } }),
-    prisma.recurringSlotTemplate.deleteMany({ where: { locationId: DEMO_LOCATION_ID } }),
-    prisma.staffUser.deleteMany({ where: { locationId: DEMO_LOCATION_ID } }),
-    prisma.location.delete({ where: { id: DEMO_LOCATION_ID } }),
+    prisma.literatureItem.deleteMany({ where: { locationId: { in: locationIds } } }), // attachments cascade automatically
+    prisma.slot.deleteMany({ where: { locationId: { in: locationIds } } }),
+    prisma.officeEmployee.deleteMany({ where: { locationId: { in: locationIds } } }),
+    prisma.officePolicy.deleteMany({ where: { locationId: { in: locationIds } } }),
+    prisma.recurringSlotTemplate.deleteMany({ where: { locationId: { in: locationIds } } }),
+    prisma.staffUser.deleteMany({ where: { locationId: { in: locationIds } } }),
+    prisma.location.deleteMany({ where: { id: { in: locationIds } } }),
     ...(orgIsSafeToDelete ? [prisma.organization.deleteMany({ where: { id: DEMO_ORG_ID } })] : []),
   ]);
   await prisma.knownManufacturerDomain.deleteMany({ where: { domain: DEMO_DOMAIN } });
