@@ -3209,7 +3209,9 @@ window.openOfficeCalendar = function() {
 // dispatch table to avoid a fetch/render/fetch loop.
 async function loadOfficeCalendarBookings() {
   try {
-    officeCalendarSlots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
+    // scope=all — the calendar's month-back navigation needs full history,
+    // unlike the dashboard ledger which defaults to today onward.
+    officeCalendarSlots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger?scope=all');
     render();
   } catch (err) {}
 }

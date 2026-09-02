@@ -166,8 +166,20 @@ router.get('/locations/:locationId/ledger', requireAuth, requireRole('office_adm
   } catch (err) {
     return res.status(403).json({ error: (err as Error).message });
   }
+  // Defaults to today onward so the office lands on what's current instead
+  // of scrolling past months of old entries — past visits still live under
+  // Visit History. A still-pending request always shows regardless of its
+  // slot's date, so nothing waiting on a decision quietly falls off the
+  // list. The office calendar's month-back navigation needs full history
+  // though, so it passes ?scope=all to opt out of this filter.
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
   const slots = await prisma.slot.findMany({
-    where: { locationId: req.params.locationId },
+    where: {
+      locationId: req.params.locationId,
+      ...(req.query.scope === 'all' ? {} : { OR: [{ startTime: { gte: todayStart } }, { status: 'REQUESTED' }] }),
+    },
     include: { booking: { include: { rep: true } } },
     orderBy: { startTime: 'asc' },
   });
