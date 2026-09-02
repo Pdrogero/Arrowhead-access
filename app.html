@@ -138,6 +138,11 @@ const SPECIALTY_OPTIONS = ['PCP','Wound Care Specialists','Podiatry','Vascular S
 let calendarMonth = new Date();
 let calendarBookings = [];
 let calendarSelectedDay = null;
+let calendarSearchQuery = '';
+// Set by clicking a past visit in the calendar to jump straight into Visit
+// History pre-filtered to that office, instead of leaving the rep to
+// re-search for it. screenVisitHistory() reads and clears this on render.
+let visitHistorySearchPrefill = '';
 let officeCalendarMonth = new Date();
 let officeCalendarSlots = [];
 let officeCalendarSelectedDay = null;
@@ -1112,6 +1117,15 @@ function screenCalendar() {
   }
 
   const dayBookings = calendarSelectedDay ? (bookingsByDay[calendarSelectedDay] || []) : [];
+  const now = new Date();
+
+  const query = calendarSearchQuery.trim().toLowerCase();
+  const searchMatches = query
+    ? calendarBookings
+        .filter(b => (b.slot.location.name || '').toLowerCase().includes(query))
+        .sort((a, b) => new Date(b.slot.startTime) - new Date(a.slot.startTime))
+        .slice(0, 25)
+    : [];
 
   return `
     <div class="wrap wide">
@@ -1121,7 +1135,17 @@ function screenCalendar() {
         <h1 style="margin:0;">${monthLabel}</h1>
         <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeCalendarMonth(1)">›</button>
       </div>
-      <p class="sub">Tap a day to see what's scheduled.</p>
+      <p class="sub">Tap a day to see what's scheduled, or search for an office below.</p>
+      <input id="calendarSearchInput" type="text" placeholder="🔍 Search by office name…" value="${calendarSearchQuery.replace(/"/g, '&quot;')}" oninput="filterCalendarSearch(this.value)" style="width:100%;margin-bottom:${searchMatches.length || query ? '8px' : '14px'};">
+      ${query ? `
+        <div class="listcard" style="margin-bottom:14px;">
+          ${searchMatches.length ? searchMatches.map(b => `
+            <div class="row" style="cursor:pointer;" onclick="jumpToCalendarBooking('${b.slot.startTime}')">
+              <div class="time">${fmtTime(b.slot.startTime)}</div>
+              <div class="mid"><div class="who">${b.slot.location.name}</div></div>
+              <span class="chip ${b.status}">${b.status}</span>
+            </div>`).join('') : '<div class="empty">No bookings match that search.</div>'}
+        </div>` : ''}
       <button class="link" style="text-align:left;margin-bottom:14px;" onclick="toggleCalendarSync()">🔗 Sync with Apple/Google Calendar</button>
       <div id="calendarSyncBox"></div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;">
@@ -1131,12 +1155,15 @@ function screenCalendar() {
       ${calendarSelectedDay ? `
         <p style="font-size:13px;font-weight:600;margin-bottom:8px;">${monthLabel.split(' ')[0]} ${calendarSelectedDay}</p>
         <div class="listcard">
-          ${dayBookings.length ? dayBookings.map(b => `
-            <div class="row">
+          ${dayBookings.length ? dayBookings.map(b => {
+            const isPast = new Date(b.slot.endTime || b.slot.startTime) < now;
+            return `
+            <div class="row"${isPast ? ` style="cursor:pointer;" onclick="goToVisitHistoryFor('${(b.slot.location.name || '').replace(/'/g, "\\'")}')"` : ''}>
               <div class="time">${fmtTime(b.slot.startTime)}</div>
-              <div class="mid"><div class="who">${b.slot.location.name}</div></div>
+              <div class="mid"><div class="who">${b.slot.location.name}</div>${isPast ? `<div style="font-size:11px;color:var(--teal);margin-top:2px;">Tap for visit history &amp; office info →</div>` : ''}</div>
               <span class="chip ${b.status}">${b.status}</span>
-            </div>`).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
+            </div>`;
+          }).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
         </div>` : ''}
     </div>`;
 }
@@ -2238,12 +2265,16 @@ function screenTransfers() {
 }
 
 function screenVisitHistory() {
+  const prefill = visitHistorySearchPrefill;
+  visitHistorySearchPrefill = '';
   return `
     <div class="wrap wide">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to dashboard</button>
       <h1>Visit History</h1>
       <p class="sub">Past visits, including lunches that were scheduled and carried out.</p>
+      <input id="historySearchInput" type="text" placeholder="${state.role === 'office' ? '🔍 Search by rep name…' : '🔍 Search by office name…'}" value="${prefill.replace(/"/g, '&quot;')}" oninput="filterHistorySearch(this.value)" style="width:100%;margin-bottom:14px;">
       <div id="historyBox" class="listcard"><div class="empty">Loading…</div></div>
+      <div id="historyNoMatches" class="empty" style="display:none;">No visits match that search.</div>
     </div>`;
 }
 
@@ -2999,6 +3030,7 @@ async function loadRepHistory() {
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message Office</button>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>
       </div>`).join('');
+    filterHistorySearch(document.getElementById('historySearchInput')?.value || '');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
@@ -3023,10 +3055,29 @@ async function loadOfficeHistory() {
         ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
         ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">⭐ Rate rep</button>` : ''}
       </div>`).join('');
+    filterHistorySearch(document.getElementById('historySearchInput')?.value || '');
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
 }
+
+// Filters visit-history rows by whether any of their visible text matches
+// the query, so it works the same way for a rep searching by office name
+// and an office searching by rep name without needing separate logic.
+window.filterHistorySearch = function(query) {
+  const box = document.getElementById('historyBox');
+  const noMatches = document.getElementById('historyNoMatches');
+  if (!box) return;
+  const q = query.trim().toLowerCase();
+  const rows = box.querySelectorAll(':scope > .row');
+  let visibleCount = 0;
+  rows.forEach(row => {
+    const match = !q || row.textContent.toLowerCase().includes(q);
+    row.style.display = match ? '' : 'none';
+    if (match) visibleCount++;
+  });
+  if (noMatches) noMatches.style.display = (rows.length && q && !visibleCount) ? '' : 'none';
+};
 
 window.orderLunch = function(address) {
   if (address && navigator.clipboard) {
@@ -3189,6 +3240,7 @@ function handleSubscriptionRequired(err) {
 window.openCalendar = function() {
   calendarMonth = new Date();
   calendarSelectedDay = null;
+  calendarSearchQuery = '';
   setState({ screen: 'calendar' });
   loadCalendarBookings();
 };
@@ -3214,6 +3266,34 @@ window.changeCalendarMonth = function(delta) {
 window.selectCalendarDay = function(day) {
   calendarSelectedDay = day;
   render();
+};
+
+// Keeps the search input's caret/focus intact by only touching the query
+// and re-rendering the results list, rather than re-rendering the whole
+// screen (which would recreate the input and lose focus mid-keystroke).
+window.filterCalendarSearch = function(value) {
+  calendarSearchQuery = value;
+  render();
+  const input = document.getElementById('calendarSearchInput');
+  if (input) { input.focus(); input.selectionStart = input.selectionEnd = input.value.length; }
+};
+
+// Jumps the calendar to the month/day of a search result so the rep doesn't
+// have to page through months by hand to find a specific office's booking.
+window.jumpToCalendarBooking = function(startTime) {
+  const d = new Date(startTime);
+  calendarMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+  calendarSelectedDay = d.getDate();
+  calendarSearchQuery = '';
+  render();
+};
+
+// Clicking a past visit on the calendar sends the rep straight to Visit
+// History, pre-filtered to that office, so they don't have to re-search
+// for it once they're there.
+window.goToVisitHistoryFor = function(officeName) {
+  visitHistorySearchPrefill = officeName;
+  setState({ screen: 'visitHistory' });
 };
 
 window.openOfficeCalendar = function() {
