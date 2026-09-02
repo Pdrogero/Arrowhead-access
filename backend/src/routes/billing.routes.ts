@@ -200,20 +200,31 @@ router.post('/check-renewals', async (req, res) => {
       const daysUntil = Math.ceil((rep.currentPeriodEnd!.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       const cycleLabel = rep.billingCycle === 'ANNUAL' ? 'annual' : 'monthly';
       const dateStr = rep.currentPeriodEnd!.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const isTrialing = rep.subscriptionStatus === 'TRIALING';
 
-      const reminders: Array<{ threshold: number; field: 'renewalReminder30dSent' | 'renewalReminder7dSent' | 'renewalReminder1dSent'; label: string }> = [
-        { threshold: 30, field: 'renewalReminder30dSent', label: 'in about a month' },
-        { threshold: 7, field: 'renewalReminder7dSent', label: 'in about a week' },
-        { threshold: 1, field: 'renewalReminder1dSent', label: 'tomorrow' },
-      ];
+      // The 14-day trial can never reach a genuine "30 days out" — skip
+      // that threshold while trialing so it doesn't fire on day one with
+      // an inaccurate "in about a month" label.
+      const reminders: Array<{ threshold: number; field: 'renewalReminder30dSent' | 'renewalReminder7dSent' | 'renewalReminder1dSent'; label: string }> = isTrialing
+        ? [
+            { threshold: 7, field: 'renewalReminder7dSent', label: 'in about a week' },
+            { threshold: 1, field: 'renewalReminder1dSent', label: 'tomorrow' },
+          ]
+        : [
+            { threshold: 30, field: 'renewalReminder30dSent', label: 'in about a month' },
+            { threshold: 7, field: 'renewalReminder7dSent', label: 'in about a week' },
+            { threshold: 1, field: 'renewalReminder1dSent', label: 'tomorrow' },
+          ];
 
       for (const r of reminders) {
         if (daysUntil <= r.threshold && !rep[r.field]) {
-          await sendEmail({
-            to: rep.email,
-            subject: `Your ${cycleLabel} subscription renews ${r.label}`,
-            html: `${emailLogoHeader()}<p>Your Arrowhead Access ${cycleLabel} subscription is set to renew on <strong>${dateStr}</strong>.</p>`,
-          });
+          const subject = isTrialing
+            ? `Your Arrowhead Access free trial ends ${r.label}`
+            : `Your ${cycleLabel} subscription renews ${r.label}`;
+          const html = isTrialing
+            ? `${emailLogoHeader()}<p>Your Arrowhead Access free trial ends on <strong>${dateStr}</strong> — after that, your ${cycleLabel} subscription begins and your card will be charged. If you don't want to continue, cancel anytime before then from your account.</p>`
+            : `${emailLogoHeader()}<p>Your Arrowhead Access ${cycleLabel} subscription is set to renew on <strong>${dateStr}</strong>.</p>`;
+          await sendEmail({ to: rep.email, subject, html });
           await prisma.rep.update({ where: { id: rep.id }, data: { [r.field]: true } });
           remindersSent++;
         }
