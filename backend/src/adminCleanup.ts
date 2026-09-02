@@ -15,6 +15,11 @@ const prisma = new PrismaClient();
 
 const DEMO_ORG_ID = 'demo-office-org';
 const DEMO_DOMAIN = 'meridianpharma.com';
+// The account owner's own real trial account — excluded from the
+// founding-rep reset below so their in-progress subscription keeps its
+// founding rate, even though it was created during the same testing pass
+// as the throwaway accounts.
+const PRESERVE_FOUNDING_REP_ID = 'cmt3ffadh0008rs1hhtp3wv57';
 
 async function cleanupDemoOffice(confirm: boolean, out: string[]) {
   const locations = await prisma.location.findMany({ where: { organizationId: DEMO_ORG_ID } });
@@ -90,22 +95,29 @@ async function resetFoundingReps(confirm: boolean, out: string[]) {
     orderBy: { createdAt: 'asc' },
   });
   const founders = reps.filter(r => r.isFoundingRep);
+  const resettable = founders.filter(r => r.id !== PRESERVE_FOUNDING_REP_ID);
+  const preserved = founders.find(r => r.id === PRESERVE_FOUNDING_REP_ID);
 
   out.push(`${reps.length} total rep account(s) currently in the database:`);
   reps.forEach(r => {
-    out.push(`  ${r.isFoundingRep ? '[FOUNDING]' : '          '} ${r.email}  —  ${r.name}  —  created ${r.createdAt.toISOString().slice(0, 10)}`);
+    const tag = r.id === PRESERVE_FOUNDING_REP_ID ? '[FOUNDING - PRESERVED]' : r.isFoundingRep ? '[FOUNDING]' : '               ';
+    out.push(`  ${tag} ${r.email}  —  ${r.name}  —  created ${r.createdAt.toISOString().slice(0, 10)}`);
   });
-  out.push(`\n${founders.length} of them currently hold a founding-rep slot (out of 30 total).`);
+  out.push(`\n${founders.length} of them currently hold a founding-rep slot (out of 30 total), ${resettable.length} of which will be reset.`);
+  if (preserved) out.push(`"${preserved.email}" is excluded and will keep its founding-rep status.`);
   out.push('Review the list above — if any of these are real prospective customers you want to');
   out.push('keep their founding status, stop here before running with confirm=1.\n');
 
   if (!confirm) {
-    out.push('(dry run — pass confirm=1 to reset all of the above to isFoundingRep=false)\n');
+    out.push('(dry run — pass confirm=1 to reset the above to isFoundingRep=false)\n');
     return;
   }
 
-  const result = await prisma.rep.updateMany({ where: { isFoundingRep: true }, data: { isFoundingRep: false } });
-  out.push(`Reset isFoundingRep to false for ${result.count} rep account(s). All 30 founding spots are available again.\n`);
+  const result = await prisma.rep.updateMany({
+    where: { isFoundingRep: true, id: { not: PRESERVE_FOUNDING_REP_ID } },
+    data: { isFoundingRep: false },
+  });
+  out.push(`Reset isFoundingRep to false for ${result.count} rep account(s). ${preserved ? `"${preserved.email}" kept its founding status. ` : ''}Founding spots are available again.\n`);
 }
 
 export async function runPreLaunchCleanup(confirm: boolean): Promise<string> {
