@@ -232,3 +232,116 @@ export async function deleteRepById(repId: string, confirm: boolean): Promise<st
   }
   return out.join('\n');
 }
+
+// --- One-off: find locations matching a name substring (case-insensitive) -
+// for spotting stray test/junk locations that show up in rep search.
+export async function lookupLocationsByName(query: string): Promise<string> {
+  const out: string[] = [];
+  try {
+    const locations = await prisma.location.findMany({
+      where: { name: { contains: query, mode: 'insensitive' } },
+      include: { organization: true },
+      orderBy: { name: 'asc' },
+      take: 25,
+    });
+    if (!locations.length) {
+      out.push(`No locations match "${query}".`);
+      return out.join('\n');
+    }
+    out.push(`${locations.length} location(s) match "${query}":\n`);
+    for (const loc of locations) {
+      const [slotCount, staffCount] = await Promise.all([
+        prisma.slot.count({ where: { locationId: loc.id } }),
+        prisma.staffUser.count({ where: { locationId: loc.id } }),
+      ]);
+      out.push(`locationId: ${loc.id}`);
+      out.push(`  name: ${loc.name}`);
+      out.push(`  address: ${loc.address}`);
+      out.push(`  organization: "${loc.organization.name}" (${loc.organizationId})`);
+      out.push(`  slots: ${slotCount}  staff logins: ${staffCount}`);
+      out.push('');
+    }
+    out.push('Pass the locationId of the one you want to REMOVE to /api/admin/delete-location?locationId=...');
+  } finally {
+    await prisma.$disconnect();
+  }
+  return out.join('\n');
+}
+
+// --- One-off: fully delete a single location and everything hanging off ---
+// it (slots, bookings, conversations, literature, staff logins) — and the
+// organization too if this was its only location and it has no reps or
+// subscription attached. SAFE BY DEFAULT: confirm=false only reports.
+export async function deleteLocationById(locationId: string, confirm: boolean): Promise<string> {
+  const out: string[] = [];
+  try {
+    const location = await prisma.location.findUnique({ where: { id: locationId }, include: { organization: true } });
+    if (!location) {
+      out.push(`No location found with id "${locationId}".`);
+      return out.join('\n');
+    }
+
+    const slots = await prisma.slot.findMany({ where: { locationId }, select: { id: true } });
+    const slotIds = slots.map(s => s.id);
+    const bookings = await prisma.booking.findMany({ where: { slotId: { in: slotIds } }, select: { id: true } });
+    const bookingIds = bookings.map(b => b.id);
+    const conversations = await prisma.conversation.findMany({ where: { locationId }, select: { id: true } });
+    const conversationIds = conversations.map(c => c.id);
+
+    const [literatureCount, employeeCount, staffCount, templateCount, messageCount, reviewCount, attendeeCount, transferCount] = await Promise.all([
+      prisma.literatureItem.count({ where: { locationId } }),
+      prisma.officeEmployee.count({ where: { locationId } }),
+      prisma.staffUser.count({ where: { locationId } }),
+      prisma.recurringSlotTemplate.count({ where: { locationId } }),
+      prisma.message.count({ where: { conversationId: { in: conversationIds } } }),
+      prisma.visitReview.count({ where: { bookingId: { in: bookingIds } } }),
+      prisma.visitAttendee.count({ where: { bookingId: { in: bookingIds } } }),
+      prisma.bookingTransfer.count({ where: { bookingId: { in: bookingIds } } }),
+    ]);
+
+    out.push(`Location found: "${location.name}" (${locationId}), org "${location.organization.name}" (${location.organizationId})`);
+    out.push('Will delete:');
+    out.push(`  ${slotIds.length} slots, ${bookingIds.length} bookings, ${reviewCount} reviews, ${attendeeCount} attendees, ${transferCount} transfers`);
+    out.push(`  ${conversationIds.length} conversations, ${messageCount} messages`);
+    out.push(`  ${literatureCount} literature items, ${employeeCount} staff-directory entries, ${templateCount} recurring templates, ${staffCount} staff login(s)`);
+
+    const [siblingLocationCount, orgRepCount, orgSubCount] = await Promise.all([
+      prisma.location.count({ where: { organizationId: location.organizationId, id: { not: locationId } } }),
+      prisma.rep.count({ where: { organizationId: location.organizationId } }),
+      prisma.subscription.count({ where: { organizationId: location.organizationId } }),
+    ]);
+    const orgIsSafeToDelete = siblingLocationCount === 0 && orgRepCount === 0 && orgSubCount === 0;
+    if (orgIsSafeToDelete) {
+      out.push(`  This is the organization's only location — will also delete organization "${location.organization.name}".`);
+    } else {
+      out.push(`  Organization has ${siblingLocationCount} other location(s), ${orgRepCount} rep(s), ${orgSubCount} subscription(s) — leaving the organization in place.`);
+    }
+
+    if (!confirm) {
+      out.push('  (dry run — pass confirm=1 to actually delete)');
+      return out.join('\n');
+    }
+
+    await prisma.$transaction([
+      prisma.message.deleteMany({ where: { conversationId: { in: conversationIds } } }),
+      prisma.visitReview.deleteMany({ where: { bookingId: { in: bookingIds } } }),
+      prisma.visitAttendee.deleteMany({ where: { bookingId: { in: bookingIds } } }),
+      prisma.bookingTransfer.deleteMany({ where: { bookingId: { in: bookingIds } } }),
+      prisma.booking.deleteMany({ where: { id: { in: bookingIds } } }),
+      prisma.conversation.deleteMany({ where: { id: { in: conversationIds } } }),
+      prisma.literatureItem.deleteMany({ where: { locationId } }), // attachments cascade automatically
+      prisma.slot.deleteMany({ where: { locationId } }),
+      prisma.officeEmployee.deleteMany({ where: { locationId } }),
+      prisma.officePolicy.deleteMany({ where: { locationId } }),
+      prisma.recurringSlotTemplate.deleteMany({ where: { locationId } }),
+      prisma.staffUser.deleteMany({ where: { locationId } }),
+      prisma.location.delete({ where: { id: locationId } }),
+      ...(orgIsSafeToDelete ? [prisma.organization.delete({ where: { id: location.organizationId } })] : []),
+    ]);
+
+    out.push('  Done — location deleted.');
+  } finally {
+    await prisma.$disconnect();
+  }
+  return out.join('\n');
+}

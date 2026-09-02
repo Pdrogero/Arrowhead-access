@@ -18,6 +18,7 @@ import reviewsRouter from './routes/reviews.routes';
 import messagesRouter from './routes/messages.routes';
 import literatureRouter from './routes/literature.routes';
 import locationsRouter from './routes/locations.routes';
+import adminRouter from './routes/admin.routes';
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use('/api/reviews', reviewsRouter);
 app.use('/api/messages', messagesRouter);
 app.use('/api/literature', literatureRouter);
 app.use('/api/locations', locationsRouter);
+app.use('/api/admin', adminRouter);
 
 // Reports any error that reaches Express's error-handling chain to Sentry
 // before falling through to Express's default 500 response. Must be
