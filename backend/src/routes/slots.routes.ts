@@ -208,33 +208,11 @@ router.get('/open', requireAuth, requireRole('rep'), requireActiveSubscription, 
   res.json(slots);
 });
 
-// --- Reps: claim an open slot ----------------------------------------------
-router.post('/:id/claim', requireAuth, requireRole('rep'), requireActiveSubscription, async (req, res) => {
-  try {
-    const rep = await prisma.rep.findUnique({ where: { id: req.user!.sub } });
-    if (!rep) return res.status(404).json({ error: 'Rep not found' });
-    if (rep.verificationStatus !== 'VERIFIED') {
-      return res.status(403).json({ error: 'Only verified reps can claim slots' });
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      const slot = await tx.slot.findUnique({ where: { id: req.params.id } });
-      if (!slot || slot.status !== 'OPEN' || slot.eventType === 'OFFICE_CLOSED') {
-        throw new Error('This slot is no longer available');
-      }
-
-      const updatedSlot = await tx.slot.update({ where: { id: slot.id }, data: { status: 'CONFIRMED' } });
-      const booking = await tx.booking.create({
-        data: { slotId: slot.id, repId: rep.id, status: 'CONFIRMED', decidedAt: new Date() },
-      });
-      return { slot: updatedSlot, booking };
-    });
-
-    res.status(201).json(result);
-  } catch (err: any) {
-    console.error(err);
-    res.status(400).json({ error: err.message || 'Could not claim slot' });
-  }
-});
+// Claiming an open slot lives at POST /api/bookings/slots/:slotId/claim
+// (bookings.routes.ts) — it goes through booking.service so a claim always
+// creates a REQUESTED booking pending office approval, with the same
+// frequency-cap checks as every other booking path. This route used to
+// duplicate that logic with an instant-auto-confirm shortcut; removed so
+// there's exactly one place a slot ever gets claimed.
 
 export default router;

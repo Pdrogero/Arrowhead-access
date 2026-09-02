@@ -3,7 +3,7 @@
 
 import { Router } from 'express';
 import crypto from 'crypto';
-import { requireAuth, requireRole, requireVerifiedRep } from '../auth/auth.guard';
+import { requireAuth, requireRole, requireVerifiedRep, requireActiveSubscription } from '../auth/auth.guard';
 import { assertOwnsLocation, assertOwnsRep } from '../auth/scoping';
 import { claimOpenSlot, requestNewSlot, decideBooking, BookingError } from '../booking/booking.service';
 import { PrismaClient } from '@prisma/client';
@@ -43,16 +43,40 @@ router.get('/locations/:locationId/slots', requireAuth, requireVerifiedRep, asyn
 });
 
 // --- Rep: claim an open slot ---------------------------------------------
-router.post('/slots/:slotId/claim', requireAuth, requireVerifiedRep, async (req, res) => {
+// Claiming never auto-confirms — it always creates a REQUESTED booking so
+// the office gets a chance to approve or decline it (see check-expired-
+// requests below, which reopens the slot if they don't respond in 3 days).
+router.post('/slots/:slotId/claim', requireAuth, requireVerifiedRep, requireActiveSubscription, async (req, res) => {
   try {
-    const slot = await prisma.slot.findUniqueOrThrow({ where: { id: req.params.slotId } });
-    const location = await prisma.location.findUniqueOrThrow({ where: { id: slot.locationId } });
     const booking = await claimOpenSlot({
       slotId: req.params.slotId,
       repId: req.user!.sub,
-      requiresApproval: (location as any).requiresApprovalForOpenSlots ?? false,
+      requiresApproval: true,
       topic: req.body.topic,
     });
+
+    const full = await prisma.booking.findUnique({
+      where: { id: booking.id },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+    if (full) {
+      const dateStr = full.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      sendEmail({
+        to: full.rep.email,
+        subject: `Request sent — ${full.slot.location.name}`,
+        html: `${emailLogoHeader()}<p>Your request to visit <strong>${full.slot.location.name}</strong> on ${dateStr} has been sent to the office. They have 3 days to approve or decline it — if they don't respond, the slot automatically reopens for other reps.</p>`,
+      }).catch(() => {});
+
+      const staff = await prisma.staffUser.findMany({ where: { locationId: full.slot.locationId } });
+      for (const s of staff) {
+        sendEmail({
+          to: s.email,
+          subject: `New visit request from ${full.rep.name}`,
+          html: `${emailLogoHeader()}<p><strong>${full.rep.name}</strong>${full.rep.companyName ? ` (${full.rep.companyName})` : ''} has requested your ${dateStr} slot. Log in to approve or decline — if there's no response within 3 days, it automatically reopens.</p>`,
+        }).catch(() => {});
+      }
+    }
+
     res.status(201).json(booking);
   } catch (err) {
     handleBookingError(err, res);
@@ -676,6 +700,42 @@ router.post('/check-lunch-reminders', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not check lunch reminders' });
+  }
+});
+
+// --- Daily check: auto-decline requests the office never answered ---------
+// A REQUESTED booking gives the office 3 days to approve or decline. If
+// they never respond, this declines it and reopens the slot so other reps
+// can grab it, rather than leaving it stuck pending forever.
+router.post('/check-expired-requests', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const expired = await prisma.booking.findMany({
+      where: { status: 'REQUESTED', requestedAt: { lte: threeDaysAgo } },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+
+    for (const booking of expired) {
+      await prisma.$transaction([
+        prisma.slot.update({ where: { id: booking.slotId }, data: { status: 'OPEN' } }),
+        prisma.booking.update({ where: { id: booking.id }, data: { status: 'DECLINED', decidedAt: new Date() } }),
+      ]);
+      const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      sendEmail({
+        to: booking.rep.email,
+        subject: `Request expired — ${booking.slot.location.name}`,
+        html: `${emailLogoHeader()}<p>The office at <strong>${booking.slot.location.name}</strong> didn't respond to your request for ${dateStr} within 3 days, so it's been released back to the open slots list. Feel free to request it again or find another time.</p>`,
+      }).catch(() => {});
+    }
+
+    res.json({ expired: expired.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check expired requests' });
   }
 });
 

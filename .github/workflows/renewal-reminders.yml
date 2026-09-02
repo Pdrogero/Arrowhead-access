@@ -25,3 +25,7 @@ jobs:
         run: |
           curl -sS -f -X POST "https://arrowhead-access-api.onrender.com/api/bookings/check-monthly-schedule-reminders" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+      - name: Trigger expired-request check
+        run: |
+          curl -sS -f -X POST "https://arrowhead-access-api.onrender.com/api/bookings/check-expired-requests" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
