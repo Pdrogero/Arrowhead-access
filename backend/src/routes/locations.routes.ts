@@ -268,7 +268,10 @@ router.get('/geo-search', requireAuth, requireRole('rep'), async (req, res) => {
       body: JSON.stringify({ input: q }),
       signal: AbortSignal.timeout(4000),
     });
-    if (!geoRes.ok) return res.json([]);
+    if (!geoRes.ok) {
+      console.error('Places API autocomplete failed:', geoRes.status, await geoRes.text().catch(() => ''));
+      return res.json([]);
+    }
 
     const data = (await geoRes.json()) as {
       suggestions?: Array<{ placePrediction?: { structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } } } }>;
@@ -285,6 +288,7 @@ router.get('/geo-search', requireAuth, requireRole('rep'), async (req, res) => {
   } catch (err) {
     // Best-effort only — never let a geocoding hiccup block the notify-me
     // flow, the rep can still just type the name in by hand.
+    console.error('Places API autocomplete error:', err);
     res.json([]);
   }
 });
