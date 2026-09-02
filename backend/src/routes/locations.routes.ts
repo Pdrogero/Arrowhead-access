@@ -256,7 +256,11 @@ router.post('/notify-me', requireAuth, requireRole('rep'), async (req, res) => {
 router.get('/geo-search', requireAuth, requireRole('rep'), async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 3) return res.json([]);
-  if (!process.env.GOOGLE_PLACES_API_KEY) return res.json([]);
+  if (!process.env.GOOGLE_PLACES_API_KEY) {
+    console.error('Places API geo-search called but GOOGLE_PLACES_API_KEY is not set on this server');
+    return res.json([]);
+  }
+  console.log('Places API geo-search request for:', JSON.stringify(q));
 
   try {
     const geoRes = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
@@ -284,6 +288,7 @@ router.get('/geo-search', requireAuth, requireRole('rep'), async (req, res) => {
       .filter(s => s.name && s.address)
       .slice(0, 5);
 
+    console.log(`Places API geo-search returned ${data.suggestions?.length ?? 0} raw suggestion(s), ${suggestions.length} usable`);
     res.json(suggestions);
   } catch (err) {
     // Best-effort only — never let a geocoding hiccup block the notify-me
