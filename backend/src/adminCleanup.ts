@@ -6,8 +6,10 @@
 // resets isFoundingRep back to false on every existing rep account so
 // testing/dev signups don't eat into the real 30-spot founding-rep pool.
 //
-// Used by both scripts/pre-launch-cleanup.ts (run from a shell) and the
-// temporary /api/admin/cleanup route (for environments with no shell access).
+// Used by scripts/pre-launch-cleanup.ts (run from a shell). Was also used
+// by a temporary HTTP route (src/routes/admin.routes.ts, removed after the
+// original launch cleanup — see git history to bring it back if needed on
+// a Render plan with no Shell access).
 
 import { PrismaClient } from '@prisma/client';
 

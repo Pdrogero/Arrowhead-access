@@ -11,8 +11,10 @@
 //   npx ts-node scripts/pre-launch-cleanup.ts            (dry run — read only)
 //   npx ts-node scripts/pre-launch-cleanup.ts --confirm  (actually applies it)
 //
-// If your Render plan has no Shell access, use the temporary
-// GET /api/admin/cleanup route instead (see src/routes/admin.routes.ts).
+// Already run once for the original launch cleanup (see git history for
+// src/routes/admin.routes.ts, the temporary HTTP-triggerable version used
+// on a Render plan with no Shell access) — kept here in case more
+// demo/test data needs clearing out later.
 
 import { runPreLaunchCleanup } from '../src/adminCleanup';
 
