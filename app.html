@@ -3083,10 +3083,12 @@ async function loadBillingStatus() {
       const dateStr = currentPeriodEnd ? new Date(currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
       box.innerHTML = cancelAtPeriodEnd ? `
         <h2 style="font-size:16px;margin-bottom:12px;">Your plan</h2>
-        <div class="note" style="margin-top:0;">Your ${cycleLabel.toLowerCase()} subscription is set to cancel${dateStr ? ' on ' + dateStr : ''}. You'll keep full access until then, and won't be charged again.</div>
+        <div class="note" style="margin-top:0;margin-bottom:12px;">Your ${cycleLabel.toLowerCase()} subscription is set to cancel${dateStr ? ' on ' + dateStr : ''}. You'll keep full access until then, and won't be charged again.</div>
+        <button class="link" style="text-align:left;" onclick="openBillingPortal()">💳 View card &amp; billing history</button>
       ` : `
         <h2 style="font-size:16px;margin-bottom:12px;">Your plan</h2>
         <p style="font-size:13px;color:var(--slate);margin-bottom:12px;">${cycleLabel} plan${subscriptionStatus === 'TRIALING' ? ' (in trial)' : ''}${dateStr ? ' — renews ' + dateStr : ''}.</p>
+        <button class="link" style="text-align:left;margin-bottom:8px;" onclick="openBillingPortal()">💳 Update card / view billing history</button>
         <button class="link" style="text-align:left;color:#C23C3C;" onclick="cancelSubscription()">Cancel subscription</button>
       `;
       return;
@@ -3157,7 +3159,21 @@ window.toggleProfileMenu = function() {
 };
 
 window.scrollToBilling = function() {
+  if (state.screen !== 'dashboard' || state.role !== 'rep') {
+    setState({ screen: 'dashboard', role: 'rep' });
+    setTimeout(() => document.getElementById('billingBox')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+    return;
+  }
   document.getElementById('billingBox')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.openBillingPortal = async function() {
+  try {
+    const { url } = await api('/api/billing/rep/portal', { method: 'POST' });
+    window.location.href = url;
+  } catch (err) {
+    alert(err.message);
+  }
 };
 
 // Paid-feature routes return 402 when a rep hasn't completed subscription
@@ -3513,7 +3529,18 @@ function render() {
     const url = new URL(window.location.href);
     url.searchParams.delete('billing');
     window.history.replaceState({}, '', url);
-    if (billingParam === 'success') setTimeout(() => alert('Subscription started! Your 14-day free trial has begun.'), 300);
+    if (billingParam === 'success') {
+      setTimeout(async () => {
+        try {
+          const status = await api('/api/billing/founding-status');
+          alert(status.subscriptionStatus === 'TRIALING'
+            ? 'Subscription started! Your 14-day free trial has begun.'
+            : 'Subscription started! Your card has been charged and your plan is now active.');
+        } catch (err) {
+          alert('Subscription started!');
+        }
+      }, 300);
+    }
     else setTimeout(() => alert('Checkout cancelled — no charge was made.'), 300);
   }
 }

@@ -266,6 +266,11 @@ model Rep {
   subscriptionStatus   SubscriptionStatus  @default(TRIALING)
   cancelAtPeriodEnd    Boolean             @default(false)
   trialEndsAt          DateTime?
+  // Set true the first time a trial actually starts (checkout completes
+  // with a trialing subscription) — checked at checkout so a rep who
+  // cancels during (or after) their trial can't just re-subscribe for
+  // another free 14 days.
+  hasUsedTrial         Boolean             @default(false)
   currentPeriodEnd     DateTime?           // next renewal/charge date, synced from Stripe
   renewalReminder30dSent Boolean           @default(false)
   renewalReminder7dSent  Boolean           @default(false)

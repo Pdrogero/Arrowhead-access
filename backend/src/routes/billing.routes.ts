@@ -62,7 +62,10 @@ router.post('/rep/checkout', requireAuth, requireRole('rep'), async (req, res) =
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: { trial_period_days: 14 },
+      // Only a rep who has never actually started a trial gets one here —
+      // otherwise cancelling during (or after) a trial and re-subscribing
+      // later would grant a fresh 14 free days every time.
+      ...(rep.hasUsedTrial ? {} : { subscription_data: { trial_period_days: 14 } }),
       success_url: `${process.env.APP_URL}/app.html?billing=success`,
       cancel_url: `${process.env.APP_URL}/app.html?billing=cancelled`,
       metadata: { repId: rep.id, billingCycle },
@@ -72,6 +75,24 @@ router.post('/rep/checkout', requireAuth, requireRole('rep'), async (req, res) =
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not start checkout' });
+  }
+});
+
+// --- Stripe-hosted portal: update card, view invoices, manage the plan ----
+router.post('/rep/portal', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const rep = await prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } });
+    if (!rep.stripeCustomerId) {
+      return res.status(400).json({ error: 'No billing account yet — start a subscription first.' });
+    }
+    const session = await stripe.billingPortal.sessions.create({
+      customer: rep.stripeCustomerId,
+      return_url: `${process.env.APP_URL}/app.html`,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not open billing portal' });
   }
 });
 
@@ -132,17 +153,19 @@ router.post('/webhook', async (req, res) => {
       const billingCycle = session.metadata?.billingCycle as 'MONTHLY' | 'ANNUAL' | undefined;
       if (repId && session.subscription) {
         const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+        const isTrialing = sub.status === 'trialing';
         await prisma.rep.update({
           where: { id: repId },
           data: {
             stripeSubscriptionId: session.subscription as string,
             billingCycle,
-            subscriptionStatus: 'TRIALING',
+            subscriptionStatus: isTrialing ? 'TRIALING' : 'ACTIVE',
             currentPeriodEnd: new Date(sub.current_period_end * 1000),
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             renewalReminder30dSent: false,
             renewalReminder7dSent: false,
             renewalReminder1dSent: false,
+            ...(isTrialing ? { hasUsedTrial: true } : {}),
           },
         });
       }
