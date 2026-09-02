@@ -248,29 +248,31 @@ router.post('/notify-me', requireAuth, requireRole('rep'), async (req, res) => {
 
 // --- Rep: real-world business/address lookup, used to help fill in the ---
 // notify-me name+address when an office isn't on the platform yet. Proxies
-// OpenStreetMap's free Nominatim geocoder (no API key needed) — proxied
-// server-side rather than called from the browser so we can set the
-// identifying User-Agent their usage policy requires, and so a hiccup on
-// their end never surfaces raw third-party errors to the rep.
+// Google's Places Autocomplete API — chosen over the free OpenStreetMap
+// option after it failed to find small private practices (e.g. "Superior
+// Podiatry") that Google's business index does have. Proxied server-side
+// so the API key never reaches the browser, and so a hiccup on Google's
+// end never surfaces a raw third-party error to the rep.
 router.get('/geo-search', requireAuth, requireRole('rep'), async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 3) return res.json([]);
+  if (!process.env.GOOGLE_PLACES_API_KEY) return res.json([]);
 
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`;
-    const geoRes = await fetch(url, {
-      headers: { 'User-Agent': 'ArrowheadAccess/1.0 (legal@arrowheadaccess.com)' },
-      signal: AbortSignal.timeout(4000),
-    });
+    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}&types=establishment&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+    const geoRes = await fetch(url, { signal: AbortSignal.timeout(4000) });
     if (!geoRes.ok) return res.json([]);
 
-    const results = (await geoRes.json()) as Array<{ name?: string; display_name?: string }>;
-    const suggestions = results
-      .map(r => ({
-        name: r.name || (r.display_name || '').split(',')[0].trim(),
-        address: r.display_name || '',
+    const data = (await geoRes.json()) as {
+      predictions?: Array<{ structured_formatting?: { main_text?: string; secondary_text?: string } }>;
+    };
+    const suggestions = (data.predictions || [])
+      .map(p => ({
+        name: p.structured_formatting?.main_text || '',
+        address: p.structured_formatting?.secondary_text || '',
       }))
-      .filter(s => s.name && s.address);
+      .filter(s => s.name && s.address)
+      .slice(0, 5);
 
     res.json(suggestions);
   } catch (err) {
