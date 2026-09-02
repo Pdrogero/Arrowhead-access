@@ -66,7 +66,11 @@ router.post('/rep/checkout', requireAuth, requireRole('rep'), async (req, res) =
       // otherwise cancelling during (or after) a trial and re-subscribing
       // later would grant a fresh 14 free days every time.
       ...(rep.hasUsedTrial ? {} : { subscription_data: { trial_period_days: 14 } }),
-      success_url: `${process.env.APP_URL}/app.html?billing=success`,
+      // {CHECKOUT_SESSION_ID} is filled in by Stripe — gives every completed
+      // checkout its own unique success URL, so the frontend can remember
+      // "already showed the alert for this one" and an old tab/bookmark
+      // reloading the same URL later can never re-fire it.
+      success_url: `${process.env.APP_URL}/app.html?billing=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.APP_URL}/app.html?billing=cancelled`,
       metadata: { repId: rep.id, billingCycle },
     });

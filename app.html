@@ -3523,13 +3523,31 @@ function render() {
   else if (state.screen === 'visitHistory' && state.role === 'rep') { app.innerHTML = screenVisitHistory(); loadRepHistory(); }
 
   const billingParam = new URLSearchParams(window.location.search).get('billing');
+  const billingSessionId = new URLSearchParams(window.location.search).get('session_id');
   if (billingParam === 'success' || billingParam === 'cancelled') {
-    // Strip the query param immediately so the next render() (any click,
-    // any navigation) doesn't see it again and re-fire the alert.
+    // Strip the query params immediately so the next render() (any click,
+    // any navigation) doesn't see them again and re-fire the alert.
     const url = new URL(window.location.href);
     url.searchParams.delete('billing');
+    url.searchParams.delete('session_id');
     window.history.replaceState({}, '', url);
-    if (billingParam === 'success') {
+
+    // Belt-and-suspenders against a reopened/reloaded tab or bookmark that
+    // still points at an old checkout's success URL: remember which Stripe
+    // checkout sessions we've already shown the alert for (keyed by Stripe's
+    // own session_id, so it survives across tabs and reloads, not just
+    // in-app navigation) and never show it twice for the same one.
+    let acked = [];
+    try { acked = JSON.parse(localStorage.getItem('ackedBillingSessions') || '[]'); } catch (e) {}
+    const alreadyShown = billingSessionId && acked.includes(billingSessionId);
+    if (billingSessionId && !alreadyShown) {
+      acked.push(billingSessionId);
+      localStorage.setItem('ackedBillingSessions', JSON.stringify(acked.slice(-20)));
+    }
+
+    if (alreadyShown) {
+      // Skip both alerts below — already acknowledged this exact checkout.
+    } else if (billingParam === 'success') {
       setTimeout(async () => {
         try {
           const status = await api('/api/billing/founding-status');
