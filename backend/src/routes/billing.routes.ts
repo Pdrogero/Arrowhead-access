@@ -39,6 +39,19 @@ router.post('/rep/checkout', requireAuth, requireRole('rep'), async (req, res) =
     }
 
     let customerId = rep.stripeCustomerId;
+    if (customerId) {
+      // The stored ID can go stale (customer deleted in Stripe, or left over
+      // from a different Stripe mode/account) — verify it still resolves
+      // before reusing it, rather than letting checkout hard-fail on it.
+      try {
+        const existing = await stripe.customers.retrieve(customerId);
+        if ((existing as Stripe.Customer | Stripe.DeletedCustomer).deleted) {
+          customerId = null;
+        }
+      } catch (err) {
+        customerId = null;
+      }
+    }
     if (!customerId) {
       const customer = await stripe.customers.create({ email: rep.email, name: rep.name, metadata: { repId: rep.id } });
       customerId = customer.id;
