@@ -662,7 +662,10 @@ function screenBrowseSlots() {
       <h1>Available slots</h1>
       <p class="sub">Browse and claim open visits across all offices.</p>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
-        <input id="browseSearch" type="text" placeholder="Search by office name…" oninput="filterBrowseSlots()" value="${browseSearchQuery}" style="flex:1;margin-bottom:0;">
+        <div style="position:relative;flex:1;">
+          <input id="browseSearch" type="text" placeholder="Search by office name…" autocomplete="off" oninput="filterBrowseSlots()" onblur="setTimeout(hideBrowseSearchSuggestions, 150)" value="${browseSearchQuery}" style="margin-bottom:0;width:100%;">
+          <div id="browseSearchSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:10;max-height:240px;overflow-y:auto;"></div>
+        </div>
         <button type="button" id="browseViewToggleBtn" onclick="toggleBrowseView()" style="white-space:nowrap;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">${browseViewMode === 'list' ? '📅 Calendar view' : '📋 List view'}</button>
       </div>
       <div id="browseContent"><div class="listcard"><div class="empty">Loading…</div></div></div>
@@ -888,10 +891,54 @@ function lunchDetailsSummaryHtml(slot) {
     </div>`;
 }
 
+let browseSearchDebounceTimer = null;
+
 function filterBrowseSlots() {
   browseSearchQuery = document.getElementById('browseSearch').value;
   renderBrowseContent();
+
+  clearTimeout(browseSearchDebounceTimer);
+  const query = browseSearchQuery.trim();
+  if (!query) { hideBrowseSearchSuggestions(); return; }
+  browseSearchDebounceTimer = setTimeout(() => loadBrowseSearchSuggestions(query), 250);
 }
+
+async function loadBrowseSearchSuggestions(query) {
+  try {
+    const results = await api('/api/locations/search?q=' + encodeURIComponent(query));
+    // Ignore a stale response if the rep kept typing after this request went out.
+    if (document.getElementById('browseSearch')?.value.trim() !== query) return;
+    showBrowseSearchSuggestions(results);
+  } catch (err) {
+    hideBrowseSearchSuggestions();
+  }
+}
+
+function showBrowseSearchSuggestions(results) {
+  const box = document.getElementById('browseSearchSuggestions');
+  if (!box) return;
+  if (!results.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.innerHTML = results.slice(0, 6).map(r => `
+    <button type="button" onmousedown="selectBrowseSearchSuggestion('${r.name.replace(/'/g, "\\'")}')" style="display:block;width:100%;text-align:left;background:none;border:none;padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--line);">
+      <div style="font-weight:600;">${r.name}</div>
+      <div style="font-size:11px;color:var(--slate);">${r.address}${r.openSlotCount ? ` · ${r.openSlotCount} open slot${r.openSlotCount === 1 ? '' : 's'}` : ' · no open slots right now'}</div>
+    </button>
+  `).join('');
+  box.style.display = 'block';
+}
+
+window.hideBrowseSearchSuggestions = function() {
+  const box = document.getElementById('browseSearchSuggestions');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+};
+
+window.selectBrowseSearchSuggestion = function(name) {
+  browseSearchQuery = name;
+  const input = document.getElementById('browseSearch');
+  if (input) input.value = name;
+  hideBrowseSearchSuggestions();
+  renderBrowseContent();
+};
 
 function toggleBrowseView() {
   browseViewMode = browseViewMode === 'list' ? 'calendar' : 'list';
@@ -910,14 +957,20 @@ function renderBrowseContent() {
   else renderBrowseList(filtered);
 }
 
-function renderBrowseList(slots) {
+// Shared "nothing matched" state for both list and calendar view — includes
+// the office-lookup fallback (is this office on the platform at all, and if
+// not, offer to notify the rep when it joins) so a search dead-end behaves
+// the same regardless of which view mode the rep is in.
+function renderBrowseEmptyState() {
   const content = document.getElementById('browseContent');
-  if (!slots.length) {
-    const query = browseSearchQuery.trim();
-    content.innerHTML = `<div class="listcard"><div class="empty">No open slots found.</div>${query ? '<div id="officeSearchFallback" style="padding:0 16px 16px;font-size:13px;color:var(--slate);">Checking if this office is on Arrowhead Access…</div>' : ''}</div>`;
-    if (query) loadOfficeSearchFallback(query);
-    return;
-  }
+  const query = browseSearchQuery.trim();
+  content.innerHTML = `<div class="listcard"><div class="empty">No open slots found.</div>${query ? '<div id="officeSearchFallback" style="padding:0 16px 16px;font-size:13px;color:var(--slate);">Checking if this office is on Arrowhead Access…</div>' : ''}</div>`;
+  if (query) loadOfficeSearchFallback(query);
+}
+
+function renderBrowseList(slots) {
+  if (!slots.length) { renderBrowseEmptyState(); return; }
+  const content = document.getElementById('browseContent');
   content.innerHTML = `<div class="listcard">${slots.map(s => `
     <div class="row">
       <div class="time">${fmtTime(s.startTime)}</div>
@@ -967,6 +1020,7 @@ window.submitNotifyMe = async function(officeName) {
 };
 
 function renderBrowseCalendar(slots) {
+  if (!slots.length) { renderBrowseEmptyState(); return; }
   const content = document.getElementById('browseContent');
   const year = browseCalendarMonth.getFullYear();
   const month = browseCalendarMonth.getMonth();
