@@ -160,7 +160,7 @@ let browseSearchQuery = '';
 // them checked (OFFICE_CLOSED excluded; it's a blocking placeholder, not
 // something a rep would search for) so the filter is a no-op until a rep
 // narrows it down.
-let browseTypeFilter = new Set(['REP_VISIT', 'LUNCH', 'BREAKFAST', 'QUICK_VISIT', 'STAFF_TRAINING']);
+let browseTypeFilter = new Set(['REP_VISIT', 'LUNCH', 'BREAKFAST', 'QUICK_VISIT', 'COFFEE', 'SNACK', 'STAFF_TRAINING']);
 let browseViewMode = 'list'; // 'list' | 'calendar'
 let browseCalendarMonth = new Date();
 let browseCalendarSelectedDay = null;
@@ -580,6 +580,8 @@ function screenOfficeSettings() {
           <option value="LUNCH">Lunch</option>
           <option value="BREAKFAST">Breakfast</option>
           <option value="QUICK_VISIT">Quick visit (15–20 min)</option>
+          <option value="COFFEE">Coffee</option>
+          <option value="SNACK">Snack</option>
           <option value="STAFF_TRAINING">Staff training</option>
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
@@ -653,10 +655,12 @@ function screenPostSlot() {
           <option value="LUNCH">Lunch</option>
           <option value="BREAKFAST">Breakfast</option>
           <option value="QUICK_VISIT">Quick visit</option>
+          <option value="COFFEE">Coffee</option>
+          <option value="SNACK">Snack</option>
           <option value="STAFF_TRAINING">Staff training</option>
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
-        <p id="quickVisitNote" style="display:none;font-size:12px;color:var(--slate);margin:-8px 0 12px;">Quick visits are typically 15–20 minutes.</p>
+        <p id="quickVisitNote" style="display:none;font-size:12px;color:var(--slate);margin:-8px 0 12px;"></p>
         <div id="postSlotLunchFields" style="display:none;">
           ${lunchDetailsFieldsHtml('postSlot')}
           <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Repeat weekly on (optional)</label>
@@ -738,6 +742,8 @@ const EVENT_TYPE_LABELS = {
   LUNCH: 'Lunch',
   BREAKFAST: 'Breakfast',
   QUICK_VISIT: 'Quick visit (15–20 min)',
+  COFFEE: 'Coffee',
+  SNACK: 'Snack',
   STAFF_TRAINING: 'Staff training',
   OFFICE_CLOSED: 'Office closed',
 };
@@ -749,6 +755,8 @@ const EVENT_TYPE_COLORS = {
   LUNCH: { bg: '#FDECE7', color: '#C2410C' },
   BREAKFAST: { bg: '#FEF9C3', color: '#854D0E' },
   QUICK_VISIT: { bg: '#F3E8FF', color: '#6B21A8' },
+  COFFEE: { bg: '#EFE4D8', color: '#7C4A21' },
+  SNACK: { bg: '#DCFCE7', color: '#166534' },
   STAFF_TRAINING: { bg: '#E0F2FE', color: '#075985' },
   OFFICE_CLOSED: { bg: '#F3F4F6', color: '#4B5563' },
 };
@@ -886,9 +894,17 @@ window.togglePostSlotLunchFields = function() {
   document.getElementById('endTimeLabel').textContent = isLunch ? 'End time for lunch' : 'End time';
 };
 
+const SHORT_VISIT_NOTES = {
+  QUICK_VISIT: 'Quick visits are typically 15–20 minutes.',
+  COFFEE: 'Coffee visits are typically 15–20 minutes.',
+  SNACK: 'Snack drop-offs are typically 15–20 minutes.',
+};
+
 window.toggleQuickVisitNote = function() {
-  const isQuickVisit = document.getElementById('eventType').value === 'QUICK_VISIT';
-  document.getElementById('quickVisitNote').style.display = isQuickVisit ? '' : 'none';
+  const note = SHORT_VISIT_NOTES[document.getElementById('eventType').value];
+  const el = document.getElementById('quickVisitNote');
+  el.style.display = note ? '' : 'none';
+  el.textContent = note || '';
 };
 
 function dateOnly(datetimeLocalValue) {
