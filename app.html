@@ -1025,6 +1025,7 @@ async function loadOfficeSearchFallback(query) {
           <input type="text" id="notifyMeNameInput" placeholder="Office name" autocomplete="off" value="${query.replace(/"/g, '&quot;')}" oninput="filterNotifyMeGeoSuggestions(this.value)" onblur="setTimeout(hideNotifyMeGeoSuggestions, 150)" style="margin-bottom:0;width:100%;">
           <div id="notifyMeGeoSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.08);max-height:220px;overflow-y:auto;"></div>
         </div>
+        <div style="font-size:11px;color:var(--slate);margin-top:4px;">Address suggestions may take a moment to appear as you type.</div>
         <input type="text" id="notifyMeAddressInput" placeholder="Address (optional — pick a suggestion above to fill this in)" autocomplete="off" style="margin-top:6px;">
         <label style="display:flex;align-items:center;margin-top:8px;">
           <input type="checkbox" id="notifyMeCheckbox" style="margin-right:8px;">
