@@ -3920,7 +3920,21 @@ function render() {
   else if (state.screen === 'repProfileView') { app.innerHTML = screenRepProfileView(); }
   else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }
-  else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); loadOfficePolicy(); loadRecurringTemplates().then(prefillPostSlotTimeForEventType); }
+  else if (state.screen === 'postSlot') {
+    app.innerHTML = screenPostSlot();
+    // The event type <select> defaults to its first option (Lunch) on
+    // load, but the order-details section's visibility is only wired to
+    // the select's onchange — which never fires just from the page
+    // rendering with that default already selected. Run the same
+    // toggle/prefill logic once immediately so the form matches whatever
+    // is actually selected from the start, not just after the office
+    // staff picks a different type and switches back.
+    togglePostSlotLunchFields();
+    toggleShortVisitNote();
+    updateLunchRepeatHint();
+    loadOfficePolicy();
+    loadRecurringTemplates().then(prefillPostSlotTimeForEventType);
+  }
   else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
   else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }
   else if (state.screen === 'messages') { app.innerHTML = screenMessages(); loadConversations(); }
