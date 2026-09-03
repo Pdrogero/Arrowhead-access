@@ -253,6 +253,8 @@ router.post('/office/signup', async (req, res) => {
       const searched = r.officeName.toLowerCase();
       return newNameLower.includes(searched) || searched.includes(newNameLower);
     });
+    const loginButtonHtml = `<p><a href="${process.env.APP_URL}/app.html" style="display:inline-block;background:#2E6F5E;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;">Log in to Arrowhead Access</a></p>`;
+
     if (matches.length) {
       await prisma.officeInterestRequest.updateMany({
         where: { id: { in: matches.map(m => m.id) } },
@@ -262,7 +264,7 @@ router.post('/office/signup', async (req, res) => {
         sendEmail({
           to: m.rep.email,
           subject: `${result.location.name} just joined Arrowhead Access`,
-          html: `${emailLogoHeader()}<p>Good news — <strong>${result.location.name}</strong>, the office you asked to be notified about, just joined Arrowhead Access. You can now find them and book a visit.</p>`,
+          html: `${emailLogoHeader()}<p>Good news — <strong>${result.location.name}</strong>, the office you asked to be notified about, just joined Arrowhead Access. You can now find them and book a visit.</p>${loginButtonHtml}`,
         }).catch(() => {});
       });
     }
@@ -278,7 +280,7 @@ router.post('/office/signup', async (req, res) => {
       sendEmail({
         to: rep.email,
         subject: `${result.location.name} just joined Arrowhead Access`,
-        html: `${emailLogoHeader()}<p><strong>${result.location.name}</strong> just joined Arrowhead Access. Log in to check out their open slots and book a visit.</p>`,
+        html: `${emailLogoHeader()}<p><strong>${result.location.name}</strong> just joined Arrowhead Access. Log in to check out their open slots and book a visit.</p>${loginButtonHtml}`,
       }).catch(() => {});
     });
 
