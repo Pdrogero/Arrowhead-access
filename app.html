@@ -550,65 +550,7 @@ function screenOfficeSettings() {
     <div class="wrap">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
       <h1>Office Settings</h1>
-      <p class="sub">Configure your visit policies and availability.</p>
-
-      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Visit Policies</p>
-      <div class="card">
-        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
-        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Max visits per rep per month</label>
-        <input id="maxVisitsPerRep" type="number" value="1" min="1">
-        
-        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Max visits per company per month</label>
-        <input id="maxVisitsPerCompany" type="number" value="2" min="1">
-        
-        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Confirmation deadline</label>
-        <select id="confirmationDeadlinePreset" onchange="applyConfirmationDeadlinePreset()" style="margin-bottom:8px;">
-          <option value="">Select common option…</option>
-          <option value="24 hours">24 hours</option>
-          <option value="48 hours">48 hours</option>
-          <option value="72 hours">72 hours</option>
-          <option value="1 week">1 week</option>
-        </select>
-        <input id="confirmationDeadline" type="text" placeholder="e.g. 48 hours, 2 business days, by 5pm the day before" value="48 hours">
-        <p style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">Pick a common option above, or type your own for more specific wording.</p>
-
-        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Allergies / dietary notes for reps to know about</label>
-        <textarea id="generalAllergyNotes" rows="3" placeholder="e.g. Please avoid peanuts — a staff member has a severe allergy." style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
-
-        <button class="primary" onclick="saveOfficePolicy()">Save Policy</button>
-      </div>
-
-      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Create Recurring Slots</p>
-      <div class="card">
-        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Event type</label>
-        <select id="recurringEventType" style="margin-bottom:12px;" onchange="prefillRecurringFieldsForEventType()">
-          <option value="REP_VISIT">Rep visit</option>
-          <option value="LUNCH">Lunch</option>
-          <option value="BREAKFAST">Breakfast</option>
-          <option value="COFFEE">Coffee</option>
-          <option value="SNACK">Snack</option>
-          <option value="STAFF_TRAINING">Staff training</option>
-          <option value="OFFICE_CLOSED">Office closed</option>
-        </select>
-        <p id="recurringLunchNote" style="display:none;font-size:12px;color:var(--slate);margin:-8px 0 12px;">Recurring lunches created here won't have headcount, allergy, or order details filled in — add those per-occurrence afterward with "Edit lunch order", or use "Post an open slot" instead to have the same order details carried to every repeat.</p>
-
-        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Days (select all that apply)</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-          ${['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'].map(day => `
-            <label style="display:flex;align-items:center;font-size:13px;"><input type="checkbox" id="day-${day}" style="margin-right:6px;"> ${day.slice(0,3)}</label>
-          `).join('')}
-        </div>
-
-        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Start time</label>
-        <input id="recurringStart" type="time" value="09:00">
-
-        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">End time</label>
-        <input id="recurringEnd" type="time" value="17:00">
-
-        <div id="recurringCurrentScheduleNote" style="font-size:12px;color:var(--slate);margin-bottom:12px;"></div>
-
-        <button class="primary" onclick="createRecurringSlot()">Create Recurring Slots</button>
-      </div>
+      <p class="sub">Configure your availability.</p>
 
       <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Our Team</p>
       <div class="card">
@@ -640,9 +582,6 @@ function screenOfficeSettings() {
           <button type="button" class="primary" style="margin-bottom:0;" onclick="createLocation()">Add this location</button>
         </div>
       </div>
-
-      <div id="saveAllErr"></div>
-      <button class="primary" id="saveAllBtn" style="margin-top:8px;" onclick="saveAllOfficeSettings()">Save All</button>
     </div>`;
 }
 
@@ -655,8 +594,7 @@ function screenPostSlot() {
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Event type</label>
-        <select id="eventType" style="margin-bottom:12px;" onchange="togglePostSlotLunchFields(); toggleShortVisitNote(); prefillPostSlotTimeForEventType();">
-          <option value="REP_VISIT">Rep visit</option>
+        <select id="eventType" style="margin-bottom:12px;" onchange="togglePostSlotLunchFields(); toggleShortVisitNote(); prefillPostSlotTimeForEventType(); updateLunchRepeatHint();">
           <option value="LUNCH">Lunch</option>
           <option value="BREAKFAST">Breakfast</option>
           <option value="COFFEE">Coffee</option>
@@ -673,9 +611,9 @@ function screenPostSlot() {
               <label style="display:flex;align-items:center;font-size:13px;"><input type="checkbox" id="postSlotDay-${day}" style="margin-right:6px;" onchange="updateLunchRepeatHint()"> ${day.slice(0,3)}</label>
             `).join('')}
           </div>
-          <p style="font-size:12px;color:var(--slate);margin:0 0 12px;">Check one or more days to repeat this lunch weekly on those days, using the date below as the starting point. Leave unchecked to use just that exact date.</p>
+          <p style="font-size:12px;color:var(--slate);margin:0 0 12px;">Check one or more days to repeat this event weekly on those days, using the date below as the starting point. Leave unchecked to use just that exact date.</p>
 
-          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Repeat this lunch</label>
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Repeat this event</label>
           <select id="postSlotRepeat" onchange="updateLunchRepeatHint()">
             <option value="">Doesn't repeat</option>
             <option value="MONTHLY">Every month</option>
@@ -690,6 +628,31 @@ function screenPostSlot() {
         <label id="endTimeLabel" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">End time</label>
         <input id="endTime" type="datetime-local">
         <button class="primary" id="postSlotBtn" onclick="submitPostSlot()">Post slot</button>
+      </div>
+
+      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Visit Policies</p>
+      <div class="card">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Max visits per rep per month</label>
+        <input id="maxVisitsPerRep" type="number" value="1" min="1">
+
+        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Max visits per company per month</label>
+        <input id="maxVisitsPerCompany" type="number" value="2" min="1">
+
+        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Confirmation deadline</label>
+        <select id="confirmationDeadlinePreset" onchange="applyConfirmationDeadlinePreset()" style="margin-bottom:8px;">
+          <option value="">Select common option…</option>
+          <option value="24 hours">24 hours</option>
+          <option value="48 hours">48 hours</option>
+          <option value="72 hours">72 hours</option>
+          <option value="1 week">1 week</option>
+        </select>
+        <input id="confirmationDeadline" type="text" placeholder="e.g. 48 hours, 2 business days, by 5pm the day before" value="48 hours">
+        <p style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">Pick a common option above, or type your own for more specific wording.</p>
+
+        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Allergies / dietary notes for reps to know about</label>
+        <textarea id="generalAllergyNotes" rows="3" placeholder="e.g. Please avoid peanuts — a staff member has a severe allergy." style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
+
+        <button class="primary" onclick="saveOfficePolicy()">Save Policy</button>
       </div>
     </div>`;
 }
@@ -916,10 +879,12 @@ function readLunchDetailsFields(prefix) {
 }
 
 window.togglePostSlotLunchFields = function() {
-  const isLunch = document.getElementById('eventType').value === 'LUNCH';
-  document.getElementById('postSlotLunchFields').style.display = isLunch ? '' : 'none';
-  document.getElementById('startTimeLabel').textContent = isLunch ? 'Start time for lunch' : 'Start time';
-  document.getElementById('endTimeLabel').textContent = isLunch ? 'End time for lunch' : 'End time';
+  const eventType = document.getElementById('eventType').value;
+  const hasOrderDetails = eventType === 'LUNCH' || eventType === 'BREAKFAST';
+  const label = eventType === 'LUNCH' ? 'lunch' : 'breakfast';
+  document.getElementById('postSlotLunchFields').style.display = hasOrderDetails ? '' : 'none';
+  document.getElementById('startTimeLabel').textContent = hasOrderDetails ? `Start time for ${label}` : 'Start time';
+  document.getElementById('endTimeLabel').textContent = hasOrderDetails ? `End time for ${label}` : 'End time';
 };
 
 const SHORT_VISIT_NOTES = {
@@ -965,29 +930,31 @@ const REPEAT_LENGTH_LABELS = { MONTHLY: '1 month', QUARTERLY: '3 months', SEMIAN
 window.updateLunchRepeatHint = function() {
   const hint = document.getElementById('postSlotRepeatHint');
   if (!hint) return;
+  const eventLabel = document.getElementById('eventType')?.value === 'BREAKFAST' ? 'breakfast' : 'lunch';
   const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
     .filter(d => document.getElementById('postSlotDay-' + d)?.checked);
   const repeat = document.getElementById('postSlotRepeat').value;
   if (days.length) {
     const dayLabel = days.map(d => d.slice(0, 1) + d.slice(1, 3).toLowerCase()).join('/');
     hint.textContent = repeat
-      ? `Will post a lunch every ${dayLabel} until about ${REPEAT_LENGTH_LABELS[repeat]} out, all with the same details.`
-      : `Will post a lunch on the next ${dayLabel} this week only. Pick a repeat length above to keep it going.`;
+      ? `Will post a ${eventLabel} every ${dayLabel} until about ${REPEAT_LENGTH_LABELS[repeat]} out, all with the same details.`
+      : `Will post a ${eventLabel} on the next ${dayLabel} this week only. Pick a repeat length above to keep it going.`;
   } else {
     hint.textContent = 'Same headcount, allergy notes, and order details will be copied to each repeat, about 2 years out.';
   }
 };
 
-// Renders a read-only summary of a lunch's order details, for reps looking
-// at an open slot or their own booking. Returns '' for non-lunch slots or
-// lunches with nothing filled in yet.
+// Renders a read-only summary of a lunch/breakfast's order details, for
+// reps looking at an open slot or their own booking. Returns '' for event
+// types with no order details, or ones with nothing filled in yet.
 function lunchDetailsSummaryHtml(slot) {
-  if (slot.eventType !== 'LUNCH') return '';
+  if (slot.eventType !== 'LUNCH' && slot.eventType !== 'BREAKFAST') return '';
   const hasAnything = slot.headCount || slot.allergyNotes || slot.foodOrderNotes || slot.repHandlesOrder;
   if (!hasAnything) return '';
+  const label = slot.eventType === 'LUNCH' ? 'Lunch' : 'Breakfast';
   return `
     <div style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:12px;color:var(--ink);">
-      🍽 <strong>Lunch order</strong>
+      🍽 <strong>${label} order</strong>
       ${slot.headCount ? `<div>${slot.headCount} people</div>` : ''}
       ${slot.allergyNotes ? `<div>Allergies: ${slot.allergyNotes.replace(/</g, '&lt;')}</div>` : ''}
       ${slot.repHandlesOrder ? `<div style="font-weight:600;color:var(--coral);">Office asked rep to place the order</div>` : ''}
@@ -3127,93 +3094,17 @@ async function loadOfficePolicy() {
 // Saves the Visit Policies (incl. allergy notes) and the team list together
 // with one button — doesn't touch Recurring Slots or Locations, since those
 // are one-off actions rather than settings with a persistent draft state.
-window.saveAllOfficeSettings = async function() {
-  const btn = document.getElementById('saveAllBtn');
-  const errBox = document.getElementById('saveAllErr');
-  errBox.innerHTML = '';
-  btn.disabled = true;
-  const originalText = btn.textContent;
-  btn.textContent = 'Saving…';
-
-  try {
-    const [policyOk, employeesOk] = await Promise.all([
-      saveOfficePolicy(true),
-      saveEmployees(true),
-    ]);
-
-    if (policyOk && employeesOk) {
-      alert('All settings saved!');
-    } else {
-      const failed = [!policyOk && 'Visit Policies', !employeesOk && 'Our Team'].filter(Boolean).join(' and ');
-      errBox.innerHTML = `<div class="msg err">Could not save: ${failed}. Please try again.</div>`;
-    }
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalText;
-  }
-};
-
-window.createRecurringSlot = async function() {
-  const days = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY']
-    .filter(day => document.getElementById('day-' + day).checked);
-  const startTime = document.getElementById('recurringStart').value;
-  const endTime = document.getElementById('recurringEnd').value;
-  const eventType = document.getElementById('recurringEventType').value;
-
-  if (!days.length || !startTime || !endTime) {
-    alert('Select at least one day and both times');
-    return;
-  }
-
-  try {
-    await api('/api/policies/recurring', {
-      method: 'POST',
-      body: JSON.stringify({ daysOfWeek: days, startTime, endTime, eventType })
-    });
-    alert('Recurring slots created for the next 12 weeks!');
-    await loadRecurringTemplates();
-  } catch (err) {
-    alert(err.message);
-  }
-};
-
+// Reads any recurring-schedule templates the office previously saved
+// (from before recurring scheduling moved fully into "Post an open
+// slot") — kept only so prefillPostSlotTimeForEventType can still default
+// an event type's start/end time to that saved schedule when there is one.
 async function loadRecurringTemplates() {
   try {
     recurringTemplates = await api('/api/policies/recurring');
   } catch (err) {
     recurringTemplates = [];
   }
-  prefillRecurringFieldsForEventType();
 }
-
-// Finds the most recently created recurring template matching whichever
-// event type is currently selected, and checks the matching days/times so
-// the office can see (and keep seeing after logging back in) what's
-// already scheduled instead of the form always looking blank.
-window.prefillRecurringFieldsForEventType = function() {
-  const eventType = document.getElementById('recurringEventType')?.value;
-  const note = document.getElementById('recurringCurrentScheduleNote');
-  const lunchNote = document.getElementById('recurringLunchNote');
-  const days = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
-  const template = recurringTemplates.find(t => t.eventType === eventType);
-  const defaults = DEFAULT_EVENT_TIMES[eventType] || { start: '09:00', end: '17:00' };
-
-  days.forEach(day => {
-    const cb = document.getElementById('day-' + day);
-    if (cb) cb.checked = !!template?.daysOfWeek.includes(day);
-  });
-
-  if (document.getElementById('recurringStart')) document.getElementById('recurringStart').value = template?.startTime || defaults.start;
-  if (document.getElementById('recurringEnd')) document.getElementById('recurringEnd').value = template?.endTime || defaults.end;
-
-  if (lunchNote) lunchNote.style.display = eventType === 'LUNCH' ? '' : 'none';
-
-  if (note) {
-    note.textContent = template
-      ? `Currently scheduled: ${template.daysOfWeek.map(d => d.slice(0, 3)).join(', ')}, ${template.startTime}–${template.endTime}`
-      : '';
-  }
-};
 
 async function submitPostSlot() {
   const startTime = document.getElementById('startTime').value;
@@ -3227,7 +3118,7 @@ async function submitPostSlot() {
   }
 
   const payload = { startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), eventType };
-  if (eventType === 'LUNCH') {
+  if (eventType === 'LUNCH' || eventType === 'BREAKFAST') {
     Object.assign(payload, readLunchDetailsFields('postSlot'));
     const repeat = document.getElementById('postSlotRepeat').value;
     if (repeat) payload.repeatInterval = repeat;
@@ -3239,7 +3130,7 @@ async function submitPostSlot() {
   btn.disabled = true; btn.textContent = 'Posting…';
   try {
     const res = await api('/api/slots', { method: 'POST', body: JSON.stringify(payload) });
-    alert(res.created > 1 ? `${res.created} lunches posted!` : 'Slot posted!');
+    alert(res.created > 1 ? `${res.created} slots posted!` : 'Slot posted!');
     setState({ screen: 'dashboard' });
   } catch (err) {
     setState({ formErr: err.message });
@@ -3321,8 +3212,8 @@ async function loadOfficeLedger() {
         ${s.status === 'OPEN' ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="removeOpenSlot('${s.id}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Remove</button>` : ''}
         ${s.status === 'CONFIRMED' && s.booking?.rep && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🔄 Cancel/Reschedule</button>` : ''}
         ${officeCancelDraft && s.booking && officeCancelDraft.bookingId === s.booking.id ? cancelSuggestFormHtml(officeCancelDraft.repName, 'finalizeCancelOfficeBooking') : ''}
-        ${s.eventType === 'LUNCH' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="toggleLunchEdit('${s.id}')">🍽 Edit lunch order</button>` : ''}
-        ${s.eventType === 'LUNCH' ? `
+        ${s.eventType === 'LUNCH' || s.eventType === 'BREAKFAST' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="toggleLunchEdit('${s.id}')">🍽 Edit order</button>` : ''}
+        ${s.eventType === 'LUNCH' || s.eventType === 'BREAKFAST' ? `
           <div id="lunchEditBox-${s.id}" class="card" style="display:none;width:100%;margin-top:10px;padding:14px;">
             ${lunchDetailsFieldsHtml('lunchEdit' + s.id, s, { includeTime: true })}
             <button class="primary" style="margin-top:0;margin-bottom:0;" onclick="saveLunchDetails('${s.id}')">Save order details</button>
@@ -3370,7 +3261,7 @@ async function loadMyBookings() {
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="logConcurExpense('${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🧾 Log in Concur</button>` : ''}
           ${b.status === 'CONFIRMED' && !(repCancelDraft && repCancelDraft.bookingId === b.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelRepBooking('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🔄 Cancel/Reschedule</button>` : ''}
         </div>
-        ${b.status === 'CONFIRMED' && b.slot.eventType === 'LUNCH' ? `
+        ${b.status === 'CONFIRMED' && (b.slot.eventType === 'LUNCH' || b.slot.eventType === 'BREAKFAST') ? `
           <div style="width:100%;margin-top:8px;">
             <p style="font-size:11.5px;font-weight:600;color:#B5651D;margin:0 0 6px;">Need help ordering food, try here!</p>
             <div style="display:flex;gap:8px;">
@@ -4023,13 +3914,13 @@ function render() {
   else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
   else if (state.screen === 'signup') { app.innerHTML = screenSignup(); renderTurnstile(); }
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
-  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); loadOfficePolicy(); loadRecurringTemplates(); }
+  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); }
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
   else if (state.screen === 'officeDetail') { app.innerHTML = screenOfficeDetail(); }
   else if (state.screen === 'repProfileView') { app.innerHTML = screenRepProfileView(); }
   else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }
-  else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); loadRecurringTemplates().then(prefillPostSlotTimeForEventType); }
+  else if (state.screen === 'postSlot') { app.innerHTML = screenPostSlot(); loadOfficePolicy(); loadRecurringTemplates().then(prefillPostSlotTimeForEventType); }
   else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
   else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }
   else if (state.screen === 'messages') { app.innerHTML = screenMessages(); loadConversations(); }

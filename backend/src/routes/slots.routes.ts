@@ -114,19 +114,24 @@ router.post('/', requireAuth, async (req, res) => {
     const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
     if (!staff) return res.status(404).json({ error: 'Staff account not found' });
 
-    const lunchDetails = eventType === 'LUNCH' ? {
+    // Breakfast gets the same headcount/allergy/order-details and
+    // repeat-scheduling treatment as lunch — the two are otherwise
+    // identical from the office's point of view, just at a different meal.
+    const hasOrderDetails = eventType === 'LUNCH' || eventType === 'BREAKFAST';
+    const lunchDetails = hasOrderDetails ? {
       headCount: headCount != null && headCount !== '' ? parseInt(headCount, 10) : null,
       allergyNotes: allergyNotes || null,
       foodOrderNotes: foodOrderNotes || null,
       repHandlesOrder: !!repHandlesOrder,
     } : {};
 
-    // A lunch posted for specific weekdays (e.g. every Mon/Wed) replaces the
-    // single-slot + same-date-repeat path below: startTime/endTime supply
-    // the starting date, time-of-day, and duration, and a slot is created
-    // for every matching weekday out to the chosen repeat length (or just
-    // the current week if no repeat length was chosen).
-    if (eventType === 'LUNCH' && Array.isArray(daysOfWeek) && daysOfWeek.length) {
+    // A lunch/breakfast posted for specific weekdays (e.g. every Mon/Wed)
+    // replaces the single-slot + same-date-repeat path below:
+    // startTime/endTime supply the starting date, time-of-day, and
+    // duration, and a slot is created for every matching weekday out to
+    // the chosen repeat length (or just the current week if no repeat
+    // length was chosen).
+    if (hasOrderDetails && Array.isArray(daysOfWeek) && daysOfWeek.length) {
       const selectedDays: number[] = daysOfWeek
         .map((d: string) => DAY_NAME_TO_INDEX[d])
         .filter((i: number | undefined): i is number => i !== undefined);
@@ -155,7 +160,7 @@ router.post('/', requireAuth, async (req, res) => {
               startTime: occStart,
               endTime: new Date(occStart.getTime() + durationMs),
               status: 'OPEN' as const,
-              eventType: 'LUNCH' as const,
+              eventType,
               createdByStaffId: staff.id,
               ...lunchDetails,
             });
@@ -168,7 +173,7 @@ router.post('/', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'No matching days fall between the start time and the repeat length chosen' });
       }
       await prisma.slot.createMany({ data: created });
-      notifyRepsOfNewSlot(staff.locationId, created[0].startTime, 'LUNCH');
+      notifyRepsOfNewSlot(staff.locationId, created[0].startTime, eventType);
       return res.status(201).json({ created: created.length });
     }
 
@@ -184,7 +189,7 @@ router.post('/', requireAuth, async (req, res) => {
       },
     });
 
-    const months = eventType === 'LUNCH' ? REPEAT_INTERVAL_MONTHS[repeatInterval] : undefined;
+    const months = hasOrderDetails ? REPEAT_INTERVAL_MONTHS[repeatInterval] : undefined;
     if (months) {
       const horizon = new Date(startTime);
       horizon.setFullYear(horizon.getFullYear() + REPEAT_HORIZON_YEARS);
@@ -200,7 +205,7 @@ router.post('/', requireAuth, async (req, res) => {
           startTime: occStart,
           endTime: addMonthsPreserveTime(origEnd, months * i),
           status: 'OPEN' as const,
-          eventType: 'LUNCH' as const,
+          eventType,
           createdByStaffId: staff.id,
           ...lunchDetails,
         });
@@ -229,8 +234,8 @@ router.patch('/:id/lunch-details', requireAuth, async (req, res) => {
     if (!slot || slot.locationId !== staff.locationId) {
       return res.status(404).json({ error: 'Slot not found' });
     }
-    if (slot.eventType !== 'LUNCH') {
-      return res.status(400).json({ error: 'Only lunch slots can have order details' });
+    if (slot.eventType !== 'LUNCH' && slot.eventType !== 'BREAKFAST') {
+      return res.status(400).json({ error: 'Only lunch or breakfast slots can have order details' });
     }
 
     const { headCount, allergyNotes, foodOrderNotes, repHandlesOrder, startTime, endTime } = req.body;
