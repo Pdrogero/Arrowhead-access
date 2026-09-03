@@ -165,10 +165,11 @@ router.get('/office', requireAuth, requireRole('office_admin', 'office_staff'), 
   }
 });
 
-// --- Office: forward a piece of shared literature to any email address ----
-// (a colleague, a patient, themselves) — separate from accept/decline,
-// since forwarding it on doesn't imply either decision.
-router.post('/:id/email', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+// --- Office: forward one or more pieces of shared literature to any email -
+// address (a colleague, a patient, themselves) in a single email —
+// separate from accept/decline, since forwarding it on doesn't imply
+// either decision.
+router.post('/email', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {
     const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
@@ -178,26 +179,36 @@ router.post('/:id/email', requireAuth, requireRole('office_admin', 'office_staff
       return res.status(400).json({ error: 'Enter a valid email address' });
     }
 
-    const item = await prisma.literatureItem.findUnique({
-      where: { id: req.params.id },
+    const ids = Array.isArray(req.body.ids)
+      ? req.body.ids.filter((id: unknown): id is string => typeof id === 'string')
+      : [];
+    if (!ids.length) return res.status(400).json({ error: 'Select at least one item to email' });
+
+    const items = await prisma.literatureItem.findMany({
+      where: { id: { in: ids }, locationId: staff.locationId },
       include: { rep: true, attachments: true },
     });
-    if (!item || item.locationId !== staff.locationId) {
-      return res.status(404).json({ error: 'Item not found' });
-    }
+    if (!items.length) return res.status(404).json({ error: 'No matching items found' });
 
-    const links = [...item.attachments.map(a => a.url), ...(item.linkUrl ? [item.linkUrl] : [])];
-    const linksHtml = links.length
-      ? `<p>${links.map(u => `<a href="${u}">${u}</a>`).join('<br>')}</p>`
-      : '';
+    const sectionsHtml = items.map(item => {
+      const links = [...item.attachments.map(a => a.url), ...(item.linkUrl ? [item.linkUrl] : [])];
+      const linksHtml = links.length
+        ? `<p style="margin:4px 0 0;">${links.map(u => `<a href="${u}">${u}</a>`).join('<br>')}</p>`
+        : '';
+      return `<div style="margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #E5E7EB;">
+        <p style="margin:0;"><strong>${item.title}</strong>, shared by ${item.rep.name}${item.rep.companyName ? ` (${item.rep.companyName})` : ''}.</p>
+        ${item.description ? `<p style="margin:4px 0 0;">${item.description.replace(/</g, '&lt;')}</p>` : ''}
+        ${linksHtml}
+      </div>`;
+    }).join('');
 
     await sendEmail({
       to,
-      subject: `${item.title} — shared via Arrowhead Access`,
-      html: `${emailLogoHeader()}<p><strong>${item.title}</strong>, shared by ${item.rep.name}${item.rep.companyName ? ` (${item.rep.companyName})` : ''}.</p>${item.description ? `<p>${item.description.replace(/</g, '&lt;')}</p>` : ''}${linksHtml}`,
+      subject: items.length === 1 ? `${items[0].title} — shared via Arrowhead Access` : `${items.length} items shared via Arrowhead Access`,
+      html: `${emailLogoHeader()}${sectionsHtml}`,
     });
 
-    res.json({ message: 'Sent' });
+    res.json({ message: 'Sent', count: items.length });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not send email' });

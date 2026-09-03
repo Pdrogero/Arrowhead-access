@@ -189,6 +189,9 @@ let conversationMessages = [];
 let literatureRows = [];
 let materialsData = [];
 let literatureTargetLocationId = '';
+// Office-side literature items currently checked, for emailing more than
+// one at once — cleared whenever the list is reloaded.
+let selectedLiteratureIds = new Set();
 
 // ========== UTILITY ==========
 async function api(path, options = {}) {
@@ -2170,7 +2173,14 @@ function screenLiterature() {
           <button class="primary" onclick="submitLiterature()">Send to office</button>
         </div>
         <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">What you've sent</p>
-      ` : `<p class="sub">Literature and samples reps have sent for your review.</p>`}
+      ` : `<p class="sub">Literature and samples reps have sent for your review.</p>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="literatureSelectAllCb" onchange="toggleLiteratureSelectAll(this.checked)">
+            Select all
+          </label>
+          <button type="button" id="emailSelectedLiteratureBtn" onclick="emailSelectedLiterature()" disabled style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">✉️ Email selected</button>
+        </div>`}
       <div id="literatureBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
@@ -2259,8 +2269,10 @@ async function loadLiterature() {
         </div>`).join('') : '<div class="empty">You have not sent anything yet.</div>';
     } else {
       literatureRows = await api('/api/literature/office');
+      selectedLiteratureIds = new Set();
       box.innerHTML = literatureRows.length ? literatureRows.map(item => `
         <div class="row" style="flex-wrap:wrap;">
+          <input type="checkbox" class="literatureSelectCb" style="margin-right:8px;align-self:flex-start;margin-top:2px;" onchange="toggleLiteratureSelect('${item.id}', this.checked)">
           <div class="mid">
             <div class="who">${item.title}</div>
             <div class="what">${item.rep.name} · ${item.rep.companyName}</div>
@@ -2273,9 +2285,9 @@ async function loadLiterature() {
               <button style="flex:1;background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="decideLiterature('${item.id}','accept')">✓ Accept</button>
               <button style="flex:1;background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="decideLiterature('${item.id}','decline')">✕ Decline</button>
             </div>` : ''}
-          <button style="width:100%;background:none;border:none;color:var(--teal);font-size:12px;font-weight:600;cursor:pointer;padding:6px 4px;margin-top:4px;text-align:left;" onclick="emailLiteratureItem('${item.id}')">✉️ Email this</button>
-          <button style="width:100%;background:none;border:none;color:var(--slate);font-size:12px;font-weight:600;cursor:pointer;padding:6px 4px;text-align:left;" onclick="deleteLiteratureItem('${item.id}')">🗑 Delete</button>
+          <button style="width:100%;background:none;border:none;color:var(--slate);font-size:12px;font-weight:600;cursor:pointer;padding:6px 4px;margin-top:4px;text-align:left;" onclick="deleteLiteratureItem('${item.id}')">🗑 Delete</button>
         </div>`).join('') : '<div class="empty">Nothing submitted yet.</div>';
+      updateLiteratureEmailBar();
     }
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
@@ -2492,12 +2504,38 @@ window.decideLiterature = async function(id, decision) {
   }
 };
 
-window.emailLiteratureItem = async function(id) {
-  const to = prompt('Email this material to which address?');
+window.toggleLiteratureSelect = function(id, checked) {
+  if (checked) selectedLiteratureIds.add(id); else selectedLiteratureIds.delete(id);
+  updateLiteratureEmailBar();
+};
+
+window.toggleLiteratureSelectAll = function(checked) {
+  selectedLiteratureIds = new Set(checked ? literatureRows.map(r => r.id) : []);
+  document.querySelectorAll('.literatureSelectCb').forEach(cb => { cb.checked = checked; });
+  updateLiteratureEmailBar();
+};
+
+// Keeps the "Email selected" button's label/enabled state and the "Select
+// all" checkbox's own checked state in sync after any selection change.
+function updateLiteratureEmailBar() {
+  const btn = document.getElementById('emailSelectedLiteratureBtn');
+  if (btn) {
+    btn.disabled = selectedLiteratureIds.size === 0;
+    btn.textContent = selectedLiteratureIds.size ? `✉️ Email selected (${selectedLiteratureIds.size})` : '✉️ Email selected';
+  }
+  const selectAll = document.getElementById('literatureSelectAllCb');
+  if (selectAll) selectAll.checked = literatureRows.length > 0 && selectedLiteratureIds.size === literatureRows.length;
+}
+
+window.emailSelectedLiterature = async function() {
+  if (!selectedLiteratureIds.size) return;
+  const count = selectedLiteratureIds.size;
+  const to = prompt(`Email ${count} selected item${count === 1 ? '' : 's'} to which address?`);
   if (!to) return;
   try {
-    await api(`/api/literature/${id}/email`, { method: 'POST', body: JSON.stringify({ to }) });
+    await api('/api/literature/email', { method: 'POST', body: JSON.stringify({ ids: [...selectedLiteratureIds], to }) });
     alert('Sent!');
+    loadLiterature();
   } catch (err) {
     alert(err.message);
   }
