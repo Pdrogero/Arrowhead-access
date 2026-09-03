@@ -95,6 +95,9 @@ router.post('/recurring', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'daysOfWeek, startTime, endTime, eventType required' });
     }
 
+    const location = await prisma.location.findUnique({ where: { id: staff.locationId } });
+    if (!location) return res.status(404).json({ error: 'Location not found' });
+
     const template = await prisma.recurringSlotTemplate.create({
       data: {
         locationId: staff.locationId,
@@ -107,7 +110,7 @@ router.post('/recurring', requireAuth, async (req, res) => {
     });
 
     // Immediately generate slots for the next 12 weeks
-    await generateSlotsFromTemplate(staff.locationId, template);
+    await generateSlotsFromTemplate(staff.locationId, template, location.timezone);
 
     res.status(201).json(template);
   } catch (err) {
@@ -116,8 +119,29 @@ router.post('/recurring', requireAuth, async (req, res) => {
   }
 });
 
+// Converts a wall-clock date/time as understood in a given IANA timezone
+// into the correct UTC instant, accounting for that timezone's DST rules
+// on that specific date. Needed because Render always runs the server
+// itself in UTC — naively calling Date#setHours would apply the office's
+// entered time-of-day as if it were UTC, which is off by the office's
+// actual UTC offset (e.g. entering "12:00" for an Eastern-time office
+// would store 12:00 UTC, which displays back as 8am Eastern).
+function zonedWallClockToUtc(year: number, month: number, day: number, hour: number, minute: number, timeZone: string): Date {
+  const utcGuess = new Date(Date.UTC(year, month, day, hour, minute, 0, 0));
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(utcGuess).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {} as Record<string, string>);
+  const asIfUtc = Date.UTC(
+    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+    Number(parts.hour) % 24, Number(parts.minute), Number(parts.second),
+  );
+  const offset = asIfUtc - utcGuess.getTime();
+  return new Date(utcGuess.getTime() - offset);
+}
+
 // Helper: expand a recurring template into actual Slot rows
-async function generateSlotsFromTemplate(locationId: string, template: any) {
+async function generateSlotsFromTemplate(locationId: string, template: any, timezone: string) {
   const now = new Date();
   const endDate = template.endsAt || new Date(now.getTime() + 12 * 7 * 24 * 60 * 60 * 1000); // 12 weeks
 
@@ -135,11 +159,8 @@ async function generateSlotsFromTemplate(locationId: string, template: any) {
   while (current < endDate) {
     const dayName = Object.keys(daysMap).find(k => daysMap[k] === current.getDay());
     if (dayName && template.daysOfWeek.includes(dayName)) {
-      const slotStart = new Date(current);
-      slotStart.setHours(startHour, startMin, 0, 0);
-
-      const slotEnd = new Date(current);
-      slotEnd.setHours(endHour, endMin, 0, 0);
+      const slotStart = zonedWallClockToUtc(current.getFullYear(), current.getMonth(), current.getDate(), startHour, startMin, timezone);
+      const slotEnd = zonedWallClockToUtc(current.getFullYear(), current.getMonth(), current.getDate(), endHour, endMin, timezone);
 
       slots.push({
         locationId,
