@@ -11,12 +11,21 @@ export class BookingError extends Error {
   }
 }
 
+// A rep can claim at most this many lunches/breakfasts at the same office
+// in a trailing 30-day window, regardless of the office's own configurable
+// visit cap — keeps one rep from claiming every meal slot in a month and
+// shutting other reps out of that office's lunches/breakfasts entirely.
+const MEALS_PER_REP_PER_LOCATION_CAP = 2;
+const MEAL_EVENT_TYPES = ['LUNCH', 'BREAKFAST'];
+
 // --- Frequency cap check -----------------------------------------------
 // Counts CONFIRMED bookings for this rep (and separately, this rep's company)
 // at this location in the trailing 30 days, and compares against the
 // location's policy. Called inside a transaction so it's race-safe.
+// `eventType`, when given, additionally enforces the fixed lunch/breakfast
+// cap above — pass it whenever the slot being booked has a known type.
 
-async function checkFrequencyCap(tx: any, locationId: string, repId: string) {
+async function checkFrequencyCap(tx: any, locationId: string, repId: string, eventType?: string) {
   const location = await tx.location.findUniqueOrThrow({ where: { id: locationId } });
   const rep = await tx.rep.findUniqueOrThrow({ where: { id: repId } });
 
@@ -53,6 +62,23 @@ async function checkFrequencyCap(tx: any, locationId: string, repId: string) {
       );
     }
   }
+
+  if (eventType && MEAL_EVENT_TYPES.includes(eventType)) {
+    const mealVisits = await tx.booking.count({
+      where: {
+        repId,
+        status: 'CONFIRMED',
+        slot: { locationId, eventType: { in: MEAL_EVENT_TYPES } },
+        requestedAt: { gte: thirtyDaysAgo },
+      },
+    });
+    if (mealVisits >= MEALS_PER_REP_PER_LOCATION_CAP) {
+      throw new BookingError(
+        `This rep has already claimed ${MEALS_PER_REP_PER_LOCATION_CAP} lunches/breakfasts at this office this month.`,
+        'MEAL_CAP_REACHED'
+      );
+    }
+  }
 }
 
 // --- Claim an already-open slot -----------------------------------------
@@ -79,7 +105,7 @@ export async function claimOpenSlot(params: {
       throw new BookingError('Only verified reps can book visits.', 'REP_NOT_VERIFIED');
     }
 
-    await checkFrequencyCap(tx, slot.locationId, repId);
+    await checkFrequencyCap(tx, slot.locationId, repId, slot.eventType);
 
     const newSlotStatus = requiresApproval ? SlotStatus.REQUESTED : SlotStatus.CONFIRMED;
     const newBookingStatus = requiresApproval ? BookingStatus.REQUESTED : BookingStatus.CONFIRMED;
@@ -149,7 +175,7 @@ export async function decideBooking(params: {
 
     if (decision === 'approve') {
       // Re-check the cap at approval time too — time may have passed since the request.
-      await checkFrequencyCap(tx, booking.slot.locationId, booking.repId);
+      await checkFrequencyCap(tx, booking.slot.locationId, booking.repId, booking.slot.eventType);
       await tx.slot.update({ where: { id: booking.slotId }, data: { status: SlotStatus.CONFIRMED } });
       return tx.booking.update({
         where: { id: bookingId },
