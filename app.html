@@ -156,6 +156,11 @@ let browseOfficeRatings = {};
 let favoriteLocationIds = new Set();
 let favoriteOfficesData = null;
 let browseSearchQuery = '';
+// Appointment types currently shown in Open Slots — starts with all of
+// them checked (OFFICE_CLOSED excluded; it's a blocking placeholder, not
+// something a rep would search for) so the filter is a no-op until a rep
+// narrows it down.
+let browseTypeFilter = new Set(['REP_VISIT', 'LUNCH', 'BREAKFAST', 'QUICK_VISIT', 'STAFF_TRAINING']);
 let browseViewMode = 'list'; // 'list' | 'calendar'
 let browseCalendarMonth = new Date();
 let browseCalendarSelectedDay = null;
@@ -694,9 +699,39 @@ function screenBrowseSlots() {
         </div>
         <button type="button" id="browseViewToggleBtn" onclick="toggleBrowseView()" style="white-space:nowrap;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">${browseViewMode === 'list' ? '📅 Calendar view' : '📋 List view'}</button>
       </div>
+      <div style="margin-bottom:16px;">
+        <button type="button" id="browseFilterToggleBtn" onclick="toggleBrowseFilterPanel()" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🎚️ Appointment type${browseFilterSummary()}</button>
+        <div id="browseFilterPanel" style="display:none;margin-top:8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;flex-wrap:wrap;gap:12px;">
+          ${Object.keys(EVENT_TYPE_LABELS).filter(t => t !== 'OFFICE_CLOSED').map(t => `
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+              <input type="checkbox" ${browseTypeFilter.has(t) ? 'checked' : ''} onchange="toggleBrowseTypeFilter('${t}', this.checked)">
+              ${eventTypeLabel(t)}
+            </label>
+          `).join('')}
+        </div>
+      </div>
       <div id="browseContent"><div class="listcard"><div class="empty">Loading…</div></div></div>
     </div>`;
 }
+
+// Short "(N selected)" suffix on the filter toggle button, blank when
+// every type is checked (i.e. the filter isn't actually narrowing anything).
+function browseFilterSummary() {
+  const total = Object.keys(EVENT_TYPE_LABELS).filter(t => t !== 'OFFICE_CLOSED').length;
+  return browseTypeFilter.size < total ? ` (${browseTypeFilter.size} selected)` : '';
+}
+
+window.toggleBrowseFilterPanel = function() {
+  const panel = document.getElementById('browseFilterPanel');
+  if (panel) panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+};
+
+window.toggleBrowseTypeFilter = function(type, checked) {
+  if (checked) browseTypeFilter.add(type); else browseTypeFilter.delete(type);
+  const btn = document.getElementById('browseFilterToggleBtn');
+  if (btn) btn.textContent = `🎚️ Appointment type${browseFilterSummary()}`;
+  renderBrowseContent();
+};
 
 const EVENT_TYPE_LABELS = {
   REP_VISIT: 'Rep visit',
@@ -975,9 +1010,12 @@ function toggleBrowseView() {
 
 function renderBrowseContent() {
   const query = browseSearchQuery.trim().toLowerCase();
-  const filtered = query
+  let filtered = query
     ? openSlotsData.filter(s => s.location.name.toLowerCase().includes(query))
     : openSlotsData;
+  // OFFICE_CLOSED entries are informational blockers, not appointment
+  // types a rep would filter for, so they're always shown regardless.
+  filtered = filtered.filter(s => s.eventType === 'OFFICE_CLOSED' || browseTypeFilter.has(s.eventType));
 
   if (browseViewMode === 'calendar') renderBrowseCalendar(filtered);
   else renderBrowseList(filtered);
