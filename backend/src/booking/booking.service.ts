@@ -11,11 +11,12 @@ export class BookingError extends Error {
   }
 }
 
-// A rep can claim at most this many lunches/breakfasts at the same office
-// in a trailing 30-day window, regardless of the office's own configurable
-// visit cap — keeps one rep from claiming every meal slot in a month and
+// A rep can claim at most this many lunches, and separately this many
+// breakfasts, at the same office in a trailing 30-day window (so up to 4
+// meal bookings total), regardless of the office's own configurable visit
+// cap — keeps one rep from claiming every meal slot in a month and
 // shutting other reps out of that office's lunches/breakfasts entirely.
-const MEALS_PER_REP_PER_LOCATION_CAP = 2;
+const MEALS_PER_TYPE_PER_REP_PER_LOCATION_CAP = 2;
 const MEAL_EVENT_TYPES = ['LUNCH', 'BREAKFAST'];
 
 // --- Frequency cap check -----------------------------------------------
@@ -68,13 +69,14 @@ async function checkFrequencyCap(tx: any, locationId: string, repId: string, eve
       where: {
         repId,
         status: 'CONFIRMED',
-        slot: { locationId, eventType: { in: MEAL_EVENT_TYPES } },
+        slot: { locationId, eventType },
         requestedAt: { gte: thirtyDaysAgo },
       },
     });
-    if (mealVisits >= MEALS_PER_REP_PER_LOCATION_CAP) {
+    if (mealVisits >= MEALS_PER_TYPE_PER_REP_PER_LOCATION_CAP) {
+      const label = eventType === 'LUNCH' ? 'lunches' : 'breakfasts';
       throw new BookingError(
-        `This rep has already claimed ${MEALS_PER_REP_PER_LOCATION_CAP} lunches/breakfasts at this office this month.`,
+        `This rep has already claimed ${MEALS_PER_TYPE_PER_REP_PER_LOCATION_CAP} ${label} at this office this month.`,
         'MEAL_CAP_REACHED'
       );
     }
