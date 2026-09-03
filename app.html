@@ -405,7 +405,6 @@ function screenSignup() {
         <div class="card">
           ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
           <input id="officeName" type="text" placeholder="Office name">
-          <input id="locationName" type="text" placeholder="Location name">
           <input id="address" type="text" placeholder="Address">
           <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
           <input id="password" type="password" placeholder="Password" autocomplete="new-password">
@@ -2736,13 +2735,16 @@ async function doRepSignup() {
 
 async function doOfficeSignup() {
   const officeName = document.getElementById('officeName').value;
-  const locationName = document.getElementById('locationName').value;
   const address = document.getElementById('address').value;
   const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
 
   try {
-    const res = await api('/api/auth/office/signup', { method: 'POST', body: JSON.stringify({ officeName, locationName, address, email, password, turnstileToken }) });
+    // The office's first location just takes the office name too — a
+    // separate "location name" field was redundant for a first-time
+    // signup. An office with more than one location can give each one
+    // its own name afterward under Settings → Locations.
+    const res = await api('/api/auth/office/signup', { method: 'POST', body: JSON.stringify({ officeName, locationName: officeName, address, email, password, turnstileToken }) });
     localStorage.setItem('token', res.token);
     state.me = res.staff;
     setState({ screen: 'dashboard', role: 'office' });
