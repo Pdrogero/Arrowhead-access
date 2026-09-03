@@ -5,9 +5,68 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole, requireActiveSubscription } from '../auth/auth.guard';
+import { sendEmail, emailLogoHeader } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
+
+const EVENT_TYPE_LABEL: Record<string, string> = {
+  REP_VISIT: 'Rep visit',
+  LUNCH: 'Lunch',
+  BREAKFAST: 'Breakfast',
+  QUICK_VISIT: 'Quick visit',
+  STAFF_TRAINING: 'Staff training',
+};
+
+// Emails every rep with an active subscription that a new open slot just
+// went up at this office — mirrors the "Lunch Available" alert competitors
+// send, so reps don't have to keep re-checking Open Slots by hand. Fired
+// once per post action (not once per recurring occurrence generated from
+// it), and skipped for OFFICE_CLOSED placeholders since those aren't a
+// bookable opportunity. Best-effort: a failure here never blocks the
+// office's slot-posting request.
+async function notifyRepsOfNewSlot(locationId: string, startTime: Date, eventType: string) {
+  if (eventType === 'OFFICE_CLOSED') return;
+  try {
+    const location = await prisma.location.findUnique({
+      where: { id: locationId },
+      include: { employees: { orderBy: { name: 'asc' } } },
+    });
+    if (!location) return;
+
+    const reps = await prisma.rep.findMany({
+      where: {
+        verificationStatus: 'VERIFIED',
+        subscriptionStatus: { in: ['TRIALING', 'ACTIVE'] },
+        stripeSubscriptionId: { not: null },
+      },
+      select: { email: true },
+    });
+    if (!reps.length) return;
+
+    const eventLabel = EVENT_TYPE_LABEL[eventType] || 'Visit';
+    const whenStr = startTime.toLocaleString('en-US', {
+      timeZone: location.timezone,
+      weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+    const doctorsHtml = location.employees.length
+      ? `<p><strong>Doctors at this office include:</strong><br>${location.employees.map(e => e.name + (e.title ? ` (${e.title})` : '')).join(', ')}</p>`
+      : '';
+    const viewUrl = `${process.env.APP_URL}/app.html?openSlots=1`;
+    const html = `${emailLogoHeader()}
+      <p><strong>${eventLabel} available at ${location.name}</strong></p>
+      <p>${whenStr}<br>${location.address}</p>
+      ${doctorsHtml}
+      <p><a href="${viewUrl}" style="display:inline-block;background:#2E6F5E;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;">View Open Slots</a></p>
+      <p style="font-size:12px;color:#6b7280;">Act fast — open slots go quickly. This alert went out to every verified rep with an active Arrowhead Access subscription.</p>`;
+
+    reps.forEach(rep => {
+      sendEmail({ to: rep.email, subject: `${eventLabel} available at ${location.name}`, html }).catch(() => {});
+    });
+  } catch (err) {
+    console.error('Failed to notify reps of new slot:', err);
+  }
+}
 
 // Months to add per repeat interval, for duplicating a lunch's schedule
 // (and its headcount/allergy/order details) forward in time so an office
@@ -108,6 +167,7 @@ router.post('/', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'No matching days fall between the start time and the repeat length chosen' });
       }
       await prisma.slot.createMany({ data: created });
+      notifyRepsOfNewSlot(staff.locationId, created[0].startTime, 'LUNCH');
       return res.status(201).json({ created: created.length });
     }
 
@@ -147,6 +207,7 @@ router.post('/', requireAuth, async (req, res) => {
       if (repeats.length) await prisma.slot.createMany({ data: repeats });
     }
 
+    notifyRepsOfNewSlot(staff.locationId, slot.startTime, slot.eventType);
     res.status(201).json({ created: 1, slot });
   } catch (err) {
     console.error(err);

@@ -3895,6 +3895,7 @@ function render() {
 const resetTokenParam = new URLSearchParams(window.location.search).get('resetToken');
 const transferParam = new URLSearchParams(window.location.search).get('transfer');
 const transferEmailParam = new URLSearchParams(window.location.search).get('email');
+const openSlotsParam = new URLSearchParams(window.location.search).get('openSlots');
 if (resetTokenParam) {
   state.resetToken = resetTokenParam;
   state.screen = 'resetPassword';
@@ -3908,7 +3909,7 @@ if (resetTokenParam) {
       state.me = { id: me.sub, role: me.role === 'office_admin' ? 'ADMIN' : 'STAFF', locationId: me.locationId };
       state.role = 'office';
     }
-    state.screen = 'dashboard';
+    state.screen = (me.role === 'rep' && openSlotsParam === '1') ? 'browseSlots' : 'dashboard';
     render();
   }).catch(() => {
     localStorage.removeItem('token');
