@@ -2273,7 +2273,8 @@ async function loadLiterature() {
               <button style="flex:1;background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="decideLiterature('${item.id}','accept')">✓ Accept</button>
               <button style="flex:1;background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="decideLiterature('${item.id}','decline')">✕ Decline</button>
             </div>` : ''}
-          <button style="width:100%;background:none;border:none;color:var(--slate);font-size:12px;font-weight:600;cursor:pointer;padding:6px 4px;margin-top:4px;text-align:left;" onclick="deleteLiteratureItem('${item.id}')">🗑 Delete</button>
+          <button style="width:100%;background:none;border:none;color:var(--teal);font-size:12px;font-weight:600;cursor:pointer;padding:6px 4px;margin-top:4px;text-align:left;" onclick="emailLiteratureItem('${item.id}')">✉️ Email this</button>
+          <button style="width:100%;background:none;border:none;color:var(--slate);font-size:12px;font-weight:600;cursor:pointer;padding:6px 4px;text-align:left;" onclick="deleteLiteratureItem('${item.id}')">🗑 Delete</button>
         </div>`).join('') : '<div class="empty">Nothing submitted yet.</div>';
     }
   } catch (err) {
@@ -2486,6 +2487,17 @@ window.decideLiterature = async function(id, decision) {
   try {
     await api(`/api/literature/${id}/decide`, { method: 'POST', body: JSON.stringify({ decision }) });
     loadLiterature();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.emailLiteratureItem = async function(id) {
+  const to = prompt('Email this material to which address?');
+  if (!to) return;
+  try {
+    await api(`/api/literature/${id}/email`, { method: 'POST', body: JSON.stringify({ to }) });
+    alert('Sent!');
   } catch (err) {
     alert(err.message);
   }

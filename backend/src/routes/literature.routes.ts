@@ -165,6 +165,45 @@ router.get('/office', requireAuth, requireRole('office_admin', 'office_staff'), 
   }
 });
 
+// --- Office: forward a piece of shared literature to any email address ----
+// (a colleague, a patient, themselves) — separate from accept/decline,
+// since forwarding it on doesn't imply either decision.
+router.post('/:id/email', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const to = String(req.body.to || '').trim().toLowerCase();
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return res.status(400).json({ error: 'Enter a valid email address' });
+    }
+
+    const item = await prisma.literatureItem.findUnique({
+      where: { id: req.params.id },
+      include: { rep: true, attachments: true },
+    });
+    if (!item || item.locationId !== staff.locationId) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    const links = [...item.attachments.map(a => a.url), ...(item.linkUrl ? [item.linkUrl] : [])];
+    const linksHtml = links.length
+      ? `<p>${links.map(u => `<a href="${u}">${u}</a>`).join('<br>')}</p>`
+      : '';
+
+    await sendEmail({
+      to,
+      subject: `${item.title} — shared via Arrowhead Access`,
+      html: `${emailLogoHeader()}<p><strong>${item.title}</strong>, shared by ${item.rep.name}${item.rep.companyName ? ` (${item.rep.companyName})` : ''}.</p>${item.description ? `<p>${item.description.replace(/</g, '&lt;')}</p>` : ''}${linksHtml}`,
+    });
+
+    res.json({ message: 'Sent' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not send email' });
+  }
+});
+
 // --- Office: accept or decline a submitted item -----------------------------
 router.post('/:id/decide', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {
