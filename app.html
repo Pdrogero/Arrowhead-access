@@ -146,6 +146,10 @@ let visitHistorySearchPrefill = '';
 let officeCalendarMonth = new Date();
 let officeCalendarSlots = [];
 let officeCalendarSelectedDay = null;
+let ledgerSlotsData = [];
+// Open (unbooked) slot ids currently checked in the office ledger, for
+// removing more than one at once — cleared whenever the ledger reloads.
+let selectedLedgerSlotIds = new Set();
 let officeCancelDraft = null; // { bookingId, repName, timeLabel, reason } once a reason has been given
 let repCancelDraft = null; // { bookingId, officeName, timeLabel, reason } once a reason has been given
 let openSlotsData = [];
@@ -2585,6 +2589,13 @@ function screenDashboardOffice() {
       <h1>This week's ledger</h1>
       <p class="sub">Your upcoming and pending rep visits and scheduled lunches at this location.</p>
       <div id="locationSwitcherBox" style="margin-bottom:16px;"></div>
+      <div id="ledgerBulkBar" style="display:none;align-items:center;gap:12px;margin-bottom:12px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="ledgerSelectAllCb" onchange="toggleLedgerSelectAll(this.checked)">
+          Select all open slots
+        </label>
+        <button type="button" id="removeSelectedLedgerBtn" onclick="removeSelectedLedgerSlots()" disabled style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🗑 Remove selected</button>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,auto);grid-auto-flow:column;gap:2px 20px;margin-bottom:16px;">
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'officeSettings'})">⚙️ Office Settings</button>
         <button class="link" style="text-align:left;margin:0;" onclick="openOfficeCalendar()">📅 Calendar</button>
@@ -3283,11 +3294,17 @@ async function loadOfficeLedger() {
   const box = document.getElementById('ledgerBox');
   try {
     const slots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
+    ledgerSlotsData = slots;
+    selectedLedgerSlotIds = new Set();
+    const bulkBar = document.getElementById('ledgerBulkBar');
+    if (bulkBar) bulkBar.style.display = slots.some(s => s.status === 'OPEN') ? 'flex' : 'none';
+    updateLedgerBulkBar();
     if (!slots.length) { box.innerHTML = '<div class="empty">No slots yet.</div>'; return; }
     const repIds = slots.filter(s => s.booking?.rep).map(s => s.booking.rep.id);
     const repRatings = await fetchRatingAverages(repIds, 'rep');
     box.innerHTML = slots.map(s => `
       <div class="row" style="flex-wrap:wrap;">
+        ${s.status === 'OPEN' ? `<input type="checkbox" class="ledgerSelectCb" style="margin-right:8px;align-self:center;" onchange="toggleLedgerSelect('${s.id}', this.checked)">` : ''}
         <div class="time">${fmtTime(s.startTime)}</div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">${s.eventType === 'OFFICE_CLOSED' ? 'Not available for booking' : 'Open slot'}</div>`}
@@ -3720,6 +3737,43 @@ window.removeOpenSlot = async function(slotId, timeLabel) {
   if (!confirm(`Remove the open slot at ${timeLabel}? Reps will no longer be able to book it.`)) return;
   try {
     await api(`/api/bookings/slots/${slotId}`, { method: 'DELETE' });
+    loadOfficeLedger();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.toggleLedgerSelect = function(id, checked) {
+  if (checked) selectedLedgerSlotIds.add(id); else selectedLedgerSlotIds.delete(id);
+  updateLedgerBulkBar();
+};
+
+window.toggleLedgerSelectAll = function(checked) {
+  const openIds = ledgerSlotsData.filter(s => s.status === 'OPEN').map(s => s.id);
+  selectedLedgerSlotIds = new Set(checked ? openIds : []);
+  document.querySelectorAll('.ledgerSelectCb').forEach(cb => { cb.checked = checked; });
+  updateLedgerBulkBar();
+};
+
+// Keeps the "Remove selected" button's label/enabled state and the
+// "Select all" checkbox's own checked state in sync after any change.
+function updateLedgerBulkBar() {
+  const btn = document.getElementById('removeSelectedLedgerBtn');
+  if (btn) {
+    btn.disabled = selectedLedgerSlotIds.size === 0;
+    btn.textContent = selectedLedgerSlotIds.size ? `🗑 Remove selected (${selectedLedgerSlotIds.size})` : '🗑 Remove selected';
+  }
+  const openCount = ledgerSlotsData.filter(s => s.status === 'OPEN').length;
+  const selectAll = document.getElementById('ledgerSelectAllCb');
+  if (selectAll) selectAll.checked = openCount > 0 && selectedLedgerSlotIds.size === openCount;
+}
+
+window.removeSelectedLedgerSlots = async function() {
+  if (!selectedLedgerSlotIds.size) return;
+  const count = selectedLedgerSlotIds.size;
+  if (!confirm(`Remove ${count} selected open slot${count === 1 ? '' : 's'}? Reps will no longer be able to book ${count === 1 ? 'it' : 'them'}.`)) return;
+  try {
+    await api('/api/bookings/slots/bulk-delete', { method: 'POST', body: JSON.stringify({ slotIds: [...selectedLedgerSlotIds] }) });
     loadOfficeLedger();
   } catch (err) {
     alert(err.message);

@@ -267,6 +267,33 @@ router.post('/locations/:locationId/slots', requireAuth, requireRole('office_adm
 });
 
 // --- Office staff: remove an open slot that hasn't been booked ------------
+// --- Office staff: remove several open, unbooked slots at once, e.g. to ---
+// clean up a batch of slots that were generated with a wrong time and need
+// to be deleted before recreating the recurring schedule correctly.
+router.post('/slots/bulk-delete', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const slotIds = Array.isArray(req.body.slotIds)
+      ? req.body.slotIds.filter((id: unknown): id is string => typeof id === 'string')
+      : [];
+    if (!slotIds.length) return res.status(400).json({ error: 'Select at least one slot to remove' });
+
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    // Only ever deletes this staff member's own location's OPEN (unbooked)
+    // slots — same restriction as the single-slot delete below, just
+    // applied as a where clause instead of a per-slot check.
+    const result = await prisma.slot.deleteMany({
+      where: { id: { in: slotIds }, locationId: staff.locationId, status: 'OPEN' },
+    });
+
+    res.json({ removed: result.count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not remove these slots' });
+  }
+});
+
 router.delete('/slots/:slotId', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {
     const slot = await prisma.slot.findUnique({ where: { id: req.params.slotId } });
