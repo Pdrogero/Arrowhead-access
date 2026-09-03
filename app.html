@@ -164,7 +164,7 @@ let browseSearchQuery = '';
 // them checked (OFFICE_CLOSED excluded; it's a blocking placeholder, not
 // something a rep would search for) so the filter is a no-op until a rep
 // narrows it down.
-let browseTypeFilter = new Set(['REP_VISIT', 'LUNCH', 'BREAKFAST', 'COFFEE', 'SNACK', 'STAFF_TRAINING']);
+let browseTypeFilter = new Set(['REP_VISIT', 'LUNCH', 'BREAKFAST', 'COFFEE_SNACK', 'STAFF_TRAINING']);
 let browseViewMode = 'list'; // 'list' | 'calendar'
 let browseCalendarMonth = new Date();
 let browseCalendarSelectedDay = null;
@@ -597,8 +597,7 @@ function screenPostSlot() {
         <select id="eventType" style="margin-bottom:12px;" onchange="togglePostSlotLunchFields(); toggleShortVisitNote(); prefillPostSlotTimeForEventType(); updateLunchRepeatHint();">
           <option value="LUNCH">Lunch</option>
           <option value="BREAKFAST">Breakfast</option>
-          <option value="COFFEE">Coffee</option>
-          <option value="SNACK">Snack</option>
+          <option value="COFFEE_SNACK">Coffee/Snack</option>
           <option value="STAFF_TRAINING">Staff training</option>
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
@@ -734,8 +733,7 @@ const EVENT_TYPE_LABELS = {
   REP_VISIT: 'Rep visit',
   LUNCH: 'Lunch',
   BREAKFAST: 'Breakfast',
-  COFFEE: 'Coffee',
-  SNACK: 'Snack',
+  COFFEE_SNACK: 'Coffee/Snack',
   STAFF_TRAINING: 'Staff training',
   OFFICE_CLOSED: 'Office closed',
 };
@@ -746,8 +744,7 @@ const EVENT_TYPE_COLORS = {
   REP_VISIT: { bg: '#DFE7FF', color: '#1F3A8A' },
   LUNCH: { bg: '#FDECE7', color: '#C2410C' },
   BREAKFAST: { bg: '#FEF9C3', color: '#854D0E' },
-  COFFEE: { bg: '#EFE4D8', color: '#7C4A21' },
-  SNACK: { bg: '#DCFCE7', color: '#166534' },
+  COFFEE_SNACK: { bg: '#EFE4D8', color: '#7C4A21' },
   STAFF_TRAINING: { bg: '#E0F2FE', color: '#075985' },
   OFFICE_CLOSED: { bg: '#F3F4F6', color: '#4B5563' },
 };
@@ -888,8 +885,7 @@ window.togglePostSlotLunchFields = function() {
 };
 
 const SHORT_VISIT_NOTES = {
-  COFFEE: 'Coffee visits are typically 15–20 minutes.',
-  SNACK: 'Snack drop-offs are typically 15–20 minutes.',
+  COFFEE_SNACK: 'Coffee/Snack visits are typically 15–20 minutes.',
 };
 
 window.toggleShortVisitNote = function() {
