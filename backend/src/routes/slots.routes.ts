@@ -14,7 +14,6 @@ const EVENT_TYPE_LABEL: Record<string, string> = {
   REP_VISIT: 'Rep visit',
   LUNCH: 'Lunch',
   BREAKFAST: 'Breakfast',
-  QUICK_VISIT: 'Quick visit',
   COFFEE: 'Coffee',
   SNACK: 'Snack',
   STAFF_TRAINING: 'Staff training',
