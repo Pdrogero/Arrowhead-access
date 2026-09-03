@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { JwtPayload } from '../auth/auth.types';
-import { sendEmail, emailLogoHeader } from '../email';
+import { sendEmail, emailLogoHeader, emailLoginButton } from '../email';
 import { requireAuth, requireRole } from '../auth/auth.guard';
 import { verifyTurnstile } from '../turnstile';
 
@@ -74,7 +74,7 @@ router.post('/rep/signup', async (req, res) => {
     sendEmail({
       to: rep.email,
       subject: 'Welcome to Arrowhead Access',
-      html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p>${claimedTransfers.count ? `<p>You also have ${claimedTransfers.count} pending visit transfer${claimedTransfers.count > 1 ? 's' : ''} waiting for you under Transfers.</p>` : ''}`,
+      html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p>${claimedTransfers.count ? `<p>You also have ${claimedTransfers.count} pending visit transfer${claimedTransfers.count > 1 ? 's' : ''} waiting for you under Transfers.</p>` : ''}${emailLoginButton()}`,
     }).catch(() => {});
 
     res.status(201).json({
@@ -253,8 +253,6 @@ router.post('/office/signup', async (req, res) => {
       const searched = r.officeName.toLowerCase();
       return newNameLower.includes(searched) || searched.includes(newNameLower);
     });
-    const loginButtonHtml = `<p><a href="${process.env.APP_URL}/app.html" style="display:inline-block;background:#2E6F5E;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;">Log in to Arrowhead Access</a></p>`;
-
     if (matches.length) {
       await prisma.officeInterestRequest.updateMany({
         where: { id: { in: matches.map(m => m.id) } },
@@ -264,7 +262,7 @@ router.post('/office/signup', async (req, res) => {
         sendEmail({
           to: m.rep.email,
           subject: `${result.location.name} just joined Arrowhead Access`,
-          html: `${emailLogoHeader()}<p>Good news — <strong>${result.location.name}</strong>, the office you asked to be notified about, just joined Arrowhead Access. You can now find them and book a visit.</p>${loginButtonHtml}`,
+          html: `${emailLogoHeader()}<p>Good news — <strong>${result.location.name}</strong>, the office you asked to be notified about, just joined Arrowhead Access. You can now find them and book a visit.</p>${emailLoginButton()}`,
         }).catch(() => {});
       });
     }
@@ -280,7 +278,7 @@ router.post('/office/signup', async (req, res) => {
       sendEmail({
         to: rep.email,
         subject: `${result.location.name} just joined Arrowhead Access`,
-        html: `${emailLogoHeader()}<p><strong>${result.location.name}</strong> just joined Arrowhead Access. Log in to check out their open slots and book a visit.</p>${loginButtonHtml}`,
+        html: `${emailLogoHeader()}<p><strong>${result.location.name}</strong> just joined Arrowhead Access. Log in to check out their open slots and book a visit.</p>${emailLoginButton()}`,
       }).catch(() => {});
     });
 
@@ -294,7 +292,7 @@ router.post('/office/signup', async (req, res) => {
     sendEmail({
       to: result.staff.email,
       subject: 'Welcome to Arrowhead Access',
-      html: `${emailLogoHeader()}<p>Hi,</p><p>Your Arrowhead Access office account for <strong>${result.location.name}</strong> is set up. You can now post open slots, review visit requests, and manage your office's availability for sales reps.</p>`,
+      html: `${emailLogoHeader()}<p>Hi,</p><p>Your Arrowhead Access office account for <strong>${result.location.name}</strong> is set up. You can now post open slots, review visit requests, and manage your office's availability for sales reps.</p>${emailLoginButton()}`,
     }).catch(() => {});
 
     res.status(201).json({
