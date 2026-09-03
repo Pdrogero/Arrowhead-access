@@ -139,6 +139,30 @@ router.post('/rep/cancel', requireAuth, requireRole('rep'), async (req, res) => 
   }
 });
 
+// --- End the rep's trial right now instead of waiting out the remaining --
+// days, charging their card on file immediately for full access.
+router.post('/rep/end-trial', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const rep = await prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } });
+    if (!rep.stripeSubscriptionId || rep.subscriptionStatus !== 'TRIALING') {
+      return res.status(400).json({ error: 'No trial in progress to end' });
+    }
+
+    const sub = await stripe.subscriptions.update(rep.stripeSubscriptionId, { trial_end: 'now' });
+
+    const subscriptionStatus = sub.status === 'active' ? 'ACTIVE' : 'PAST_DUE';
+    await prisma.rep.update({
+      where: { id: rep.id },
+      data: { subscriptionStatus, currentPeriodEnd: new Date(sub.current_period_end * 1000) },
+    });
+
+    res.json({ subscriptionStatus });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not activate full access. Check that your card on file is valid under Billing.' });
+  }
+});
+
 router.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'] as string;
   let event: Stripe.Event;

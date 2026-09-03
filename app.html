@@ -3456,6 +3456,7 @@ async function loadBillingStatus() {
       ` : `
         <h2 style="font-size:16px;margin-bottom:12px;">Your plan</h2>
         <p style="font-size:13px;color:var(--slate);margin-bottom:12px;">${cycleLabel} plan${subscriptionStatus === 'TRIALING' ? ' (in trial)' : ''}${dateStr ? ' — renews ' + dateStr : ''}.</p>
+        ${subscriptionStatus === 'TRIALING' ? `<button class="link" style="text-align:left;margin-bottom:8px;" onclick="endTrialNow()">⚡ Activate full access now</button>` : ''}
         <button class="link" style="text-align:left;margin-bottom:8px;" onclick="openBillingPortal()">💳 Update card / view billing history</button>
         <button class="link" style="text-align:left;color:#C23C3C;" onclick="cancelSubscription()">Cancel subscription</button>
       `;
@@ -3472,6 +3473,18 @@ async function loadBillingStatus() {
     box.innerHTML = `<div class="msg err">${err.message}</div>`;
   }
 }
+
+window.endTrialNow = async function() {
+  const ok = confirm(`End your free trial now and switch to full access? Your card on file will be charged today instead of when the trial would have ended.`);
+  if (!ok) return;
+  try {
+    await api('/api/billing/rep/end-trial', { method: 'POST' });
+    await loadBillingStatus();
+    alert('You\'re on full access now — thanks!');
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 window.cancelSubscription = async function() {
   const ok = confirm(`Cancel your subscription? You'll keep full access until the end of your current billing period, then it won't renew. No refund is given for unused time, per the Terms of Service.`);
