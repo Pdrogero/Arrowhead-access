@@ -704,9 +704,13 @@ function screenBrowseSlots() {
       <div style="margin-bottom:16px;">
         <button type="button" id="browseFilterToggleBtn" onclick="toggleBrowseFilterPanel()" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🎚️ Appointment type${browseFilterSummary()}</button>
         <div id="browseFilterPanel" style="display:none;margin-top:8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;flex-wrap:wrap;gap:12px;">
-          ${Object.keys(EVENT_TYPE_LABELS).filter(t => t !== 'OFFICE_CLOSED').map(t => `
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;flex-basis:100%;padding-bottom:8px;border-bottom:1px solid var(--line);">
+            <input type="checkbox" id="browseFilterSelectAll" ${browseTypeFilter.size === browseFilterableTypes().length ? 'checked' : ''} onchange="toggleBrowseFilterSelectAll(this.checked)">
+            Select all
+          </label>
+          ${browseFilterableTypes().map(t => `
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
-              <input type="checkbox" ${browseTypeFilter.has(t) ? 'checked' : ''} onchange="toggleBrowseTypeFilter('${t}', this.checked)">
+              <input type="checkbox" class="browseFilterTypeCb" ${browseTypeFilter.has(t) ? 'checked' : ''} onchange="toggleBrowseTypeFilter('${t}', this.checked)">
               ${eventTypeLabel(t)}
             </label>
           `).join('')}
@@ -716,11 +720,17 @@ function screenBrowseSlots() {
     </div>`;
 }
 
+// All appointment types offered in the filter panel — OFFICE_CLOSED is
+// excluded since it's an informational blocker, not something a rep would
+// filter Open Slots by.
+function browseFilterableTypes() {
+  return Object.keys(EVENT_TYPE_LABELS).filter(t => t !== 'OFFICE_CLOSED');
+}
+
 // Short "(N selected)" suffix on the filter toggle button, blank when
 // every type is checked (i.e. the filter isn't actually narrowing anything).
 function browseFilterSummary() {
-  const total = Object.keys(EVENT_TYPE_LABELS).filter(t => t !== 'OFFICE_CLOSED').length;
-  return browseTypeFilter.size < total ? ` (${browseTypeFilter.size} selected)` : '';
+  return browseTypeFilter.size < browseFilterableTypes().length ? ` (${browseTypeFilter.size} selected)` : '';
 }
 
 window.toggleBrowseFilterPanel = function() {
@@ -728,10 +738,26 @@ window.toggleBrowseFilterPanel = function() {
   if (panel) panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
 };
 
-window.toggleBrowseTypeFilter = function(type, checked) {
-  if (checked) browseTypeFilter.add(type); else browseTypeFilter.delete(type);
+// Keeps the filter toggle button's label and the "Select all" checkbox's
+// own checked state in sync after any change to browseTypeFilter, whether
+// that came from an individual checkbox or the "Select all" one itself.
+function syncBrowseFilterUi() {
   const btn = document.getElementById('browseFilterToggleBtn');
   if (btn) btn.textContent = `🎚️ Appointment type${browseFilterSummary()}`;
+  const selectAll = document.getElementById('browseFilterSelectAll');
+  if (selectAll) selectAll.checked = browseTypeFilter.size === browseFilterableTypes().length;
+}
+
+window.toggleBrowseTypeFilter = function(type, checked) {
+  if (checked) browseTypeFilter.add(type); else browseTypeFilter.delete(type);
+  syncBrowseFilterUi();
+  renderBrowseContent();
+};
+
+window.toggleBrowseFilterSelectAll = function(checked) {
+  browseTypeFilter = new Set(checked ? browseFilterableTypes() : []);
+  document.querySelectorAll('#browseFilterPanel .browseFilterTypeCb').forEach(cb => { cb.checked = checked; });
+  syncBrowseFilterUi();
   renderBrowseContent();
 };
 
