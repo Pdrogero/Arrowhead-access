@@ -2359,27 +2359,75 @@ async function loadSavedMaterialsPicker() {
   if (!box) return;
   try {
     const materials = await api('/api/profile/materials');
-    box.innerHTML = materials.length ? materials.map(m => `
+    box.innerHTML = materials.length ? `
+      <label style="display:flex;align-items:center;font-size:13px;font-weight:600;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line);">
+        <input type="checkbox" id="savedMaterialsSelectAll" style="margin-right:8px;" onchange="toggleSavedMaterialsSelectAll(this.checked)"> Select all
+      </label>
+      ${materials.map(m => `
       <label style="display:flex;align-items:center;font-size:13px;margin-bottom:8px;">
-        <input type="checkbox" style="margin-right:8px;" onchange="toggleSavedMaterial(this, '${m.url}', '${m.title.replace(/'/g, "\\'")}')"> ${m.title}
-      </label>`).join('') : '<div class="empty" style="padding:8px;">No saved materials yet — add some under Profile → Marketing Materials.</div>';
+        <input type="checkbox" class="savedMaterialCb" data-url="${m.url.replace(/"/g, '&quot;')}" data-title="${m.title.replace(/"/g, '&quot;')}" style="margin-right:8px;" onchange="toggleSavedMaterial(this)"> ${m.title}
+      </label>`).join('')}` : '<div class="empty" style="padding:8px;">No saved materials yet — add some under Profile → Marketing Materials.</div>';
   } catch (err) {
     box.innerHTML = `<div class="msg err">${err.message}</div>`;
   }
 }
 
-window.toggleSavedMaterial = function(checkbox, url, title) {
+// Shared by both the individual checkboxes and "Select all" — true if the
+// material was actually added (false if the attachment cap stopped it).
+function addSavedMaterial(url, title) {
+  if (pendingLiteratureAttachments.length >= MAX_LITERATURE_ATTACHMENTS) return false;
+  pendingLiteratureAttachments.push({ url, name: title });
+  return true;
+}
+
+function removeSavedMaterial(url) {
+  const idx = pendingLiteratureAttachments.findIndex(a => a.url === url);
+  if (idx !== -1) pendingLiteratureAttachments.splice(idx, 1);
+}
+
+// Keeps the "Select all" checkbox's own checked state in sync with
+// whether every individual saved-material checkbox is currently checked.
+function syncSavedMaterialsSelectAll() {
+  const selectAll = document.getElementById('savedMaterialsSelectAll');
+  const boxes = document.querySelectorAll('.savedMaterialCb');
+  if (selectAll && boxes.length) selectAll.checked = [...boxes].every(cb => cb.checked);
+}
+
+window.toggleSavedMaterial = function(checkbox) {
+  const { url, title } = checkbox.dataset;
   if (checkbox.checked) {
-    if (pendingLiteratureAttachments.length >= MAX_LITERATURE_ATTACHMENTS) {
+    if (!addSavedMaterial(url, title)) {
       checkbox.checked = false;
       alert(`You can attach up to ${MAX_LITERATURE_ATTACHMENTS} files.`);
       return;
     }
-    pendingLiteratureAttachments.push({ url, name: title });
   } else {
-    const idx = pendingLiteratureAttachments.findIndex(a => a.url === url);
-    if (idx !== -1) pendingLiteratureAttachments.splice(idx, 1);
+    removeSavedMaterial(url);
   }
+  syncSavedMaterialsSelectAll();
+  renderPendingLiteratureAttachments();
+};
+
+window.toggleSavedMaterialsSelectAll = function(checked) {
+  const boxes = document.querySelectorAll('.savedMaterialCb');
+  if (checked) {
+    let hitCap = false;
+    boxes.forEach(cb => {
+      if (cb.checked) return;
+      if (addSavedMaterial(cb.dataset.url, cb.dataset.title)) {
+        cb.checked = true;
+      } else {
+        hitCap = true;
+      }
+    });
+    if (hitCap) alert(`You can attach up to ${MAX_LITERATURE_ATTACHMENTS} files — not all saved materials fit.`);
+  } else {
+    boxes.forEach(cb => {
+      removeSavedMaterial(cb.dataset.url);
+      cb.checked = false;
+    });
+  }
+  syncSavedMaterialsSelectAll();
   renderPendingLiteratureAttachments();
 };
 
@@ -2389,9 +2437,10 @@ window.removePendingLiteratureAttachment = function(index) {
   // If this attachment came from the saved-materials picker, uncheck it there too.
   if (removed) {
     const picker = document.getElementById('savedMaterialsPicker');
-    picker?.querySelectorAll('input[type=checkbox]').forEach(cb => {
-      if (cb.getAttribute('onchange')?.includes(`'${removed.url}'`)) cb.checked = false;
+    picker?.querySelectorAll('.savedMaterialCb').forEach(cb => {
+      if (cb.dataset.url === removed.url) cb.checked = false;
     });
+    syncSavedMaterialsSelectAll();
   }
 };
 
