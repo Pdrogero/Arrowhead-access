@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { JwtPayload } from '../auth/auth.types';
-import { sendEmail, emailLogoHeader, emailLoginButton } from '../email';
+import { sendEmail, emailLogoHeader, emailLoginButton, notifyAdmin } from '../email';
 import { requireAuth, requireRole } from '../auth/auth.guard';
 import { verifyTurnstile } from '../turnstile';
 
@@ -88,6 +88,11 @@ router.post('/rep/signup', async (req, res) => {
       subject: 'Welcome to Arrowhead Access',
       html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p>${claimedTransfers.count ? `<p>You also have ${claimedTransfers.count} pending visit transfer${claimedTransfers.count > 1 ? 's' : ''} waiting for you under Transfers.</p>` : ''}${emailLoginButton()}`,
     }).catch(() => {});
+
+    notifyAdmin(
+      'New rep signup — Arrowhead Access',
+      `<p>A new sales rep just signed up.</p><p><strong>${rep.name}</strong> (${rep.companyName})<br>${rep.email}<br>${knownDomain ? 'Verified via known company domain' : 'Unverified — manual review may be needed'}</p>`
+    );
 
     res.status(201).json({
       token,
@@ -306,6 +311,11 @@ router.post('/office/signup', async (req, res) => {
       subject: 'Welcome to Arrowhead Access',
       html: `${emailLogoHeader()}<p>Hi,</p><p>Your Arrowhead Access office account for <strong>${result.location.name}</strong> is set up. You can now post open slots, review visit requests, and manage your office's availability for sales reps.</p>${emailLoginButton()}`,
     }).catch(() => {});
+
+    notifyAdmin(
+      'New office signup — Arrowhead Access',
+      `<p>A new office just signed up.</p><p><strong>${result.location.name}</strong> (${officeName})<br>${result.location.address}<br>${result.staff.email}</p>`
+    );
 
     res.status(201).json({
       token,

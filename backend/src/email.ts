@@ -24,6 +24,13 @@ export function emailLoginButton(label = 'Log in to Arrowhead Access'): string {
   return `<p><a href="${appUrl}/app.html" style="display:inline-block;background:#2E6F5E;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;">${label}</a></p>`;
 }
 
+// Where the "someone new signed up" pings below go — override with the
+// ADMIN_NOTIFICATION_EMAIL env var if that should ever move off Paul's inbox.
+export function notifyAdmin(subject: string, html: string) {
+  const to = process.env.ADMIN_NOTIFICATION_EMAIL || 'pdrogero@gmail.com';
+  sendEmail({ to, subject, html }).catch(() => {});
+}
+
 export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
