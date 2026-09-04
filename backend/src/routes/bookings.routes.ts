@@ -333,7 +333,7 @@ router.post('/:bookingId/decide', requireAuth, requireRole('office_admin', 'offi
       sendEmail({
         to: full.rep.email,
         subject: approved ? 'Your visit request was approved' : 'Your visit request was declined',
-        html: `${emailLogoHeader()}<p>Your visit request at <strong>${full.slot.location.name}</strong> on ${dateStr} was ${approved ? 'approved' : 'declined'}.</p>`,
+        html: `${emailLogoHeader()}<p>Your visit request at <strong>${full.slot.location.name}</strong> on ${dateStr} was ${approved ? 'approved' : 'declined'}.</p>${approved ? emailLoginButton() : ''}`,
       }).catch(() => {});
     }
 
