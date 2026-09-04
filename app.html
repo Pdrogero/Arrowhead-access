@@ -2609,6 +2609,7 @@ function screenDashboardOffice() {
     <div class="wrap wide">
       <h1>This week's ledger</h1>
       <p class="sub">Your upcoming and pending rep visits and scheduled lunches at this location.</p>
+      <div id="pendingRequestsBox"></div>
       <div id="locationSwitcherBox" style="margin-bottom:16px;"></div>
       <div id="ledgerBulkBar" style="display:none;align-items:center;gap:12px;margin-bottom:12px;">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
@@ -3266,11 +3267,38 @@ window.saveLunchDetails = async function(slotId) {
   }
 };
 
+// A quick-access summary of any REQUESTED bookings at the top of the
+// dashboard, so an office doesn't have to scroll the full ledger to find
+// and act on a pending rep request. Reuses the ledger's own data — no
+// extra API call — and hides itself entirely when there's nothing pending.
+function renderPendingRequestsBox(slots) {
+  const box = document.getElementById('pendingRequestsBox');
+  if (!box) return;
+  const pending = slots.filter(s => s.status === 'REQUESTED' && s.booking?.rep);
+  if (!pending.length) { box.innerHTML = ''; return; }
+
+  box.innerHTML = `
+    <div class="card" style="margin-bottom:16px;border:1px solid #F0D9B5;background:#FFF8F0;">
+      <p style="font-size:13px;font-weight:700;margin-bottom:10px;">⏳ Pending requests (${pending.length})</p>
+      ${pending.map(s => `
+        <div class="row" style="flex-wrap:wrap;background:#fff;border-radius:8px;margin-bottom:8px;">
+          <div class="time">${fmtTime(s.startTime)}</div>
+          <div class="mid">
+            <div class="who">${repNameLinkHtml(s.booking.rep)}</div>
+            <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
+          </div>
+          <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','approve')">✓ Approve</button>
+          <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
+        </div>`).join('')}
+    </div>`;
+}
+
 async function loadOfficeLedger() {
   const box = document.getElementById('ledgerBox');
   try {
     const slots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
     ledgerSlotsData = slots;
+    renderPendingRequestsBox(slots);
     selectedLedgerSlotIds = new Set();
     const bulkBar = document.getElementById('ledgerBulkBar');
     if (bulkBar) bulkBar.style.display = slots.some(s => s.status === 'OPEN') ? 'flex' : 'none';
