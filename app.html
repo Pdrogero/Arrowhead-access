@@ -653,6 +653,8 @@ function screenPostSlot() {
 
         <button class="primary" onclick="saveOfficePolicy()">Save Policy</button>
       </div>
+
+      <button class="primary" id="saveAllPostSlotBtn" style="margin-top:8px;" onclick="saveAllPostSlot()">Save All</button>
     </div>`;
 }
 
@@ -3087,9 +3089,6 @@ async function loadOfficePolicy() {
   } catch (err) {}
 }
 
-// Saves the Visit Policies (incl. allergy notes) and the team list together
-// with one button — doesn't touch Recurring Slots or Locations, since those
-// are one-off actions rather than settings with a persistent draft state.
 // Reads any recurring-schedule templates the office previously saved
 // (from before recurring scheduling moved fully into "Post an open
 // slot") — kept only so prefillPostSlotTimeForEventType can still default
@@ -3102,7 +3101,10 @@ async function loadRecurringTemplates() {
   }
 }
 
-async function submitPostSlot() {
+// Posts the slot. Pass silent=true (from saveAllPostSlot) to suppress this
+// function's own success alert/navigation and get a true/false result back
+// instead, so the caller can report on both this and Visit Policies together.
+async function submitPostSlot(silent) {
   const startTime = document.getElementById('startTime').value;
   const endTime = document.getElementById('endTime').value;
   const eventType = document.getElementById('eventType').value;
@@ -3110,7 +3112,7 @@ async function submitPostSlot() {
 
   if (!startTime || !endTime) {
     setState({ formErr: 'Both start and end times are required' });
-    return;
+    return false;
   }
 
   const payload = { startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), eventType };
@@ -3123,15 +3125,46 @@ async function submitPostSlot() {
     if (daysOfWeek.length) payload.daysOfWeek = daysOfWeek;
   }
 
-  btn.disabled = true; btn.textContent = 'Posting…';
+  if (!silent) { btn.disabled = true; btn.textContent = 'Posting…'; }
   try {
     const res = await api('/api/slots', { method: 'POST', body: JSON.stringify(payload) });
-    alert(res.created > 1 ? `${res.created} slots posted!` : 'Slot posted!');
-    setState({ screen: 'dashboard' });
+    if (!silent) {
+      alert(res.created > 1 ? `${res.created} slots posted!` : 'Slot posted!');
+      setState({ screen: 'dashboard' });
+    }
+    return true;
   } catch (err) {
+    if (silent) return false;
     setState({ formErr: err.message });
+    return false;
   }
 }
+
+// Posts the slot and saves Visit Policies together with one button.
+window.saveAllPostSlot = async function() {
+  const btn = document.getElementById('saveAllPostSlotBtn');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Saving…';
+
+  try {
+    const [slotOk, policyOk] = await Promise.all([
+      submitPostSlot(true),
+      saveOfficePolicy(true),
+    ]);
+
+    if (slotOk && policyOk) {
+      alert('Slot posted and policy saved!');
+      setState({ screen: 'dashboard' });
+    } else {
+      const failed = [!slotOk && 'the slot', !policyOk && 'Visit Policies'].filter(Boolean).join(' and ');
+      setState({ formErr: `Could not save: ${failed}. Please try again.` });
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+};
 
 async function loadLocationSwitcher() {
   const box = document.getElementById('locationSwitcherBox');
