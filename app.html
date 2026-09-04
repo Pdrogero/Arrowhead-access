@@ -1243,8 +1243,13 @@ function screenCalendar() {
   for (let i = 0; i < firstDay; i++) cells += `<div></div>`;
   for (let day = 1; day <= daysInMonth; day++) {
     const has = bookingsByDay[day];
+    const dotColor = has ? (
+      has.some(b => b.status === 'CONFIRMED') ? '#2D6F5E'
+      : has.some(b => b.status === 'REQUESTED') ? '#92400E'
+      : '#991B1B'
+    ) : '';
     cells += `<button onclick="selectCalendarDay(${day})" style="aspect-ratio:1;border:1px solid var(--line);border-radius:8px;background:${has ? 'rgba(46,111,94,.12)' : '#fff'};font-size:13px;position:relative;cursor:pointer;">
-      ${day}${has ? `<div style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--teal);"></div>` : ''}
+      ${day}${has ? `<div style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:${dotColor};"></div>` : ''}
     </button>`;
   }
 
@@ -1290,9 +1295,16 @@ function screenCalendar() {
           ${dayBookings.length ? dayBookings.map(b => {
             const isPast = new Date(b.slot.endTime || b.slot.startTime) < now;
             return `
-            <div class="row"${isPast ? ` style="cursor:pointer;" onclick="goToVisitHistoryFor('${(b.slot.location.name || '').replace(/'/g, "\\'")}')"` : ''}>
+            <div class="row" style="flex-wrap:wrap;">
               <div class="time">${fmtTime(b.slot.startTime)}</div>
-              <div class="mid"><div class="who">${b.slot.location.name}</div>${isPast ? `<div style="font-size:11px;color:var(--teal);margin-top:2px;">Tap for visit history &amp; office info →</div>` : ''}</div>
+              <div class="mid"${isPast ? ` style="cursor:pointer;" onclick="goToVisitHistoryFor('${(b.slot.location.name || '').replace(/'/g, "\\'")}')"` : ''}>
+                <div class="who">${b.slot.location.name}</div>
+                <div style="margin-top:4px;">${eventTypeChipHtml(b.slot.eventType)}</div>
+                <div class="what">${addressLinkHtml(b.slot.location.address)}</div>
+                ${isPast ? `<div style="font-size:11px;color:var(--teal);margin-top:2px;">Tap for visit history &amp; office info →</div>` : ''}
+                ${lunchDetailsSummaryHtml(b.slot)}
+                ${(b.status === 'CANCELLED' || b.status === 'DECLINED') && b.cancelReason ? `<div style="font-size:11.5px;color:#991B1B;margin-top:4px;">Reason: ${b.cancelReason.replace(/</g, '&lt;')}</div>` : ''}
+              </div>
               <span class="chip ${b.status}">${b.status}</span>
             </div>`;
           }).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
