@@ -1325,6 +1325,11 @@ function screenOfficeCalendar() {
         <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeOfficeCalendarMonth(1)">›</button>
       </div>
       <p class="sub">Tap a day to see what's scheduled — lunches, breakfasts, and visits — and cancel one if you need to.</p>
+      <div style="position:relative;margin-bottom:8px;">
+        <input id="officeCalendarSearch" type="text" placeholder="🔍 Search upcoming lunches/breakfasts by rep name…" autocomplete="off" oninput="filterOfficeCalendarSearch(this.value)" onblur="setTimeout(hideOfficeCalendarSearchResults, 150)" style="margin-bottom:0;width:100%;">
+        <div id="officeCalendarSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:10;max-height:260px;overflow-y:auto;"></div>
+      </div>
+      <p style="font-size:12px;color:var(--slate);margin:0 0 16px;">Looking for a past lunch? Check <a href="#" onclick="event.preventDefault();setState({screen:'visitHistory'})" style="color:var(--teal);">Visit History</a> instead — this calendar only searches what's still upcoming.</p>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;">
         ${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
         ${cells}
@@ -3652,6 +3657,57 @@ window.changeOfficeCalendarMonth = function(delta) {
 window.selectOfficeCalendarDay = function(day) {
   officeCalendarSelectedDay = day;
   officeCancelDraft = null;
+  render();
+};
+
+// Searches this office's already-loaded calendar data (officeCalendarSlots,
+// fetched once with scope=all) for upcoming lunches/breakfasts matching the
+// typed rep name — no separate API call needed since it's all in memory.
+window.filterOfficeCalendarSearch = function(query) {
+  const box = document.getElementById('officeCalendarSearchResults');
+  if (!box) return;
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+  const now = new Date();
+  const matches = officeCalendarSlots
+    .filter(s => s.booking && ['REQUESTED', 'CONFIRMED'].includes(s.booking.status))
+    .filter(s => s.eventType === 'LUNCH' || s.eventType === 'BREAKFAST')
+    .filter(s => new Date(s.startTime) >= now)
+    .filter(s => (s.booking.rep.name || '').toLowerCase().includes(q))
+    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+    .slice(0, 8);
+
+  if (!matches.length) {
+    box.innerHTML = `<div style="padding:10px 12px;font-size:13px;color:var(--slate);">No upcoming lunches or breakfasts match "${query.replace(/</g, '&lt;')}".</div>`;
+    box.style.display = 'block';
+    return;
+  }
+
+  box.innerHTML = matches.map(s => `
+    <button type="button" onmousedown="jumpToOfficeCalendarDay('${s.startTime}')" style="display:block;width:100%;text-align:left;background:none;border:none;padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--line);">
+      <div style="font-weight:600;">${fmtTime(s.startTime)}</div>
+      <div style="font-size:11px;color:var(--slate);">${(s.booking.rep.name || '').replace(/</g, '&lt;')} · ${eventTypeLabel(s.eventType)}</div>
+    </button>
+  `).join('');
+  box.style.display = 'block';
+};
+
+window.hideOfficeCalendarSearchResults = function() {
+  const box = document.getElementById('officeCalendarSearchResults');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+};
+
+// Jumps the calendar to whatever month/day a search result falls on and
+// opens that day, same as if the office had tapped it directly.
+window.jumpToOfficeCalendarDay = function(startTimeIso) {
+  const d = new Date(startTimeIso);
+  officeCalendarMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+  officeCalendarSelectedDay = d.getDate();
+  officeCancelDraft = null;
+  const search = document.getElementById('officeCalendarSearch');
+  if (search) search.value = '';
+  hideOfficeCalendarSearchResults();
   render();
 };
 
