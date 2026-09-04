@@ -412,6 +412,7 @@ function screenSignup() {
           <input id="address" type="text" placeholder="Address">
           <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
           <input id="password" type="password" placeholder="Password" autocomplete="new-password">
+          <input id="confirmPassword" type="password" placeholder="Confirm password" autocomplete="new-password">
           <div id="turnstileBox" style="margin-bottom:12px;"></div>
           <p style="font-size:11px;color:var(--slate);margin-bottom:12px;">By creating an account, you agree to our <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--teal);">Terms of Service</a> and <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--teal);">Privacy Policy</a>.</p>
           <button class="primary" onclick="doOfficeSignup()">Create Account</button>
@@ -429,6 +430,7 @@ function screenSignup() {
           <input id="companyName" type="text" placeholder="Company name">
           <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${pendingTransferEmail || ''}">
           <input id="password" type="password" placeholder="Password" autocomplete="new-password">
+          <input id="confirmPassword" type="password" placeholder="Confirm password" autocomplete="new-password">
           <div id="turnstileBox" style="margin-bottom:12px;"></div>
           <p style="font-size:11px;color:var(--slate);margin-bottom:12px;">By creating an account, you agree to our <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--teal);">Terms of Service</a> and <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--teal);">Privacy Policy</a>.</p>
           <button class="primary" onclick="doRepSignup()">Create Account</button>
@@ -2755,7 +2757,13 @@ async function doRepSignup() {
   const companyName = document.getElementById('companyName').value;
   const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
-  
+  const confirmPassword = document.getElementById('confirmPassword').value;
+
+  if (password !== confirmPassword) {
+    setState({ formErr: "Passwords don't match" });
+    return;
+  }
+
   try {
     const res = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ name, companyName, email, password, turnstileToken }) });
     localStorage.setItem('token', res.token);
@@ -2771,6 +2779,12 @@ async function doOfficeSignup() {
   const address = document.getElementById('address').value;
   const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+
+  if (password !== confirmPassword) {
+    setState({ formErr: "Passwords don't match" });
+    return;
+  }
 
   try {
     // The office's first location just takes the office name too — a
@@ -3369,6 +3383,11 @@ async function loadMyBookings() {
           <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
           <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message Office</button>
           ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
+          ${b.status === 'REQUESTED' ? (
+            b.lastNudgedAt && Date.now() - new Date(b.lastNudgedAt).getTime() < 24 * 60 * 60 * 1000
+              ? `<button disabled style="background:#F0F0EE;color:var(--slate);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:default;white-space:nowrap;">🔔 Nudged</button>`
+              : `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="nudgeOffice('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">🔔 Nudge office</button>`
+          ) : ''}
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openAttendance('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime)}')">📝 Attendance</button>` : ''}
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>` : ''}
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="logConcurExpense('${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🧾 Log in Concur</button>` : ''}
@@ -4024,6 +4043,17 @@ window.decideTransfer = async function(id, decision) {
   try {
     await api('/api/transfers/' + id + '/decide', { method: 'POST', body: JSON.stringify({ decision }) });
     loadTransfers();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.nudgeOffice = async function(bookingId, officeName) {
+  if (!confirm(`Send ${officeName} a friendly reminder that you're still waiting on their response?`)) return;
+  try {
+    await api(`/api/bookings/${bookingId}/nudge`, { method: 'POST' });
+    alert('Reminder sent!');
+    loadMyBookings();
   } catch (err) {
     alert(err.message);
   }

@@ -17,6 +17,18 @@ function signToken(payload: JwtPayload): string {
   return jwt.sign(payload, process.env.JWT_SECRET!, { expiresIn: '30d' });
 }
 
+// Security notice sent to an account whenever its password changes —
+// whether through the logged-in "change password" flow or a forgot-
+// password reset link — so the real owner has a paper trail to notice if
+// it wasn't them. Never blocks the request it's called from.
+function sendPasswordChangedEmail(to: string) {
+  sendEmail({
+    to,
+    subject: 'Your Arrowhead Access password was changed',
+    html: `${emailLogoHeader()}<p>This is a confirmation that your Arrowhead Access password was just changed.</p><p>If this was you, no action is needed. If you didn't make this change, contact us right away at <a href="mailto:legal@arrowheadaccess.com">legal@arrowheadaccess.com</a> so we can secure your account.</p>`,
+  }).catch(() => {});
+}
+
 router.post('/rep/signup', async (req, res) => {
   try {
     const { password, name, companyName, turnstileToken } = req.body;
@@ -370,11 +382,15 @@ router.post('/reset-password', async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
+    let accountEmail: string;
     if (payload.role === 'rep') {
-      await prisma.rep.update({ where: { id: payload.sub }, data: { passwordHash } });
+      const rep = await prisma.rep.update({ where: { id: payload.sub }, data: { passwordHash } });
+      accountEmail = rep.email;
     } else {
-      await prisma.staffUser.update({ where: { id: payload.sub }, data: { passwordHash } });
+      const staff = await prisma.staffUser.update({ where: { id: payload.sub }, data: { passwordHash } });
+      accountEmail = staff.email;
     }
+    sendPasswordChangedEmail(accountEmail);
 
     res.json({ message: 'Password updated successfully' });
   } catch (err) {
@@ -409,6 +425,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
     } else {
       await prisma.staffUser.update({ where: { id: req.user!.sub }, data: { passwordHash } });
     }
+    sendPasswordChangedEmail(account.email);
 
     res.json({ message: 'Password updated successfully' });
   } catch (err) {

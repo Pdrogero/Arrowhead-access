@@ -423,6 +423,13 @@ model Booking {
   lunchReminder1dSent  Boolean @default(false)
   lunchReminderDaySent Boolean @default(false)
 
+  // While a REQUESTED booking is still awaiting the office's response —
+  // tracks the daily cron's one-time nudge to the office (before the
+  // 3-day auto-decline), and the last time the rep manually nudged them
+  // (rate-limited so a rep can't spam the office with reminders).
+  officeReminderSent Boolean   @default(false)
+  lastNudgedAt       DateTime?
+
   transfers   BookingTransfer[]
   attendees   VisitAttendee[]
   reviews     VisitReview[]

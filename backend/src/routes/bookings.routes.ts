@@ -7,7 +7,7 @@ import { requireAuth, requireRole, requireVerifiedRep, requireActiveSubscription
 import { assertOwnsLocation, assertOwnsRep } from '../auth/scoping';
 import { claimOpenSlot, requestNewSlot, decideBooking, BookingError } from '../booking/booking.service';
 import { PrismaClient } from '@prisma/client';
-import { sendEmail, emailLogoHeader } from '../email';
+import { sendEmail, emailLogoHeader, emailLoginButton } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -730,17 +730,39 @@ router.post('/check-lunch-reminders', async (req, res) => {
   }
 });
 
-// --- Daily check: auto-decline requests the office never answered ---------
-// A REQUESTED booking gives the office 3 days to approve or decline. If
-// they never respond, this declines it and reopens the slot so other reps
-// can grab it, rather than leaving it stuck pending forever.
+// --- Daily check: nudge offices about pending requests, then auto-decline -
+// the ones they never answered. A REQUESTED booking gives the office 3
+// days to approve or decline: at the 1-day mark (with no response yet)
+// this emails the office a one-time reminder, and past the 3-day mark it
+// declines the request and reopens the slot so other reps can grab it,
+// rather than leaving it stuck pending forever.
 router.post('/check-expired-requests', async (req, res) => {
   if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
+    const dueForReminder = await prisma.booking.findMany({
+      where: { status: 'REQUESTED', officeReminderSent: false, requestedAt: { lte: oneDayAgo, gt: threeDaysAgo } },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+
+    for (const booking of dueForReminder) {
+      const staff = await prisma.staffUser.findMany({ where: { locationId: booking.slot.locationId } });
+      const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      staff.forEach(s => {
+        sendEmail({
+          to: s.email,
+          subject: `Reminder: pending visit request from ${booking.rep.name}`,
+          html: `${emailLogoHeader()}<p>You still have a pending request from <strong>${booking.rep.name}</strong>${booking.rep.companyName ? ` (${booking.rep.companyName})` : ''} for ${dateStr}. Log in to approve or decline it — if there's no response within 3 days of the original request, it automatically reopens for other reps.</p>${emailLoginButton()}`,
+        }).catch(() => {});
+      });
+      await prisma.booking.update({ where: { id: booking.id }, data: { officeReminderSent: true } });
+    }
+
     const expired = await prisma.booking.findMany({
       where: { status: 'REQUESTED', requestedAt: { lte: threeDaysAgo } },
       include: { rep: true, slot: { include: { location: true } } },
@@ -759,10 +781,48 @@ router.post('/check-expired-requests', async (req, res) => {
       }).catch(() => {});
     }
 
-    res.json({ expired: expired.length });
+    res.json({ reminded: dueForReminder.length, expired: expired.length });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not check expired requests' });
+  }
+});
+
+// --- Rep: manually nudge the office about a pending request ---------------
+// Rate-limited to once every 24 hours per booking so a rep can't spam the
+// office — separate from (and in addition to) the automatic 1-day reminder
+// above, for when a rep wants to give it a friendly push themselves.
+router.post('/:bookingId/nudge', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.bookingId },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+    if (!booking || booking.repId !== req.user!.sub) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+    if (booking.status !== 'REQUESTED') {
+      return res.status(400).json({ error: 'This request has already been decided' });
+    }
+    if (booking.lastNudgedAt && Date.now() - booking.lastNudgedAt.getTime() < 24 * 60 * 60 * 1000) {
+      return res.status(429).json({ error: 'You can nudge this office once every 24 hours.' });
+    }
+
+    const staff = await prisma.staffUser.findMany({ where: { locationId: booking.slot.locationId } });
+    const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    staff.forEach(s => {
+      sendEmail({
+        to: s.email,
+        subject: `Friendly reminder: ${booking.rep.name} is still waiting on your response`,
+        html: `${emailLogoHeader()}<p><strong>${booking.rep.name}</strong>${booking.rep.companyName ? ` (${booking.rep.companyName})` : ''} sent a friendly reminder about their pending request for ${dateStr}. Log in to approve or decline it.</p>${emailLoginButton()}`,
+      }).catch(() => {});
+    });
+
+    await prisma.booking.update({ where: { id: booking.id }, data: { lastNudgedAt: new Date() } });
+    res.json({ message: 'Nudge sent' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not send nudge' });
   }
 });
 
