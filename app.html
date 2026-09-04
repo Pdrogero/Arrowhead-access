@@ -3281,31 +3281,50 @@ window.saveLunchDetails = async function(slotId) {
   }
 };
 
+// Kept so the "🆕 Pending requests" toggle can re-render its expanded
+// list without a re-fetch, and so it stays expanded across a
+// decide()-triggered reload if the office already had it open.
+let pendingRequestsSlots = [];
+let pendingRequestsExpanded = false;
+
 // A quick-access summary of any REQUESTED bookings at the top of the
 // dashboard, so an office doesn't have to scroll the full ledger to find
-// and act on a pending rep request. Reuses the ledger's own data — no
-// extra API call — and hides itself entirely when there's nothing pending.
+// and act on a pending rep request. Collapsed to a single subtle line by
+// default — a busy office with a lot of requests coming in shouldn't get
+// a wall of cards every time they land on the dashboard — and expands to
+// the full list on click. Reuses the ledger's own data (no extra API
+// call) and hides itself entirely when there's nothing pending.
 function renderPendingRequestsBox(slots) {
   const box = document.getElementById('pendingRequestsBox');
   if (!box) return;
+  pendingRequestsSlots = slots;
   const pending = slots.filter(s => s.status === 'REQUESTED' && s.booking?.rep);
-  if (!pending.length) { box.innerHTML = ''; return; }
+  if (!pending.length) { box.innerHTML = ''; pendingRequestsExpanded = false; return; }
 
   box.innerHTML = `
-    <div class="card" style="margin-bottom:16px;border:1px solid #F0D9B5;background:#FFF8F0;">
-      <p style="font-size:13px;font-weight:700;margin-bottom:10px;">⏳ Pending requests (${pending.length})</p>
-      ${pending.map(s => `
-        <div class="row" style="flex-wrap:wrap;background:#fff;border-radius:8px;margin-bottom:8px;">
-          <div class="time">${fmtTime(s.startTime)}</div>
-          <div class="mid">
-            <div class="who">${repNameLinkHtml(s.booking.rep)}</div>
-            <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
-          </div>
-          <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','approve')">✓ Approve</button>
-          <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
-        </div>`).join('')}
-    </div>`;
+    <button type="button" onclick="togglePendingRequestsExpanded()" style="display:flex;align-items:center;gap:6px;width:100%;background:#FFF8F0;border:1px solid #F0D9B5;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;margin-bottom:${pendingRequestsExpanded ? '8px' : '16px'};">
+      🆕 ${pending.length} pending request${pending.length === 1 ? '' : 's'}
+      <span style="margin-left:auto;color:var(--slate);font-weight:400;">${pendingRequestsExpanded ? 'Hide ▲' : 'Review ▼'}</span>
+    </button>
+    ${pendingRequestsExpanded ? `
+      <div style="margin-bottom:16px;">
+        ${pending.map(s => `
+          <div class="row" style="flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;">
+            <div class="time">${fmtTime(s.startTime)}</div>
+            <div class="mid">
+              <div class="who">${repNameLinkHtml(s.booking.rep)}</div>
+              <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
+            </div>
+            <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','approve')">✓ Approve</button>
+            <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
+          </div>`).join('')}
+      </div>` : ''}`;
 }
+
+window.togglePendingRequestsExpanded = function() {
+  pendingRequestsExpanded = !pendingRequestsExpanded;
+  renderPendingRequestsBox(pendingRequestsSlots);
+};
 
 async function loadOfficeLedger() {
   const box = document.getElementById('ledgerBox');
