@@ -264,14 +264,36 @@ router.patch('/:id/lunch-details', requireAuth, async (req, res) => {
 });
 
 // --- Reps: browse open slots across all locations --------------------------
+// Also mixes in this rep's own still-upcoming REQUESTED/CONFIRMED slots
+// (which are no longer OPEN, so wouldn't otherwise show here at all) with
+// a claimedByMe flag, so a slot they claimed still appears — marked as
+// claimed — instead of just vanishing once they navigate back to this
+// screen, especially once the office approves it.
 router.get('/open', requireAuth, requireRole('rep'), requireActiveSubscription, async (req, res) => {
-  const slots = await prisma.slot.findMany({
-    where: { status: 'OPEN', startTime: { gte: new Date() } },
-    include: { location: true },
-    orderBy: { startTime: 'asc' },
-    take: 50,
-  });
-  res.json(slots);
+  const now = new Date();
+  const [openSlots, myClaimedSlots] = await Promise.all([
+    prisma.slot.findMany({
+      where: { status: 'OPEN', startTime: { gte: now } },
+      include: { location: true },
+      orderBy: { startTime: 'asc' },
+      take: 50,
+    }),
+    prisma.slot.findMany({
+      where: {
+        startTime: { gte: now },
+        booking: { repId: req.user!.sub, status: { in: ['REQUESTED', 'CONFIRMED'] } },
+      },
+      include: { location: true, booking: true },
+      orderBy: { startTime: 'asc' },
+    }),
+  ]);
+
+  const combined = [
+    ...openSlots.map(s => ({ ...s, claimedByMe: null })),
+    ...myClaimedSlots.map(s => ({ ...s, claimedByMe: s.booking!.status })),
+  ].sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+  res.json(combined);
 });
 
 // Claiming an open slot lives at POST /api/bookings/slots/:slotId/claim

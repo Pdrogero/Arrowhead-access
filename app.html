@@ -1044,6 +1044,16 @@ function renderBrowseEmptyState() {
   if (query) loadOfficeSearchFallback(query);
 }
 
+// A slot the rep already has a REQUESTED/CONFIRMED booking on shows its
+// status instead of a Claim button — it's no longer OPEN, but the browse
+// endpoint still includes it (via claimedByMe) so it doesn't just vanish
+// once claimed, especially once the office approves it.
+function claimButtonOrStatusHtml(s) {
+  if (s.eventType === 'OFFICE_CLOSED') return '';
+  if (s.claimedByMe) return `<span class="chip ${s.claimedByMe}">${s.claimedByMe === 'CONFIRMED' ? '✓ Claimed' : '⏳ Requested'}</span>`;
+  return `<button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>`;
+}
+
 function renderBrowseList(slots) {
   if (!slots.length) { renderBrowseEmptyState(); return; }
   const content = document.getElementById('browseContent');
@@ -1057,7 +1067,7 @@ function renderBrowseList(slots) {
         ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count, 'office', s.location.id, s.location.name)}
         ${lunchDetailsSummaryHtml(s)}
       </div>
-      ${s.eventType === 'OFFICE_CLOSED' ? '' : `<button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>`}
+      ${claimButtonOrStatusHtml(s)}
     </div>`).join('')}</div>`;
 }
 
@@ -1196,7 +1206,7 @@ function renderBrowseCalendar(slots) {
               <div>${eventTypeChipHtml(s.eventType)}</div>
               ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count, 'office', s.location.id, s.location.name)}
             </div>
-            ${s.eventType === 'OFFICE_CLOSED' ? '' : `<button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>`}
+            ${claimButtonOrStatusHtml(s)}
           </div>`).join('') : '<div class="empty">No open slots this day.</div>'}
       </div>` : ''}
   `;
