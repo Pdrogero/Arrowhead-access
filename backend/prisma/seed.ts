@@ -51,8 +51,6 @@ async function main() {
         name: 'Meridian Family Practice — Main Office',
         address: '123 Main St, Springfield',
         timezone: 'America/New_York',
-        maxVisitsPerRepPerMonth: 1,
-        maxVisitsPerCompanyPerMonth: 2,
       },
     });
 
