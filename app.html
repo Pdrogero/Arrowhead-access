@@ -133,6 +133,9 @@ let catalogData = [];
 // Set from a ?transfer=1&email=... link in a transfer-invite email, so the
 // signup screen can prefill the email and explain why they're here.
 let pendingTransferEmail = null;
+// Same idea, from a ?teammate=1&email=... link in a "join me on Arrowhead
+// Access" teammate-invite email.
+let pendingTeammateInviteEmail = null;
 let selectedProfileImage; // undefined = unchanged, null = remove, string = new data URL
 const SPECIALTY_OPTIONS = ['PCP','Wound Care Specialists','Podiatry','Vascular Surgery','Plastic and Reconstructive Surgery','General Surgery','Home Health','Long-Term Care','Hospital Value Analysis','ASCs','Traveling Physicians','Medical Distributors','Orthopedic Surgery','Interventional Cardiology','Cardiology','Endocrinology','Infectious Disease','Dermatology','Emergency Medicine','Trauma Surgery','Physical Medicine and Rehabilitation (PM&R)','Internal Medicine','Family Medicine','Hospital Medicine','Geriatric Medicine','Colorectal Surgery','Cardiothoracic Surgery','Neurosurgery','Urology','OB/GYN','Gynecologic Surgery','ENT (Otolaryngology)','Oral and Maxillofacial Surgery','Pain Management','Sports Medicine','Rheumatology','Nephrology','Surgical Oncology','Medical Oncology','Radiation Oncology','Transplant Surgery','Hand Surgery','Ophthalmology','Interventional Radiology','Gastroenterology','Pulmonology','Critical Care Medicine','Anesthesiology','Pediatric Surgery'];
 let calendarMonth = new Date();
@@ -463,11 +466,12 @@ function screenSignup() {
         <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'login'})">&larr; Back</button>
         <h1>Create Rep Account</h1>
         ${pendingTransferEmail ? `<div class="msg ok">You've been invited to accept a visit transfer — sign up with the same email it was sent to, then check Transfers on your dashboard.</div>` : ''}
+        ${pendingTeammateInviteEmail ? `<div class="msg ok">You've been invited to connect as teammates on Arrowhead Access — sign up with the same email it was sent to, then check Transfers → My Team → Invites.</div>` : ''}
         <div class="card">
           ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
           <input id="name" type="text" placeholder="Full name">
           <input id="companyName" type="text" placeholder="Company name">
-          <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${pendingTransferEmail || ''}">
+          <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${pendingTransferEmail || pendingTeammateInviteEmail || ''}">
           ${passwordFieldHtml('password', 'Password', 'new-password')}
           ${passwordFieldHtml('confirmPassword', 'Confirm password', 'new-password')}
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:0 0 14px;cursor:pointer;">
@@ -4419,7 +4423,17 @@ function renderTeamBox() {
         <button id="inviteBtn-${r.id}" style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="inviteTeammate('${r.id}')">+ Add</button>
       </div>`).join('') : '<div class="empty">No suggested teammates right now — we\'ll show reps from your company as they join Arrowhead Access.</div>';
   } else {
-    box.innerHTML = teamInvitesData.length ? teamInvitesData.map(inv => `
+    const sendInviteFormHtml = `
+      <div class="row" style="flex-wrap:wrap;background:var(--paper);">
+        <div class="mid" style="width:100%;">
+          <label style="font-size:12.5px;font-weight:600;margin-bottom:6px;display:block;">Invite a teammate who isn't on Arrowhead Access yet</label>
+          <div style="display:flex;gap:8px;">
+            <input id="teammateInviteEmail" type="email" placeholder="Their email address" style="flex:1;margin-bottom:0;" onkeydown="if(event.key==='Enter')sendTeammateEmailInvite()">
+            <button class="primary" style="width:auto;margin:0;padding:0 16px;" onclick="sendTeammateEmailInvite()">Send Invite</button>
+          </div>
+        </div>
+      </div>`;
+    const invitesListHtml = teamInvitesData.length ? teamInvitesData.map(inv => `
       <div class="row">
         <div class="mid">
           <div class="who">${inv.fromRep.name}</div>
@@ -4428,8 +4442,22 @@ function renderTeamBox() {
         <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="respondToTeammateInvite('${inv.id}','accept')">✓ Accept</button>
         <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="respondToTeammateInvite('${inv.id}','decline')">✕ Decline</button>
       </div>`).join('') : '<div class="empty">No pending invites.</div>';
+    box.innerHTML = sendInviteFormHtml + invitesListHtml;
   }
 }
+
+window.sendTeammateEmailInvite = async function() {
+  const input = document.getElementById('teammateInviteEmail');
+  const email = input.value.trim();
+  if (!email) return;
+  try {
+    await api('/api/teammates/invite', { method: 'POST', body: JSON.stringify({ toRepEmail: email }) });
+    alert(`Invite sent to ${email}!`);
+    loadTeamData();
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 window.inviteTeammate = async function(repId) {
   const btn = document.getElementById(`inviteBtn-${repId}`);
@@ -4646,6 +4674,7 @@ function render() {
 const resetTokenParam = new URLSearchParams(window.location.search).get('resetToken');
 const transferParam = new URLSearchParams(window.location.search).get('transfer');
 const transferEmailParam = new URLSearchParams(window.location.search).get('email');
+const teammateInviteParam = new URLSearchParams(window.location.search).get('teammate');
 const openSlotsParam = new URLSearchParams(window.location.search).get('openSlots');
 if (resetTokenParam) {
   state.resetToken = resetTokenParam;
@@ -4668,6 +4697,11 @@ if (resetTokenParam) {
   });
 } else if (transferParam === '1' && transferEmailParam) {
   pendingTransferEmail = transferEmailParam;
+  state.screen = 'signup';
+  state.role = 'rep';
+  render();
+} else if (teammateInviteParam === '1' && transferEmailParam) {
+  pendingTeammateInviteEmail = transferEmailParam;
   state.screen = 'signup';
   state.role = 'rep';
   render();

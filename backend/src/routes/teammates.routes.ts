@@ -36,7 +36,7 @@ router.get('/suggested', requireAuth, requireRole('rep'), async (req, res) => {
     select: { fromRepId: true, toRepId: true },
   });
   const excludeIds = new Set<string>([me.id]);
-  existing.forEach(inv => { excludeIds.add(inv.fromRepId); excludeIds.add(inv.toRepId); });
+  existing.forEach(inv => { excludeIds.add(inv.fromRepId); if (inv.toRepId) excludeIds.add(inv.toRepId); });
 
   const suggested = await prisma.rep.findMany({
     where: {
@@ -63,39 +63,63 @@ router.get('/invites', requireAuth, requireRole('rep'), async (req, res) => {
 // --- Send an invite ----------------------------------------------------------
 router.post('/invite', requireAuth, requireRole('rep'), async (req, res) => {
   try {
-    const toRepId = String(req.body.toRepId || '');
-    if (!toRepId) return res.status(400).json({ error: 'toRepId is required' });
-    if (toRepId === req.user!.sub) return res.status(400).json({ error: "You can't invite yourself" });
+    const me = await prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } });
 
-    const [me, toRep] = await Promise.all([
-      prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } }),
-      prisma.rep.findUnique({ where: { id: toRepId } }),
-    ]);
-    if (!toRep) return res.status(404).json({ error: 'Rep not found' });
+    // Two ways in: toRepId picks an existing rep (the Suggested Teammates
+    // "+ Add" button); toRepEmail invites someone by email who may not be
+    // on Arrowhead Access yet — mirrors how visit transfers handle
+    // inviting a not-yet-registered rep.
+    let toRepId: string | null = null;
+    let toRepEmail: string;
+
+    if (req.body.toRepId) {
+      toRepId = String(req.body.toRepId);
+      if (toRepId === me.id) return res.status(400).json({ error: "You can't invite yourself" });
+      const toRep = await prisma.rep.findUnique({ where: { id: toRepId } });
+      if (!toRep) return res.status(404).json({ error: 'Rep not found' });
+      toRepEmail = toRep.email;
+    } else {
+      toRepEmail = String(req.body.toRepEmail || '').trim().toLowerCase();
+      if (!toRepEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toRepEmail)) {
+        return res.status(400).json({ error: 'Enter a valid email address' });
+      }
+      if (toRepEmail === me.email.toLowerCase()) {
+        return res.status(400).json({ error: "You can't invite yourself" });
+      }
+      const existingRep = await prisma.rep.findFirst({ where: { email: { equals: toRepEmail, mode: 'insensitive' } } });
+      toRepId = existingRep?.id ?? null;
+    }
 
     const existing = await prisma.teammateInvite.findFirst({
-      where: {
-        OR: [
-          { fromRepId: me.id, toRepId },
-          { fromRepId: toRepId, toRepId: me.id },
-        ],
-      },
+      where: toRepId
+        ? { OR: [{ fromRepId: me.id, toRepId }, { fromRepId: toRepId, toRepId: me.id }] }
+        : { fromRepId: me.id, toRepEmail },
     });
     if (existing) {
       if (existing.status === 'ACCEPTED') return res.status(409).json({ error: 'You are already teammates' });
-      if (existing.fromRepId === me.id) return res.status(409).json({ error: 'You already invited this rep' });
+      if (existing.fromRepId === me.id) return res.status(409).json({ error: 'You already invited this person' });
       return res.status(409).json({ error: 'This rep already invited you — check your Invites tab to accept' });
     }
 
     const invite = await prisma.teammateInvite.create({
-      data: { fromRepId: me.id, toRepId },
+      data: { fromRepId: me.id, toRepId, toRepEmail },
     });
 
-    sendEmail({
-      to: toRep.email,
-      subject: `${me.name} invited you to connect on Arrowhead Access`,
-      html: `${emailLogoHeader()}<p><strong>${me.name}</strong> (${me.companyName}) invited you to connect as teammates on Arrowhead Access.</p><p>Log in and check your Team invites under Transfers to accept.</p>${emailLoginButton()}`,
-    }).catch(() => {});
+    if (toRepId) {
+      sendEmail({
+        to: toRepEmail,
+        subject: `${me.name} invited you to connect on Arrowhead Access`,
+        html: `${emailLogoHeader()}<p><strong>${me.name}</strong> (${me.companyName}) invited you to connect as teammates on Arrowhead Access.</p><p>Log in and check Transfers → My Team → Invites to accept.</p>${emailLoginButton()}`,
+      }).catch(() => {});
+    } else {
+      const appUrl = process.env.APP_URL || 'https://arrowheadaccess.com';
+      const signupUrl = `${appUrl}/app.html?teammate=1&email=${encodeURIComponent(toRepEmail)}`;
+      sendEmail({
+        to: toRepEmail,
+        subject: `${me.name} invited you to join Arrowhead Access`,
+        html: `${emailLogoHeader()}<p><strong>${me.name}</strong> (${me.companyName}) uses Arrowhead Access to schedule visits with medical offices, and wants to connect with you there as a teammate.</p><p><a href="${signupUrl}">Sign up with this email address</a> to join — it only takes a minute.</p>`,
+      }).catch(() => {});
+    }
 
     res.status(201).json(invite);
   } catch (err) {
@@ -124,7 +148,9 @@ router.post('/invites/:id/respond', requireAuth, requireRole('rep'), async (req,
       include: { fromRep: true, toRep: true },
     });
 
-    if (decision === 'ACCEPTED') {
+    // toRepId was already confirmed to match the authenticated caller above,
+    // so toRep is guaranteed to be populated here.
+    if (decision === 'ACCEPTED' && updated.toRep) {
       sendEmail({
         to: updated.fromRep.email,
         subject: `${updated.toRep.name} accepted your teammate invite`,

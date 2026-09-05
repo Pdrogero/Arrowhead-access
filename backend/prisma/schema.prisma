@@ -329,11 +329,17 @@ enum TeammateInviteStatus {
 // teammates. Once ACCEPTED, both reps show up under each other's "My
 // Teammates" list — the direction of who invited whom stops mattering.
 model TeammateInvite {
-  id          String               @id @default(cuid())
-  fromRepId   String
-  fromRep     Rep                  @relation("TeammateInvitesSent", fields: [fromRepId], references: [id], onDelete: Cascade)
-  toRepId     String
-  toRep       Rep                  @relation("TeammateInvitesReceived", fields: [toRepId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  fromRepId String
+  fromRep   Rep     @relation("TeammateInvitesSent", fields: [fromRepId], references: [id], onDelete: Cascade)
+  // The email the invite was sent to — set on every invite. toRepId fills
+  // in once a matching rep account exists: either one already did when
+  // the invite was sent (the Suggested Teammates "+ Add" path), or a new
+  // signup with this email claims it (see /api/auth/rep/signup), for
+  // someone invited by email who wasn't on Arrowhead Access yet.
+  toRepEmail  String
+  toRepId     String?
+  toRep       Rep?                 @relation("TeammateInvitesReceived", fields: [toRepId], references: [id], onDelete: Cascade)
   status      TeammateInviteStatus @default(PENDING)
   createdAt   DateTime             @default(now())
   respondedAt DateTime?
@@ -341,6 +347,7 @@ model TeammateInvite {
   @@unique([fromRepId, toRepId])
   @@index([toRepId, status])
   @@index([fromRepId, status])
+  @@index([toRepEmail, status])
 }
 
 // A one-time email code issued for a rep's two-factor login. Only the most
