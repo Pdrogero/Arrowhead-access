@@ -1105,9 +1105,42 @@ function renderBrowseEmptyState() {
 // once claimed, especially once the office approves it.
 function claimButtonOrStatusHtml(s) {
   if (s.eventType === 'OFFICE_CLOSED') return '';
-  if (s.claimedByMe) return `<span class="chip ${s.claimedByMe}">${s.claimedByMe === 'CONFIRMED' ? '✓ Claimed' : '⏳ Requested'}</span>`;
+  if (s.claimedByMe) {
+    return `<span class="chip ${s.claimedByMe}">${s.claimedByMe === 'CONFIRMED' ? '✓ Claimed' : '⏳ Requested'}</span>
+      <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:6px;" onclick="recallClaimedSlot('${s.booking.id}', '${s.claimedByMe}', '${(s.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">↩️ Recall</button>`;
+  }
   return `<button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>`;
 }
+
+// Lets a rep undo a claim they made by accident right from Available Slots,
+// rather than having to find it under Your bookings. A still-pending
+// request is simply withdrawn (the slot reopens, nothing to notify the
+// office about yet); an already-confirmed visit goes through the same
+// reason-required cancel flow used elsewhere, since the office has already
+// committed to it.
+window.recallClaimedSlot = async function(bookingId, status, officeName, timeLabel) {
+  if (status === 'CONFIRMED') {
+    if (!confirm(`Are you sure you want to cancel your visit at ${officeName} on ${timeLabel}? The office will be notified by email.`)) return;
+    const reason = prompt('Please provide a brief reason for the cancellation — this will be included in the email to the office:');
+    if (reason === null) return;
+    if (!reason.trim()) { alert('A reason is required so the office understands why.'); return; }
+    try {
+      await api(`/api/bookings/${bookingId}/cancel-by-rep`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
+      alert('Visit cancelled — the office has been notified by email.');
+      loadOpenSlots();
+    } catch (err) {
+      alert(err.message);
+    }
+  } else {
+    if (!confirm(`Recall your request for this visit at ${officeName} on ${timeLabel}? It'll go back to being an open slot.`)) return;
+    try {
+      await api(`/api/bookings/${bookingId}/withdraw`, { method: 'POST' });
+      loadOpenSlots();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+};
 
 function renderBrowseList(slots) {
   if (!slots.length) { renderBrowseEmptyState(); return; }

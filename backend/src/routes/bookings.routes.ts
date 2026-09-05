@@ -484,6 +484,40 @@ router.post('/:bookingId/cancel-by-rep', requireAuth, requireRole('rep'), async 
   }
 });
 
+// --- Rep: undo a claim made by accident, before the office has acted -------
+// Only for a still-pending request — a confirmed visit is a real
+// commitment the office has already made, so that goes through
+// cancel-by-rep above instead. Withdrawing removes the request entirely
+// (rather than leaving a CANCELLED record) and reopens the slot, since as
+// far as the office is concerned nothing happened.
+router.post('/:bookingId/withdraw', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({ where: { id: req.params.bookingId } });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    try {
+      assertOwnsRep(req, booking.repId);
+    } catch (err) {
+      return res.status(403).json({ error: (err as Error).message });
+    }
+
+    if (booking.status !== 'REQUESTED') {
+      return res.status(409).json({ error: 'Only a pending request can be withdrawn this way' });
+    }
+
+    await prisma.$transaction([
+      prisma.bookingTransfer.deleteMany({ where: { bookingId: booking.id } }),
+      prisma.booking.delete({ where: { id: booking.id } }),
+      prisma.slot.update({ where: { id: booking.slotId }, data: { status: 'OPEN' } }),
+    ]);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not withdraw this request' });
+  }
+});
+
 // --- Rep: accept or decline a reschedule the office suggested --------------
 router.post('/:bookingId/reschedule/respond', requireAuth, requireRole('rep'), async (req, res) => {
   try {
