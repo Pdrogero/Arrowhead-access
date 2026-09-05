@@ -238,14 +238,15 @@ function goHome() {
 }
 function fmtTime(isoStr) { return new Date(isoStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 
-// A password <input> with a 👁️ toggle to reveal what's typed — margin
-// moves onto the wrapper (with the input's own margin zeroed) so the
-// wrapper's height matches the input exactly, which is what keeps the
-// button centered vertically without extra positioning math.
+// A password <input> with a small text toggle ("Show"/"Hide") to reveal
+// what's typed — margin moves onto the wrapper (with the input's own
+// margin zeroed) so the wrapper's height matches the input exactly, which
+// is what keeps the toggle centered vertically without extra positioning
+// math. Plain text rather than an eye icon reads calmer/more professional.
 function passwordFieldHtml(id, placeholder, autocomplete) {
   return `<div style="position:relative;margin-bottom:12px;">
-    <input id="${id}" type="password" placeholder="${placeholder}" autocomplete="${autocomplete}" style="margin-bottom:0;padding-right:44px;">
-    <button type="button" tabindex="-1" onclick="togglePasswordVisibility('${id}', this)" aria-label="Show password" style="position:absolute;top:50%;right:6px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:6px;color:var(--slate);">👁️</button>
+    <input id="${id}" type="password" placeholder="${placeholder}" autocomplete="${autocomplete}" style="margin-bottom:0;padding-right:52px;">
+    <button type="button" tabindex="-1" onclick="togglePasswordVisibility('${id}', this)" aria-label="Show password" style="position:absolute;top:50%;right:10px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;letter-spacing:0.02em;line-height:1;padding:4px;color:var(--teal);">Show</button>
   </div>`;
 }
 
@@ -254,7 +255,7 @@ window.togglePasswordVisibility = function(inputId, btn) {
   if (!input) return;
   const willShow = input.type === 'password';
   input.type = willShow ? 'text' : 'password';
-  btn.textContent = willShow ? '🙈' : '👁️';
+  btn.textContent = willShow ? 'Hide' : 'Show';
   btn.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
 };
 
