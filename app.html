@@ -189,6 +189,7 @@ let conversationsData = [];
 let activeConversationId = null;
 let activeConversationCounterpart = '';
 let activeConversationTargetId = null;
+let activeConversationEventLabel = null;
 let conversationMessages = [];
 let literatureRows = [];
 let materialsData = [];
@@ -785,6 +786,12 @@ function eventTypeLabel(t) {
 function eventTypeChipHtml(t) {
   const c = EVENT_TYPE_COLORS[t] || { bg: 'var(--paper)', color: 'var(--slate)' };
   return `<span class="chip" style="background:${c.bg};color:${c.color};">${eventTypeLabel(t)}</span>`;
+}
+
+// Short plain-text label identifying a specific visit (e.g. "Lunch — Sep
+// 15, 12:00 PM"), used to tag a message as being about that visit.
+function eventMessageLabel(slot) {
+  return `${eventTypeLabel(slot.eventType)} — ${fmtTime(slot.startTime)}`;
 }
 
 // Wraps an office address in a link to Google Maps (opens the Maps app on
@@ -2086,13 +2093,19 @@ window.openConversation = function(id, counterpart, targetId) {
   activeConversationId = id;
   activeConversationCounterpart = counterpart;
   activeConversationTargetId = targetId;
+  activeConversationEventLabel = null;
   setState({ screen: 'conversation' });
 };
 
-window.startConversation = async function(targetId, counterpart) {
+// `eventLabel`, when given, is set from a "Message" button on a specific
+// visit's row rather than the general Messages list — every message sent
+// while it's showing gets tagged with it, so a rep/office scrolling the
+// shared history later can tell which visit a given message was about.
+window.startConversation = async function(targetId, counterpart, eventLabel) {
   activeConversationId = null;
   activeConversationCounterpart = counterpart;
   activeConversationTargetId = targetId;
+  activeConversationEventLabel = eventLabel || null;
   conversationMessages = [];
   setState({ screen: 'conversation' });
 
@@ -2115,6 +2128,11 @@ function screenConversation() {
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'messages'})">&larr; Back to messages</button>
       <h1>${activeConversationCounterpart}</h1>
       <div id="messagesBox" class="listcard" style="margin-bottom:12px;max-height:400px;overflow-y:auto;"><div class="empty">Loading…</div></div>
+      ${activeConversationEventLabel ? `
+        <div style="display:flex;align-items:center;gap:8px;background:#FFF8F0;border:1px solid #F0D9B5;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
+          💬 Messaging about: <strong>${activeConversationEventLabel.replace(/</g, '&lt;')}</strong>
+          <button type="button" onclick="clearConversationEventLabel()" style="margin-left:auto;background:none;border:none;color:var(--slate);font-size:11px;text-decoration:underline;cursor:pointer;">Send a general message instead</button>
+        </div>` : ''}
       <div style="display:flex;gap:8px;">
         <input id="newMessageBody" type="text" placeholder="Type a message…" style="flex:1;margin-bottom:0;" onkeydown="if(event.key==='Enter')sendMessage()">
         <button class="primary" style="width:auto;margin-bottom:0;padding:0 20px;" onclick="sendMessage()">Send</button>
@@ -2122,6 +2140,11 @@ function screenConversation() {
       <p style="font-size:11px;color:var(--slate);margin-top:8px;">Don't include patient names, dates of birth, medical record numbers, or diagnoses in messages.</p>
     </div>`;
 }
+
+window.clearConversationEventLabel = function() {
+  activeConversationEventLabel = null;
+  render();
+};
 
 async function loadConversationMessages() {
   if (!activeConversationId) { renderMessages(); return; }
@@ -2138,12 +2161,20 @@ function renderMessages() {
   const box = document.getElementById('messagesBox');
   if (!conversationMessages.length) { box.innerHTML = '<div class="empty">No messages yet — say hello!</div>'; return; }
   const myType = state.role === 'rep' ? 'REP' : 'OFFICE';
-  box.innerHTML = conversationMessages.map(m => `
+  let lastLabel = null;
+  box.innerHTML = conversationMessages.map(m => {
+    // Only repeat the "Re: ..." tag when it changes from the message right
+    // before it, so a back-and-forth about the same visit isn't relabeled
+    // on every single line.
+    const showLabel = m.eventLabel && m.eventLabel !== lastLabel;
+    lastLabel = m.eventLabel || null;
+    return `
     <div style="padding:10px 14px;border-bottom:1px solid var(--line);${m.senderType === myType ? 'background:#F7FBF9;' : ''}">
+      ${showLabel ? `<div style="font-size:11px;font-weight:600;color:var(--teal-dark);margin-bottom:4px;">Re: ${m.eventLabel.replace(/</g, '&lt;')}</div>` : ''}
       <div style="font-size:13px;">${m.body.replace(/</g, '&lt;')}</div>
       <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}</div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
   box.scrollTop = box.scrollHeight;
 }
 
@@ -2155,6 +2186,7 @@ window.sendMessage = async function() {
   const payload = { body };
   if (state.role === 'rep') payload.locationId = activeConversationTargetId;
   else payload.repId = activeConversationTargetId;
+  if (activeConversationEventLabel) payload.eventLabel = activeConversationEventLabel;
 
   try {
     const message = await api('/api/messages', { method: 'POST', body: JSON.stringify(payload) });
@@ -3447,7 +3479,7 @@ async function loadOfficeLedger() {
           <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
         ` : ''}
         ${s.status === 'CONFIRMED' && s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">⭐ Rate rep</button>` : ''}
-        ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
+        ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${eventMessageLabel(s).replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
         ${s.status === 'OPEN' ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="removeOpenSlot('${s.id}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Remove</button>` : ''}
         ${s.status === 'CONFIRMED' && s.booking?.rep && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🔄 Cancel/Reschedule</button>` : ''}
         ${officeCancelDraft && s.booking && officeCancelDraft.bookingId === s.booking.id ? cancelSuggestFormHtml(officeCancelDraft.repName, 'finalizeCancelOfficeBooking') : ''}
@@ -3493,7 +3525,7 @@ async function loadMyBookings() {
         <span class="chip ${b.status}">${b.status}</span>
         <div style="width:100%;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px;">
           <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
-          <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message Office</button>
+          <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${eventMessageLabel(b.slot).replace(/'/g, "\\'")}')">💬 Message Office</button>
           ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="offerTransfer('${b.id}')">🔁 Transfer</button>` : ''}
           ${b.status === 'REQUESTED' ? (
             b.lastNudgedAt && Date.now() - new Date(b.lastNudgedAt).getTime() < 24 * 60 * 60 * 1000
@@ -3548,7 +3580,7 @@ async function loadRepHistory() {
         <div class="time">${fmtTime(b.slot.startTime)}</div>
         <div class="mid"><div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${b.slot.location.id}')">${favoriteStarHtml(b.slot.location.id)} ${b.slot.location.name}</div><div style="margin-top:4px;">${eventTypeChipHtml(b.slot.eventType)}</div>${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count, 'office', b.slot.location.id, b.slot.location.name)}${lunchDetailsSummaryHtml(b.slot)}</div>
         <span class="chip ${b.status}">${b.status}</span>
-        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">💬 Message Office</button>
+        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${eventMessageLabel(b.slot).replace(/'/g, "\\'")}')">💬 Message Office</button>
         <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>
       </div>`).join('');
     filterHistorySearch(document.getElementById('historySearchInput')?.value || '');
@@ -3573,7 +3605,7 @@ async function loadOfficeHistory() {
           ${lunchDetailsSummaryHtml(s)}
         </div>
         <span class="chip ${s.status}">${s.status}</span>
-        ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
+        ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${eventMessageLabel(s).replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
         ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">⭐ Rate rep</button>` : ''}
       </div>`).join('');
     filterHistorySearch(document.getElementById('historySearchInput')?.value || '');

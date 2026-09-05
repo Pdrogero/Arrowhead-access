@@ -567,6 +567,12 @@ model Message {
   senderType     MessageSenderType
   senderId       String
   body           String
+  // Plain-text snapshot of which visit this message was about (e.g. "Lunch
+  // — Sep 15, 12:00 PM"), set when sent from that visit's "Message" button
+  // rather than the general conversation list. Deliberately not a relation
+  // to Slot/Booking — it's a label of what was true when the message was
+  // sent, so it stays meaningful even if that slot is later edited/removed.
+  eventLabel     String?
   createdAt      DateTime          @default(now())
 
   // Set when the other side of the conversation opens it after this

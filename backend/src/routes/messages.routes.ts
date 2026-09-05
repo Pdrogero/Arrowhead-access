@@ -120,9 +120,11 @@ router.post('/', requireAuth, requireActiveSubscription, async (req, res) => {
     const conversation = await resolveConversation(req.user!, req.body);
     if (!conversation) return res.status(400).json({ error: 'locationId (rep) or repId (office) is required' });
 
+    const eventLabel = typeof req.body.eventLabel === 'string' ? req.body.eventLabel.trim().slice(0, 200) || undefined : undefined;
+
     const senderType = req.user!.role === 'rep' ? 'REP' : 'OFFICE';
     const message = await prisma.message.create({
-      data: { conversationId: conversation.id, senderType, senderId: req.user!.sub, body },
+      data: { conversationId: conversation.id, senderType, senderId: req.user!.sub, body, eventLabel },
     });
 
     const full = await prisma.conversation.findUnique({
