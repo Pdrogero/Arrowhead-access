@@ -36,7 +36,7 @@ function sendPasswordChangedEmail(to: string) {
 
 router.post('/rep/signup', async (req, res) => {
   try {
-    const { password, name, companyName, turnstileToken } = req.body;
+    const { password, name, companyName, turnstileToken, twoFactorEnabled } = req.body;
     const email = String(req.body.email || '').trim().toLowerCase();
     if (!email || !password || !name || !companyName) {
       return res.status(400).json({ error: 'email, password, name, and companyName are required' });
@@ -71,6 +71,7 @@ router.post('/rep/signup', async (req, res) => {
         verificationStatus: knownDomain ? 'VERIFIED' : 'UNVERIFIED',
         verificationMethod: knownDomain ? 'DOMAIN_MATCH' : undefined,
         isFoundingRep,
+        twoFactorEnabled: !!twoFactorEnabled,
       },
     });
 
@@ -91,7 +92,7 @@ router.post('/rep/signup', async (req, res) => {
     sendEmail({
       to: rep.email,
       subject: 'Welcome to Arrowhead Access',
-      html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p>${claimedTransfers.count ? `<p>You also have ${claimedTransfers.count} pending visit transfer${claimedTransfers.count > 1 ? 's' : ''} waiting for you under Transfers.</p>` : ''}${emailLoginButton()}`,
+      html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p>${claimedTransfers.count ? `<p>You also have ${claimedTransfers.count} pending visit transfer${claimedTransfers.count > 1 ? 's' : ''} waiting for you under Transfers.</p>` : ''}${rep.twoFactorEnabled ? `<p>🔒 You turned on email login codes — from now on we'll send a 6-digit code to this address each time you log in from a new device. You can turn this off anytime in Account Settings.</p>` : ''}${emailLoginButton()}`,
     }).catch(() => {});
 
     notifyAdmin(
