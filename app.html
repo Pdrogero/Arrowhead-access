@@ -3241,8 +3241,8 @@ window.saveOfficePolicy = async function(silent) {
 async function loadOfficePolicy() {
   try {
     const policy = await api('/api/policies');
-    document.getElementById('maxVisitsPerRep').value = policy.maxVisitsPerRepPerMonth ?? 1;
-    document.getElementById('maxVisitsPerCompany').value = policy.maxVisitsPerCompanyPerMonth ?? 2;
+    document.getElementById('maxVisitsPerRep').value = policy.maxVisitsPerRepPerMonth ?? 4;
+    document.getElementById('maxVisitsPerCompany').value = policy.maxVisitsPerCompanyPerMonth ?? 8;
     document.getElementById('confirmationDeadline').value = policy.confirmationDeadline || '48 hours';
     document.getElementById('generalAllergyNotes').value = policy.generalAllergyNotes || '';
   } catch (err) {}

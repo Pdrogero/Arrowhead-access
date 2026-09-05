@@ -19,15 +19,23 @@ export class BookingError extends Error {
 const MEALS_PER_TYPE_PER_REP_PER_LOCATION_CAP = 2;
 const MEAL_EVENT_TYPES = ['LUNCH', 'BREAKFAST'];
 
+// Fallback values when an office hasn't saved its own Visit Policy yet —
+// kept in sync with the defaults policies.routes.ts hands back for a
+// location with no OfficePolicy row.
+const DEFAULT_MAX_VISITS_PER_REP_PER_MONTH = 4;
+const DEFAULT_MAX_VISITS_PER_COMPANY_PER_MONTH = 8;
+
 // --- Frequency cap check -----------------------------------------------
 // Counts CONFIRMED bookings for this rep (and separately, this rep's company)
 // at this location in the trailing 30 days, and compares against the
-// location's policy. Called inside a transaction so it's race-safe.
+// office's own Visit Policy. Called inside a transaction so it's race-safe.
 // `eventType`, when given, additionally enforces the fixed lunch/breakfast
 // cap above — pass it whenever the slot being booked has a known type.
 
 async function checkFrequencyCap(tx: any, locationId: string, repId: string, eventType?: string) {
-  const location = await tx.location.findUniqueOrThrow({ where: { id: locationId } });
+  const policy = await tx.officePolicy.findUnique({ where: { locationId } });
+  const maxVisitsPerRepPerMonth = policy?.maxVisitsPerRepPerMonth ?? DEFAULT_MAX_VISITS_PER_REP_PER_MONTH;
+  const maxVisitsPerCompanyPerMonth = policy?.maxVisitsPerCompanyPerMonth ?? DEFAULT_MAX_VISITS_PER_COMPANY_PER_MONTH;
   const rep = await tx.rep.findUniqueOrThrow({ where: { id: repId } });
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -40,9 +48,9 @@ async function checkFrequencyCap(tx: any, locationId: string, repId: string, eve
       requestedAt: { gte: thirtyDaysAgo },
     },
   });
-  if (repVisits >= location.maxVisitsPerRepPerMonth) {
+  if (repVisits >= maxVisitsPerRepPerMonth) {
     throw new BookingError(
-      `This rep has already reached the ${location.maxVisitsPerRepPerMonth}-visit monthly limit at this location.`,
+      `This rep has already reached the ${maxVisitsPerRepPerMonth}-visit monthly limit at this location.`,
       'REP_CAP_REACHED'
     );
   }
@@ -56,9 +64,9 @@ async function checkFrequencyCap(tx: any, locationId: string, repId: string, eve
         rep: { companyName: rep.companyName },
       },
     });
-    if (companyVisits >= location.maxVisitsPerCompanyPerMonth) {
+    if (companyVisits >= maxVisitsPerCompanyPerMonth) {
       throw new BookingError(
-        `${rep.companyName} has already reached the ${location.maxVisitsPerCompanyPerMonth}-visit monthly limit at this location.`,
+        `${rep.companyName} has already reached the ${maxVisitsPerCompanyPerMonth}-visit monthly limit at this location.`,
         'COMPANY_CAP_REACHED'
       );
     }

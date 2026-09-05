@@ -128,8 +128,6 @@ model Location {
   // since existing locations predate this field.
   phone                       String?
   timezone                    String
-  maxVisitsPerRepPerMonth     Int      @default(1)
-  maxVisitsPerCompanyPerMonth Int      @default(2)
   createdAt                   DateTime @default(now())
   // "2026-09" style key for the month the new-month schedule-setup email
   // was last sent, so the daily cron only sends it once per month.
@@ -178,8 +176,8 @@ model OfficePolicy {
   id                          String   @id @default(cuid())
   locationId                  String   @unique
   location                    Location @relation(fields: [locationId], references: [id])
-  maxVisitsPerRepPerMonth     Int      @default(1)
-  maxVisitsPerCompanyPerMonth Int      @default(2)
+  maxVisitsPerRepPerMonth     Int      @default(4)
+  maxVisitsPerCompanyPerMonth Int      @default(8)
   // Free text (e.g. "48 hours", "2 business days", "by 5pm the day
   // before") — a dropdown of common hour presets fills this in, but the
   // office can type something more specific too, so it's not strictly

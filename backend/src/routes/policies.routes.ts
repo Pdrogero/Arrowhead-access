@@ -21,8 +21,8 @@ router.get('/', requireAuth, async (req, res) => {
     });
 
     res.json(policy || {
-      maxVisitsPerRepPerMonth: 1,
-      maxVisitsPerCompanyPerMonth: 2,
+      maxVisitsPerRepPerMonth: 4,
+      maxVisitsPerCompanyPerMonth: 8,
       confirmationDeadline: '48 hours',
       closedDays: [],
       generalAllergyNotes: '',
@@ -44,16 +44,16 @@ router.post('/', requireAuth, async (req, res) => {
     const policy = await prisma.officePolicy.upsert({
       where: { locationId: staff.locationId },
       update: {
-        maxVisitsPerRepPerMonth: maxVisitsPerRepPerMonth || 1,
-        maxVisitsPerCompanyPerMonth: maxVisitsPerCompanyPerMonth || 2,
+        maxVisitsPerRepPerMonth: maxVisitsPerRepPerMonth || 4,
+        maxVisitsPerCompanyPerMonth: maxVisitsPerCompanyPerMonth || 8,
         confirmationDeadline: confirmationDeadline || null,
         closedDays: closedDays || [],
         generalAllergyNotes: generalAllergyNotes || null,
       },
       create: {
         locationId: staff.locationId,
-        maxVisitsPerRepPerMonth: maxVisitsPerRepPerMonth || 1,
-        maxVisitsPerCompanyPerMonth: maxVisitsPerCompanyPerMonth || 2,
+        maxVisitsPerRepPerMonth: maxVisitsPerRepPerMonth || 4,
+        maxVisitsPerCompanyPerMonth: maxVisitsPerCompanyPerMonth || 8,
         confirmationDeadline: confirmationDeadline || null,
         closedDays: closedDays || [],
         generalAllergyNotes: generalAllergyNotes || null,
