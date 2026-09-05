@@ -425,6 +425,63 @@ router.post('/:bookingId/cancel', requireAuth, requireRole('office_admin', 'offi
   }
 });
 
+// --- Office staff: undo a cancellation they just made ----------------------
+// Only for a cancellation the office itself made (not one the rep
+// initiated — that's the rep's call to reverse, not the office's), the
+// visit hasn't already passed, and the rep hasn't already responded to a
+// suggested reschedule (accepting one creates a separate new booking, so
+// restoring this one at that point would just create a confusing duplicate).
+router.post('/:bookingId/undo-cancel', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.bookingId },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    try {
+      assertOwnsLocation(req, booking.slot.locationId);
+    } catch (err) {
+      return res.status(403).json({ error: (err as Error).message });
+    }
+
+    if (booking.status !== 'CANCELLED' || booking.cancelledBy !== 'OFFICE') {
+      return res.status(409).json({ error: 'Only a cancellation your office made can be undone this way' });
+    }
+    if (booking.rescheduleResponse) {
+      return res.status(409).json({ error: 'The rep already responded to your reschedule suggestion, so this can\'t be undone — message them directly instead.' });
+    }
+    if (booking.slot.startTime.getTime() < Date.now()) {
+      return res.status(409).json({ error: 'This visit\'s time has already passed' });
+    }
+
+    const [updatedBooking] = await prisma.$transaction([
+      prisma.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: 'CONFIRMED',
+          cancelReason: null,
+          cancelledBy: null,
+          suggestedRescheduleAt: null,
+        },
+      }),
+      prisma.slot.update({ where: { id: booking.slotId }, data: { status: 'CONFIRMED' } }),
+    ]);
+
+    const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    sendEmail({
+      to: booking.rep.email,
+      subject: `${booking.slot.location.name} restored your visit on ${dateStr}`,
+      html: `${emailLogoHeader()}<p>Good news — <strong>${booking.slot.location.name}</strong> undid their cancellation. Your visit on ${dateStr} is confirmed again.</p>${emailLoginButton()}`,
+    }).catch(() => {});
+
+    res.json(updatedBooking);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not undo this cancellation' });
+  }
+});
+
 // --- Rep: cancel a confirmed visit, with a reason sent to the office -------
 router.post('/:bookingId/cancel-by-rep', requireAuth, requireRole('rep'), async (req, res) => {
   try {

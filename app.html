@@ -3637,6 +3637,7 @@ async function loadOfficeLedger() {
         ${s.status === 'OPEN' ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="removeOpenSlot('${s.id}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Remove</button>` : ''}
         ${s.status === 'CONFIRMED' && s.booking?.rep && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🔄 Cancel/Reschedule</button>` : ''}
         ${officeCancelDraft && s.booking && officeCancelDraft.bookingId === s.booking.id ? cancelSuggestFormHtml(officeCancelDraft.repName, 'finalizeCancelOfficeBooking') : ''}
+        ${s.status === 'CANCELLED' && s.booking?.cancelledBy === 'OFFICE' && !s.booking.rescheduleResponse ? `<button style="background:#EEF7F1;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="undoOfficeCancellation('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">↩️ Undo cancellation</button>` : ''}
         ${s.eventType === 'LUNCH' || s.eventType === 'BREAKFAST' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="toggleLunchEdit('${s.id}')">🍽 Edit order</button>` : ''}
         ${s.eventType === 'LUNCH' || s.eventType === 'BREAKFAST' ? `
           <div id="lunchEditBox-${s.id}" class="card" style="display:none;width:100%;margin-top:10px;padding:14px;">
@@ -4190,6 +4191,17 @@ window.finalizeCancelOfficeBooking = async function(withSuggestion) {
     officeCancelDraft = null;
     if (state.screen === 'officeCalendar') loadOfficeCalendarBookings();
     else loadOfficeLedger();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.undoOfficeCancellation = async function(bookingId, repName, timeLabel) {
+  if (!confirm(`Undo the cancellation of ${repName}'s visit on ${timeLabel}? This confirms it again and notifies them by email.`)) return;
+  try {
+    await api(`/api/bookings/${bookingId}/undo-cancel`, { method: 'POST' });
+    alert('Visit restored — the rep has been notified by email.');
+    loadOfficeLedger();
   } catch (err) {
     alert(err.message);
   }
