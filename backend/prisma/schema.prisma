@@ -310,36 +310,6 @@ model Rep {
   marketingMaterials   RepMarketingMaterial[]
   officeInterestRequests OfficeInterestRequest[]
   favoriteLocations    FavoriteLocation[]
-  loginOtps            RepLoginOtp[]
-  trustedDevices       TrustedDevice[]
-}
-
-// A one-time SMS code issued for a rep's two-factor login. Only the most
-// recent row per rep matters — a fresh login attempt clears any prior one
-// so an old code can't still be guessed after a new one was sent.
-model RepLoginOtp {
-  id        String   @id @default(cuid())
-  repId     String
-  rep       Rep      @relation(fields: [repId], references: [id], onDelete: Cascade)
-  codeHash  String
-  expiresAt DateTime
-  attempts  Int      @default(0)
-  createdAt DateTime @default(now())
-
-  @@index([repId])
-}
-
-// A browser/device that already completed SMS 2FA once, so a rep isn't
-// texted a code on every login for 30 days from that same device.
-model TrustedDevice {
-  id         String   @id @default(cuid())
-  repId      String
-  rep        Rep      @relation(fields: [repId], references: [id], onDelete: Cascade)
-  tokenHash  String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-
-  @@index([repId])
 }
 
 // A rep searched for an office that isn't on Arrowhead Access yet (or has

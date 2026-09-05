@@ -354,23 +354,6 @@ function screenPrivacy() {
 
 function screenLogin() {
   const isOffice = state.role === 'office';
-  if (!isOffice && repOtpPending) {
-    return `
-      <div class="wrap">
-        <button class="link" style="text-align:left;margin-bottom:16px;" onclick="cancelRepOtp()">&larr; Back</button>
-        <h1>Enter your code</h1>
-        <p class="sub">We texted a 6-digit code to the phone number ending in ${repOtpPhoneHint}.</p>
-        <div class="card">
-          ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
-          <input id="otpCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code">
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0 14px;cursor:pointer;">
-            <input type="checkbox" id="rememberDevice" checked style="width:auto;margin:0;">
-            Remember this device for 30 days
-          </label>
-          <button class="primary" onclick="doVerifyRepOtp()">Verify</button>
-        </div>
-      </div>`;
-  }
   return `
     <div class="wrap">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'role'})">&larr; Back</button>
@@ -502,7 +485,6 @@ function screenProfile() {
           <input id="phone" type="tel" placeholder="Phone number">
           <input id="mobilePhone" type="tel" placeholder="Mobile number">
         </div>
-        <p style="font-size:11px;color:var(--slate);margin:-8px 0 12px;">Adding a phone number turns on text-message login codes for extra account security.</p>
         <input id="credentials" type="text" placeholder="Credentials (e.g. RN, CWS)">
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Relationship to company</label>
         <select id="relationshipToCompany" style="margin-bottom:16px;">
@@ -2701,31 +2683,13 @@ function screenDashboardRep() {
 }
 
 // ========== LOAD DATA ==========
-// Set while a rep is on the "enter your code" step of SMS 2FA — kept
-// outside `state` (rather than as setState fields) so a stray re-render
-// elsewhere in the app can't accidentally drop them back to the
-// email/password form mid-verification.
-let repOtpPending = false;
-let repOtpRepId = null;
-let repOtpPhoneHint = '';
-let repOtpEmail = '';
-
 async function doLogin() {
   const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
   const endpoint = state.role === 'office' ? '/api/auth/staff/login' : '/api/auth/rep/login';
-  const trustedDeviceToken = state.role === 'office' ? null : localStorage.getItem('repTrustedDevice:' + email);
 
   try {
-    const res = await api(endpoint, { method: 'POST', body: JSON.stringify({ email, password, trustedDeviceToken }) });
-    if (res.requiresOtp) {
-      repOtpPending = true;
-      repOtpRepId = res.repId;
-      repOtpPhoneHint = res.phoneHint;
-      repOtpEmail = email;
-      setState({ formErr: null });
-      return;
-    }
+    const res = await api(endpoint, { method: 'POST', body: JSON.stringify({ email, password }) });
     localStorage.setItem('token', res.token);
     state.me = state.role === 'office' ? res.staff : res.rep;
     setState({ screen: 'dashboard', role: state.role });
@@ -2733,36 +2697,6 @@ async function doLogin() {
     setState({ formErr: err.message });
   }
 }
-
-window.cancelRepOtp = function() {
-  repOtpPending = false;
-  repOtpRepId = null;
-  repOtpEmail = '';
-  setState({ formErr: null });
-};
-
-window.doVerifyRepOtp = async function() {
-  const code = document.getElementById('otpCode').value.trim();
-  const rememberDevice = document.getElementById('rememberDevice').checked;
-
-  try {
-    const res = await api('/api/auth/rep/verify-otp', {
-      method: 'POST',
-      body: JSON.stringify({ repId: repOtpRepId, code, rememberDevice }),
-    });
-    if (res.trustedDeviceToken) {
-      localStorage.setItem('repTrustedDevice:' + repOtpEmail, res.trustedDeviceToken);
-    }
-    localStorage.setItem('token', res.token);
-    state.me = res.rep;
-    repOtpPending = false;
-    repOtpRepId = null;
-    repOtpEmail = '';
-    setState({ screen: 'dashboard', role: 'rep' });
-  } catch (err) {
-    setState({ formErr: err.message });
-  }
-};
 
 async function doForgotPassword() {
   const email = document.getElementById('forgotEmail').value.trim().toLowerCase();
