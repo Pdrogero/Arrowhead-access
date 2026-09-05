@@ -23,7 +23,7 @@ router.get('/', requireAuth, async (req, res) => {
     res.json(policy || {
       maxVisitsPerRepPerMonth: 4,
       maxVisitsPerCompanyPerMonth: 8,
-      confirmationDeadline: '48 hours',
+      confirmationDeadline: '',
       closedDays: [],
       generalAllergyNotes: '',
     });

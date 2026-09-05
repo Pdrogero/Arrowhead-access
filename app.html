@@ -718,7 +718,7 @@ function screenPostSlot() {
           <option value="72 hours">72 hours</option>
           <option value="1 week">1 week</option>
         </select>
-        <input id="confirmationDeadline" type="text" placeholder="e.g. 48 hours, 2 business days, by 5pm the day before" value="48 hours">
+        <input id="confirmationDeadline" type="text" placeholder="e.g. 48 hours, 2 business days, by 5pm the day before">
         <p style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">Pick a common option above, or type your own for more specific wording.</p>
 
         <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Allergies / dietary notes for reps to know about</label>
@@ -3433,7 +3433,7 @@ async function loadOfficePolicy() {
     const policy = await api('/api/policies');
     document.getElementById('maxVisitsPerRep').value = policy.maxVisitsPerRepPerMonth ?? 4;
     document.getElementById('maxVisitsPerCompany').value = policy.maxVisitsPerCompanyPerMonth ?? 8;
-    document.getElementById('confirmationDeadline').value = policy.confirmationDeadline || '48 hours';
+    document.getElementById('confirmationDeadline').value = policy.confirmationDeadline || '';
     document.getElementById('generalAllergyNotes').value = policy.generalAllergyNotes || '';
   } catch (err) {}
 }
