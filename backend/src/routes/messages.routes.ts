@@ -156,6 +156,55 @@ router.post('/', requireAuth, requireActiveSubscription, async (req, res) => {
   }
 });
 
+// --- Office: email a link a rep dropped into a message to any address -----
+// Reps can attach saved marketing material to a message as a plain link —
+// this lets office staff forward that specific link on without having to
+// copy/paste it into their own email client.
+router.post('/email-attachment', requireAuth, async (req, res) => {
+  try {
+    if (req.user!.role === 'rep') {
+      return res.status(403).json({ error: 'Only office staff can use this' });
+    }
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const to = String(req.body.to || '').trim().toLowerCase();
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return res.status(400).json({ error: 'Enter a valid email address' });
+    }
+
+    const messageId = String(req.body.messageId || '');
+    const url = String(req.body.url || '').trim();
+    if (!messageId || !url) return res.status(400).json({ error: 'messageId and url are required' });
+
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      include: { conversation: { include: { rep: true } } },
+    });
+    if (!message || message.conversation.locationId !== staff.locationId) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    // The link must actually appear in that message — a lightweight guard
+    // against using this endpoint to email an arbitrary unrelated link.
+    if (!message.body.includes(url)) {
+      return res.status(400).json({ error: 'That link was not found in this message' });
+    }
+
+    const title = String(req.body.title || '').trim() || url;
+
+    await sendEmail({
+      to,
+      subject: `${title} — shared via Arrowhead Access`,
+      html: `${emailLogoHeader()}<p>Shared by <strong>${message.conversation.rep.name}</strong> (${message.conversation.rep.companyName}) via Arrowhead Access:</p><p><strong>${title}</strong></p><p><a href="${url}">${url}</a></p>`,
+    });
+
+    res.json({ message: 'Sent' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not send email' });
+  }
+});
+
 // --- Daily unread-message check, called by a scheduled trigger --------------
 // Not behind requireAuth — guarded by the same shared cron secret used for
 // the lunch-reminder and renewal-reminder checks. Sends one reminder email

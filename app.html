@@ -2261,6 +2261,21 @@ function linkifyMessageBody(body) {
   );
 }
 
+// Pulls every link out of a message body, pairing each with a readable
+// title when it was sent in the "📎 Title: url" format the material picker
+// inserts — falls back to the bare URL as the title for a plain pasted link.
+function extractMessageLinks(body) {
+  const links = [];
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  let match;
+  while ((match = urlRegex.exec(body)) !== null) {
+    const url = match[0];
+    const titleMatch = body.slice(0, match.index).match(/📎\s*([^:\n]+):\s*$/);
+    links.push({ url, title: (titleMatch ? titleMatch[1].trim() : url) });
+  }
+  return links;
+}
+
 function renderMessages() {
   const box = document.getElementById('messagesBox');
   if (!conversationMessages.length) { box.innerHTML = '<div class="empty">No messages yet — say hello!</div>'; return; }
@@ -2272,15 +2287,30 @@ function renderMessages() {
     // on every single line.
     const showLabel = m.eventLabel && m.eventLabel !== lastLabel;
     lastLabel = m.eventLabel || null;
+    const links = (state.role === 'office' && m.senderType === 'REP') ? extractMessageLinks(m.body) : [];
     return `
     <div style="padding:10px 14px;border-bottom:1px solid var(--line);${m.senderType === myType ? 'background:#F7FBF9;' : ''}">
       ${showLabel ? `<div style="font-size:11px;font-weight:600;color:var(--teal-dark);margin-bottom:4px;">Re: ${m.eventLabel.replace(/</g, '&lt;')}</div>` : ''}
       <div style="font-size:13px;">${linkifyMessageBody(m.body)}</div>
       <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}</div>
+      ${links.map(link => `
+        <button type="button" onclick="emailMessageAttachment('${m.id}', '${link.url.replace(/'/g, "\\'")}', '${link.title.replace(/'/g, "\\'")}')" style="display:inline-block;margin-top:6px;margin-right:6px;background:#F0F0EE;color:var(--ink);border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;">✉️ Email this</button>
+      `).join('')}
     </div>`;
   }).join('');
   box.scrollTop = box.scrollHeight;
 }
+
+window.emailMessageAttachment = async function(messageId, url, title) {
+  const to = prompt(`Email "${title}" to which address?`);
+  if (!to) return;
+  try {
+    await api('/api/messages/email-attachment', { method: 'POST', body: JSON.stringify({ messageId, url, title, to }) });
+    alert('Sent!');
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 window.sendMessage = async function() {
   const input = document.getElementById('newMessageBody');
