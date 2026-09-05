@@ -541,6 +541,66 @@ router.post('/:bookingId/cancel-by-rep', requireAuth, requireRole('rep'), async 
   }
 });
 
+// --- Rep: undo a cancellation they just made --------------------------
+// Mirrors the office's undo-cancel above — only for a cancellation the
+// rep themselves made, the visit hasn't already passed, and the office
+// hasn't already responded to a suggested reschedule (accepting one
+// creates a separate new booking, so undoing at that point would just
+// create a confusing duplicate).
+router.post('/:bookingId/undo-cancel-by-rep', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.bookingId },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    try {
+      assertOwnsRep(req, booking.repId);
+    } catch (err) {
+      return res.status(403).json({ error: (err as Error).message });
+    }
+
+    if (booking.status !== 'CANCELLED' || booking.cancelledBy !== 'REP') {
+      return res.status(409).json({ error: 'Only a cancellation you made can be undone this way' });
+    }
+    if (booking.rescheduleResponse) {
+      return res.status(409).json({ error: 'The office already responded to your reschedule suggestion, so this can\'t be undone — message them directly instead.' });
+    }
+    if (booking.slot.startTime.getTime() < Date.now()) {
+      return res.status(409).json({ error: 'This visit\'s time has already passed' });
+    }
+
+    const [updatedBooking] = await prisma.$transaction([
+      prisma.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: 'CONFIRMED',
+          cancelReason: null,
+          cancelledBy: null,
+          suggestedRescheduleAt: null,
+        },
+      }),
+      prisma.slot.update({ where: { id: booking.slotId }, data: { status: 'CONFIRMED' } }),
+    ]);
+
+    const undoDateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const undoStaff = await prisma.staffUser.findMany({ where: { locationId: booking.slot.locationId } });
+    undoStaff.forEach(s => {
+      sendEmail({
+        to: s.email,
+        subject: `${booking.rep.name} restored their visit on ${undoDateStr}`,
+        html: `${emailLogoHeader()}<p><strong>${booking.rep.name}</strong> (${booking.rep.companyName}) undid their cancellation. Their visit at <strong>${booking.slot.location.name}</strong> on ${undoDateStr} is confirmed again.</p>`,
+      }).catch(() => {});
+    });
+
+    res.json(updatedBooking);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not undo this cancellation' });
+  }
+});
+
 // --- Rep: undo a claim made by accident, before the office has acted -------
 // Only for a still-pending request — a confirmed visit is a real
 // commitment the office has already made, so that goes through

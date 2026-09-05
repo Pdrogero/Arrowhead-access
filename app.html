@@ -3691,6 +3691,7 @@ async function loadMyBookings() {
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>` : ''}
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="logConcurExpense('${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🧾 Log in Concur</button>` : ''}
           ${b.status === 'CONFIRMED' && !(repCancelDraft && repCancelDraft.bookingId === b.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelRepBooking('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🔄 Cancel/Reschedule</button>` : ''}
+          ${b.status === 'CANCELLED' && b.cancelledBy === 'REP' && !b.rescheduleResponse ? `<button style="background:#EEF7F1;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="undoRepCancellation('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">↩️ Undo cancellation</button>` : ''}
           ${(b.status === 'CANCELLED' || b.status === 'DECLINED') ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="removeCancelledBooking('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">🗑 Remove</button>` : ''}
         </div>
         ${(b.status === 'CANCELLED' || b.status === 'DECLINED') ? `<p style="width:100%;font-size:10.5px;color:var(--slate);margin:4px 0 0;">This will be removed automatically once ${fmtTime(b.slot.startTime)} has passed.</p>` : ''}
@@ -4241,6 +4242,17 @@ window.finalizeCancelRepBooking = async function(withSuggestion) {
     await api(`/api/bookings/${bookingId}/cancel-by-rep`, { method: 'POST', body: JSON.stringify({ reason, suggestedTime }) });
     alert('Visit cancelled — the office has been notified by email' + (suggestedTime ? ', including your suggested new time.' : '.'));
     repCancelDraft = null;
+    loadMyBookings();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.undoRepCancellation = async function(bookingId, officeName, timeLabel) {
+  if (!confirm(`Undo your cancellation of the visit at ${officeName} on ${timeLabel}? This confirms it again and notifies the office by email.`)) return;
+  try {
+    await api(`/api/bookings/${bookingId}/undo-cancel-by-rep`, { method: 'POST' });
+    alert('Visit restored — the office has been notified by email.');
     loadMyBookings();
   } catch (err) {
     alert(err.message);
