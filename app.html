@@ -2809,18 +2809,49 @@ window.deleteLiteratureItem = async function(id) {
   }
 };
 
+let transfersTab = 'visits'; // 'visits' | 'team'
+let teamSubTab = 'mine'; // 'mine' | 'suggested' | 'invites'
+let teammatesData = [];
+let suggestedTeammatesData = [];
+let teamInvitesData = [];
+
+function transfersTabButtonHtml(tab, label) {
+  const active = transfersTab === tab;
+  return `<button type="button" onclick="setTransfersTab('${tab}')" style="flex:1;background:none;border:none;border-bottom:2px solid ${active ? 'var(--teal)' : 'transparent'};color:${active ? 'var(--ink)' : 'var(--slate)'};font-weight:600;font-size:13px;padding:10px 4px;cursor:pointer;margin-bottom:-1px;">${label}</button>`;
+}
+
+function teamSubTabButtonHtml(tab, label) {
+  const active = teamSubTab === tab;
+  return `<button type="button" onclick="setTeamSubTab('${tab}')" style="background:none;border:none;border-bottom:2px solid ${active ? 'var(--teal)' : 'transparent'};color:${active ? 'var(--ink)' : 'var(--slate)'};font-weight:600;font-size:13px;padding:8px 0;cursor:pointer;">${label}</button>`;
+}
+
 function screenTransfers() {
   return `
     <div class="wrap wide">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
       <h1>Transfers</h1>
-      <p class="sub">Hand off a booking to a teammate, or respond to one offered to you.</p>
+      <div style="display:flex;border-bottom:1px solid var(--line);margin-bottom:20px;">
+        ${transfersTabButtonHtml('visits', 'Visit Transfers')}
+        ${transfersTabButtonHtml('team', 'My Team')}
+      </div>
 
-      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Incoming</p>
-      <div id="incomingBox" class="listcard" style="margin-bottom:24px;"><div class="empty">Loading…</div></div>
+      ${transfersTab === 'visits' ? `
+        <p class="sub">Hand off a booking to a teammate, or respond to one offered to you.</p>
 
-      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Outgoing</p>
-      <div id="outgoingBox" class="listcard"><div class="empty">Loading…</div></div>
+        <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Incoming</p>
+        <div id="incomingBox" class="listcard" style="margin-bottom:24px;"><div class="empty">Loading…</div></div>
+
+        <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Outgoing</p>
+        <div id="outgoingBox" class="listcard"><div class="empty">Loading…</div></div>
+      ` : `
+        <p class="sub">Connect with other reps at your company who are already on Arrowhead Access.</p>
+        <div style="display:flex;gap:20px;border-bottom:1px solid var(--line);margin-bottom:16px;">
+          ${teamSubTabButtonHtml('mine', `My Teammates (${teammatesData.length})`)}
+          ${teamSubTabButtonHtml('suggested', 'Suggested Teammates')}
+          ${teamSubTabButtonHtml('invites', `Invites${teamInvitesData.length ? ` (${teamInvitesData.length})` : ''}`)}
+        </div>
+        <div id="teamBox" class="listcard"><div class="empty">Loading…</div></div>
+      `}
     </div>`;
 }
 
@@ -4329,6 +4360,98 @@ async function loadTransfers() {
   }
 }
 
+// Re-renders just the Transfers screen's own markup (tab bar + container)
+// without going through the top-level render() dispatch — that dispatch
+// re-triggers loadTeamData() on every call for this screen, so calling it
+// from inside loadTeamData()'s own completion would recurse forever.
+function renderTransfersScreen() {
+  const app = document.getElementById('app');
+  if (app) app.innerHTML = screenTransfers();
+}
+
+window.setTransfersTab = function(tab) {
+  transfersTab = tab;
+  render();
+};
+
+window.setTeamSubTab = function(tab) {
+  teamSubTab = tab;
+  renderTransfersScreen();
+  renderTeamBox();
+};
+
+// Fetches all three Team lists together (rather than lazily per sub-tab) so
+// the tab counts (My Teammates (n), Invites (n)) are always accurate as
+// soon as the My Team tab opens, regardless of which sub-tab is active.
+async function loadTeamData() {
+  try {
+    const [teammates, suggested, invites] = await Promise.all([
+      api('/api/teammates'),
+      api('/api/teammates/suggested'),
+      api('/api/teammates/invites'),
+    ]);
+    teammatesData = teammates;
+    suggestedTeammatesData = suggested;
+    teamInvitesData = invites;
+  } catch (err) {}
+  renderTransfersScreen();
+  renderTeamBox();
+}
+
+function renderTeamBox() {
+  const box = document.getElementById('teamBox');
+  if (!box) return;
+  if (teamSubTab === 'mine') {
+    box.innerHTML = teammatesData.length ? teammatesData.map(r => `
+      <div class="row">
+        <div class="mid">
+          <div class="who">${r.name}</div>
+          <div class="what">${r.companyName}${r.title ? ` · ${r.title}` : ''}</div>
+        </div>
+      </div>`).join('') : '<div class="empty">You have no teammates. Try Suggested Teammates or wait for an invite.</div>';
+  } else if (teamSubTab === 'suggested') {
+    box.innerHTML = suggestedTeammatesData.length ? suggestedTeammatesData.map(r => `
+      <div class="row">
+        <div class="mid">
+          <div class="who">${r.name}</div>
+          <div class="what">${r.companyName}${r.title ? ` · ${r.title}` : ''}</div>
+        </div>
+        <button id="inviteBtn-${r.id}" style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="inviteTeammate('${r.id}')">+ Add</button>
+      </div>`).join('') : '<div class="empty">No suggested teammates right now — we\'ll show reps from your company as they join Arrowhead Access.</div>';
+  } else {
+    box.innerHTML = teamInvitesData.length ? teamInvitesData.map(inv => `
+      <div class="row">
+        <div class="mid">
+          <div class="who">${inv.fromRep.name}</div>
+          <div class="what">${inv.fromRep.companyName}${inv.fromRep.title ? ` · ${inv.fromRep.title}` : ''}</div>
+        </div>
+        <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="respondToTeammateInvite('${inv.id}','accept')">✓ Accept</button>
+        <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="respondToTeammateInvite('${inv.id}','decline')">✕ Decline</button>
+      </div>`).join('') : '<div class="empty">No pending invites.</div>';
+  }
+}
+
+window.inviteTeammate = async function(repId) {
+  const btn = document.getElementById(`inviteBtn-${repId}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Inviting…'; }
+  try {
+    await api('/api/teammates/invite', { method: 'POST', body: JSON.stringify({ toRepId: repId }) });
+    if (btn) btn.textContent = '✓ Invited';
+  } catch (err) {
+    alert(err.message);
+    if (btn) { btn.disabled = false; btn.textContent = '+ Add'; }
+  }
+};
+
+window.respondToTeammateInvite = async function(inviteId, decision) {
+  try {
+    await api(`/api/teammates/invites/${inviteId}/respond`, { method: 'POST', body: JSON.stringify({ decision }) });
+    loadTeamData();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 window.respondToReschedule = async function(bookingId, decision) {
   const messageBox = document.getElementById(`rescheduleMsg-${bookingId}`);
   const message = (messageBox?.value || '').trim();
@@ -4464,7 +4587,7 @@ function render() {
     loadRecurringTemplates().then(prefillPostSlotTimeForEventType);
   }
   else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
-  else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); loadTransfers(); }
+  else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); if (transfersTab === 'visits') loadTransfers(); else loadTeamData(); }
   else if (state.screen === 'messages') { app.innerHTML = screenMessages(); loadConversations(); }
   else if (state.screen === 'conversation') { app.innerHTML = screenConversation(); loadConversationMessages(); }
   else if (state.screen === 'literature') { app.innerHTML = screenLiterature(); loadLiterature(); }

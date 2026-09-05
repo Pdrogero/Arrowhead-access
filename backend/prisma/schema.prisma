@@ -315,6 +315,32 @@ model Rep {
   favoriteLocations    FavoriteLocation[]
   loginOtps            RepLoginOtp[]
   trustedDevices       TrustedDevice[]
+  teammateInvitesSent     TeammateInvite[] @relation("TeammateInvitesSent")
+  teammateInvitesReceived TeammateInvite[] @relation("TeammateInvitesReceived")
+}
+
+enum TeammateInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+// A rep inviting another rep (typically at the same company) to connect as
+// teammates. Once ACCEPTED, both reps show up under each other's "My
+// Teammates" list — the direction of who invited whom stops mattering.
+model TeammateInvite {
+  id          String               @id @default(cuid())
+  fromRepId   String
+  fromRep     Rep                  @relation("TeammateInvitesSent", fields: [fromRepId], references: [id], onDelete: Cascade)
+  toRepId     String
+  toRep       Rep                  @relation("TeammateInvitesReceived", fields: [toRepId], references: [id], onDelete: Cascade)
+  status      TeammateInviteStatus @default(PENDING)
+  createdAt   DateTime             @default(now())
+  respondedAt DateTime?
+
+  @@unique([fromRepId, toRepId])
+  @@index([toRepId, status])
+  @@index([fromRepId, status])
 }
 
 // A one-time email code issued for a rep's two-factor login. Only the most
