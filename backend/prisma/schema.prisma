@@ -461,6 +461,10 @@ model Booking {
   officeReminderSent Boolean   @default(false)
   lastNudgedAt       DateTime?
 
+  // Set when the rep manually dismisses a cancelled/declined booking from
+  // "Your bookings" — hides it from that list without deleting the record.
+  hiddenFromRepBookings Boolean @default(false)
+
   transfers   BookingTransfer[]
   attendees   VisitAttendee[]
   reviews     VisitReview[]

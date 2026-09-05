@@ -100,13 +100,41 @@ router.post('/locations/:locationId/request', requireAuth, requireVerifiedRep, a
 });
 
 // --- Rep: view own bookings ------------------------------------------------
+// Cancelled/declined bookings drop off this list on their own once the
+// visit's date has passed (nothing to act on anymore), or sooner if the rep
+// dismisses one manually via POST /:bookingId/hide-from-bookings below.
 router.get('/mine', requireAuth, requireRole('rep'), async (req, res) => {
   const bookings = await prisma.booking.findMany({
-    where: { repId: req.user!.sub },
+    where: {
+      repId: req.user!.sub,
+      hiddenFromRepBookings: false,
+      OR: [
+        { status: { notIn: ['CANCELLED', 'DECLINED'] } },
+        { slot: { startTime: { gte: new Date() } } },
+      ],
+    },
     include: { slot: { include: { location: true } } },
     orderBy: { requestedAt: 'desc' },
   });
   res.json(bookings);
+});
+
+// --- Rep: dismiss a cancelled/declined booking from "Your bookings" -------
+router.post('/:bookingId/hide-from-bookings', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({ where: { id: req.params.bookingId } });
+    if (!booking || booking.repId !== req.user!.sub) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+    if (booking.status !== 'CANCELLED' && booking.status !== 'DECLINED') {
+      return res.status(400).json({ error: 'Only cancelled or declined bookings can be removed from this list' });
+    }
+    await prisma.booking.update({ where: { id: booking.id }, data: { hiddenFromRepBookings: true } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not remove booking' });
+  }
 });
 
 // --- Rep: visit history (past visits that were actually confirmed) ------

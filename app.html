@@ -3560,7 +3560,9 @@ async function loadMyBookings() {
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">⭐ Rate visit</button>` : ''}
           ${b.status === 'CONFIRMED' ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="logConcurExpense('${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🧾 Log in Concur</button>` : ''}
           ${b.status === 'CONFIRMED' && !(repCancelDraft && repCancelDraft.bookingId === b.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelRepBooking('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(b.slot.startTime).replace(/'/g, "\\'")}')">🔄 Cancel/Reschedule</button>` : ''}
+          ${(b.status === 'CANCELLED' || b.status === 'DECLINED') ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="removeCancelledBooking('${b.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">🗑 Remove</button>` : ''}
         </div>
+        ${(b.status === 'CANCELLED' || b.status === 'DECLINED') ? `<p style="width:100%;font-size:10.5px;color:var(--slate);margin:4px 0 0;">This will be removed automatically once ${fmtTime(b.slot.startTime)} has passed.</p>` : ''}
         ${b.status === 'CONFIRMED' && (b.slot.eventType === 'LUNCH' || b.slot.eventType === 'BREAKFAST') ? `
           <div style="width:100%;margin-top:8px;">
             <p style="font-size:11.5px;font-weight:600;color:#B5651D;margin:0 0 6px;">Need help ordering food, try here!</p>
@@ -4221,6 +4223,16 @@ window.nudgeOffice = async function(bookingId, officeName) {
   try {
     await api(`/api/bookings/${bookingId}/nudge`, { method: 'POST' });
     alert('Reminder sent!');
+    loadMyBookings();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.removeCancelledBooking = async function(bookingId, officeName) {
+  if (!confirm(`Remove this cancelled visit with ${officeName} from your bookings list?`)) return;
+  try {
+    await api(`/api/bookings/${bookingId}/hide-from-bookings`, { method: 'POST' });
     loadMyBookings();
   } catch (err) {
     alert(err.message);
