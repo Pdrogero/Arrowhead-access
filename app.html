@@ -2195,6 +2195,9 @@ function screenConversation() {
         <input id="newMessageBody" type="text" placeholder="Type a message…" style="flex:1;margin-bottom:0;" onkeydown="if(event.key==='Enter')sendMessage()">
         <button class="primary" style="width:auto;margin-bottom:0;padding:0 20px;" onclick="sendMessage()">Send</button>
       </div>
+      ${state.role === 'rep' ? `
+        <button type="button" onclick="toggleMaterialPicker()" style="background:none;border:none;color:var(--teal);font-size:12px;font-weight:600;padding:0;margin-top:8px;cursor:pointer;">📎 Attach literature or marketing material</button>
+        <div id="materialPickerBox" style="display:none;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:6px;max-height:180px;overflow-y:auto;"></div>` : ''}
       <p style="font-size:11px;color:var(--slate);margin-top:8px;">Don't include patient names, dates of birth, medical record numbers, or diagnoses in messages.</p>
     </div>`;
 }
@@ -2202,6 +2205,39 @@ function screenConversation() {
 window.clearConversationEventLabel = function() {
   activeConversationEventLabel = null;
   render();
+};
+
+// Lets a rep drop a link to one of their saved marketing materials straight
+// into a message, instead of going through the full Literature submit-for-
+// review flow when they just want to share something in passing.
+window.toggleMaterialPicker = async function() {
+  const box = document.getElementById('materialPickerBox');
+  if (!box) return;
+  const showing = box.style.display !== 'none';
+  if (showing) { box.style.display = 'none'; return; }
+
+  box.style.display = 'block';
+  box.innerHTML = '<div class="empty" style="padding:8px;">Loading…</div>';
+  try {
+    const materials = await api('/api/profile/materials');
+    box.innerHTML = materials.length ? materials.map(m => `
+      <button type="button" onclick="insertMaterialLink('${m.title.replace(/'/g, "\\'")}', '${m.url.replace(/'/g, "\\'")}')" style="display:block;width:100%;text-align:left;background:none;border:none;padding:6px 4px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--line);">📄 ${m.title.replace(/</g, '&lt;')}</button>
+    `).join('') : '<div class="empty" style="padding:8px;">No saved materials yet — add some under Profile → Marketing Materials.</div>';
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+};
+
+window.insertMaterialLink = function(title, url) {
+  const input = document.getElementById('newMessageBody');
+  if (!input) return;
+  // #newMessageBody is a single-line text input, so a literal newline
+  // wouldn't actually display as a break — space-separated reads fine
+  // as one line and the URL still comes through clickable once sent.
+  const snippet = `📎 ${title}: ${url}`;
+  input.value = input.value.trim() ? `${input.value.trim()} ${snippet}` : snippet;
+  document.getElementById('materialPickerBox').style.display = 'none';
+  input.focus();
 };
 
 async function loadConversationMessages() {
@@ -2213,6 +2249,16 @@ async function loadConversationMessages() {
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
+}
+
+// Escapes the message text first, then turns any http(s) URL into a real
+// clickable link — needed now that a rep can drop a saved-material link
+// straight into a message body.
+function linkifyMessageBody(body) {
+  const escaped = body.replace(/</g, '&lt;');
+  return escaped.replace(/(https?:\/\/[^\s]+)/g, url =>
+    `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--teal-dark);text-decoration:underline;">${url}</a>`
+  );
 }
 
 function renderMessages() {
@@ -2229,7 +2275,7 @@ function renderMessages() {
     return `
     <div style="padding:10px 14px;border-bottom:1px solid var(--line);${m.senderType === myType ? 'background:#F7FBF9;' : ''}">
       ${showLabel ? `<div style="font-size:11px;font-weight:600;color:var(--teal-dark);margin-bottom:4px;">Re: ${m.eventLabel.replace(/</g, '&lt;')}</div>` : ''}
-      <div style="font-size:13px;">${m.body.replace(/</g, '&lt;')}</div>
+      <div style="font-size:13px;">${linkifyMessageBody(m.body)}</div>
       <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}</div>
     </div>`;
   }).join('');
