@@ -238,6 +238,26 @@ function goHome() {
 }
 function fmtTime(isoStr) { return new Date(isoStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 
+// A password <input> with a 👁️ toggle to reveal what's typed — margin
+// moves onto the wrapper (with the input's own margin zeroed) so the
+// wrapper's height matches the input exactly, which is what keeps the
+// button centered vertically without extra positioning math.
+function passwordFieldHtml(id, placeholder, autocomplete) {
+  return `<div style="position:relative;margin-bottom:12px;">
+    <input id="${id}" type="password" placeholder="${placeholder}" autocomplete="${autocomplete}" style="margin-bottom:0;padding-right:44px;">
+    <button type="button" tabindex="-1" onclick="togglePasswordVisibility('${id}', this)" aria-label="Show password" style="position:absolute;top:50%;right:6px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:6px;color:var(--slate);">👁️</button>
+  </div>`;
+}
+
+window.togglePasswordVisibility = function(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const willShow = input.type === 'password';
+  input.type = willShow ? 'text' : 'password';
+  btn.textContent = willShow ? '🙈' : '👁️';
+  btn.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
+};
+
 // ========== SCREENS ==========
 function screenRole() {
   return `
@@ -379,7 +399,7 @@ function screenLogin() {
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
-        <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+        ${passwordFieldHtml('password', 'Password', 'current-password')}
         <button class="primary" onclick="doLogin()">Log In</button>
         <button class="link" onclick="setState({screen:'forgotPassword',role:state.role})">Forgot password?</button>
         ${!isOffice ? `<button class="link" onclick="setState({screen:'signup'})">Create Account</button>` : ''}
@@ -411,8 +431,8 @@ function screenResetPassword() {
       <h1>Choose a new password</h1>
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
-        <input id="newPassword" type="password" placeholder="New password" autocomplete="new-password">
-        <input id="confirmPassword" type="password" placeholder="Confirm new password" autocomplete="new-password">
+        ${passwordFieldHtml('newPassword', 'New password', 'new-password')}
+        ${passwordFieldHtml('confirmPassword', 'Confirm new password', 'new-password')}
         <button class="primary" onclick="doResetPassword()">Set new password</button>
       </div>
     </div>`;
@@ -429,8 +449,8 @@ function screenSignup() {
           <input id="officeName" type="text" placeholder="Office name">
           <input id="address" type="text" placeholder="Address">
           <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
-          <input id="password" type="password" placeholder="Password" autocomplete="new-password">
-          <input id="confirmPassword" type="password" placeholder="Confirm password" autocomplete="new-password">
+          ${passwordFieldHtml('password', 'Password', 'new-password')}
+          ${passwordFieldHtml('confirmPassword', 'Confirm password', 'new-password')}
           <div id="turnstileBox" style="margin-bottom:12px;"></div>
           <p style="font-size:11px;color:var(--slate);margin-bottom:12px;">By creating an account, you agree to our <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--teal);">Terms of Service</a> and <a href="#" onclick="event.preventDefault();setState({screen:'privacy'})" style="color:var(--teal);">Privacy Policy</a>.</p>
           <button class="primary" onclick="doOfficeSignup()">Create Account</button>
@@ -447,8 +467,8 @@ function screenSignup() {
           <input id="name" type="text" placeholder="Full name">
           <input id="companyName" type="text" placeholder="Company name">
           <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${pendingTransferEmail || ''}">
-          <input id="password" type="password" placeholder="Password" autocomplete="new-password">
-          <input id="confirmPassword" type="password" placeholder="Confirm password" autocomplete="new-password">
+          ${passwordFieldHtml('password', 'Password', 'new-password')}
+          ${passwordFieldHtml('confirmPassword', 'Confirm password', 'new-password')}
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:0 0 14px;cursor:pointer;">
             <input type="checkbox" id="signupTwoFactorEnabled" style="width:auto;margin:0;">
             🔒 Email me a login code each time I sign in (extra account security)
@@ -561,9 +581,9 @@ function screenAccountSettings() {
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         ${state.passwordChanged ? `<div class="msg ok">Password updated successfully.</div>` : ''}
-        <input id="currentPassword" type="password" placeholder="Current password" autocomplete="current-password">
-        <input id="newPassword" type="password" placeholder="New password" autocomplete="new-password">
-        <input id="confirmPassword" type="password" placeholder="Confirm new password" autocomplete="new-password">
+        ${passwordFieldHtml('currentPassword', 'Current password', 'current-password')}
+        ${passwordFieldHtml('newPassword', 'New password', 'new-password')}
+        ${passwordFieldHtml('confirmPassword', 'Confirm new password', 'new-password')}
         <button class="primary" onclick="doChangePassword()">Update password</button>
       </div>
       ${state.role === 'rep' ? `
