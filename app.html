@@ -503,12 +503,6 @@ function screenProfile() {
           <input id="phone" type="tel" placeholder="Phone number">
           <input id="mobilePhone" type="tel" placeholder="Mobile number">
         </div>
-
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:0 0 16px;cursor:pointer;">
-          <input type="checkbox" id="twoFactorEnabled" style="width:auto;margin:0;">
-          🔒 Email me a login code each time I sign in (extra account security)
-        </label>
-
         <input id="credentials" type="text" placeholder="Credentials (e.g. RN, CWS)">
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Relationship to company</label>
         <select id="relationshipToCompany" style="margin-bottom:16px;">
@@ -568,8 +562,35 @@ function screenAccountSettings() {
         <input id="confirmPassword" type="password" placeholder="Confirm new password" autocomplete="new-password">
         <button class="primary" onclick="doChangePassword()">Update password</button>
       </div>
+      ${state.role === 'rep' ? `
+        <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Two-factor login</p>
+        <div class="card">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:0;cursor:pointer;">
+            <input type="checkbox" id="twoFactorEnabled" style="width:auto;margin:0;" onchange="saveTwoFactorSetting(this.checked)">
+            🔒 Email me a login code each time I sign in (extra account security)
+          </label>
+          <div id="twoFactorSavedMsg" style="font-size:12px;color:var(--teal-dark);margin-top:8px;display:none;">Saved.</div>
+        </div>` : ''}
     </div>`;
 }
+
+async function loadTwoFactorSetting() {
+  try {
+    const profile = await api('/api/profile/rep');
+    document.getElementById('twoFactorEnabled').checked = !!profile.twoFactorEnabled;
+  } catch (err) {}
+}
+
+window.saveTwoFactorSetting = async function(checked) {
+  const msg = document.getElementById('twoFactorSavedMsg');
+  try {
+    await api('/api/profile/rep', { method: 'PATCH', body: JSON.stringify({ twoFactorEnabled: checked }) });
+    msg.style.display = 'block';
+    setTimeout(() => { msg.style.display = 'none'; }, 2000);
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 function screenOfficeSettings() {
   return `
@@ -2948,7 +2969,6 @@ async function loadProfile() {
     document.getElementById('additionalEmail').value = profile.additionalEmail || '';
     document.getElementById('credentials').value = profile.credentials || '';
     document.getElementById('relationshipToCompany').value = profile.relationshipToCompany || '';
-    document.getElementById('twoFactorEnabled').checked = !!profile.twoFactorEnabled;
     (profile.specialties || []).forEach(s => {
       const existing = Array.from(document.querySelectorAll('.specialty')).find(cb => cb.value === s);
       if (existing) existing.checked = true;
@@ -3226,11 +3246,10 @@ async function saveProfile() {
   const companyId = document.getElementById('companySelect').value;
   const specialties = Array.from(document.querySelectorAll('.specialty:checked')).map(e => e.value);
   const productIds = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(e => e.value);
-  const twoFactorEnabled = document.getElementById('twoFactorEnabled').checked;
 
   const payload = {
     firstName, lastName, title, roleFunction, phone, mobilePhone,
-    additionalEmail, credentials, relationshipToCompany, twoFactorEnabled,
+    additionalEmail, credentials, relationshipToCompany,
     manufacturerCompanyId: companyId || null, specialties, productIds,
   };
   if (selectedProfileImage !== undefined) payload.profileImageUrl = selectedProfileImage;
@@ -4257,7 +4276,7 @@ function render() {
   else if (state.screen === 'officeDetail') { app.innerHTML = screenOfficeDetail(); }
   else if (state.screen === 'repProfileView') { app.innerHTML = screenRepProfileView(); }
   else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }
-  else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); }
+  else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); if (state.role === 'rep') loadTwoFactorSetting(); }
   else if (state.screen === 'postSlot') {
     app.innerHTML = screenPostSlot();
     // The event type <select> defaults to its first option (Lunch) on
