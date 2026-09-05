@@ -4,11 +4,16 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { JwtPayload } from '../auth/auth.types';
 import { sendEmail, emailLogoHeader, emailLoginButton, notifyAdmin } from '../email';
 import { requireAuth, requireRole } from '../auth/auth.guard';
 import { verifyTurnstile } from '../turnstile';
+
+const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
+const TRUSTED_DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -112,7 +117,7 @@ router.post('/rep/signup', async (req, res) => {
 
 router.post('/rep/login', async (req, res) => {
   try {
-    const { password } = req.body;
+    const { password, trustedDeviceToken } = req.body;
     const email = String(req.body.email || '').trim();
     // Case-insensitive lookup — mobile keyboards (iPad in particular) can
     // auto-capitalize the first letter of an email field, which would
@@ -120,6 +125,40 @@ router.post('/rep/login', async (req, res) => {
     const rep = await prisma.rep.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
     if (!rep || !(await bcrypt.compare(password, rep.passwordHash))) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Email login codes are opt-in (turned on in Profile Settings), so most
+    // reps log straight in exactly as before.
+    if (rep.twoFactorEnabled) {
+      let deviceTrusted = false;
+      if (trustedDeviceToken) {
+        const devices = await prisma.trustedDevice.findMany({
+          where: { repId: rep.id, expiresAt: { gt: new Date() } },
+        });
+        for (const device of devices) {
+          if (await bcrypt.compare(trustedDeviceToken, device.tokenHash)) {
+            deviceTrusted = true;
+            break;
+          }
+        }
+      }
+
+      if (!deviceTrusted) {
+        // Only the latest code should ever be guessable.
+        await prisma.repLoginOtp.deleteMany({ where: { repId: rep.id } });
+        const code = String(crypto.randomInt(100000, 1000000));
+        const codeHash = await bcrypt.hash(code, 10);
+        await prisma.repLoginOtp.create({
+          data: { repId: rep.id, codeHash, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+        });
+        sendEmail({
+          to: rep.email,
+          subject: `Your Arrowhead Access login code: ${code}`,
+          html: `${emailLogoHeader()}<p>Your login code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:4px;">${code}</p><p>It expires in 10 minutes. If you didn't just try to log in, you can ignore this email.</p>`,
+        }).catch(() => {});
+
+        return res.json({ requiresOtp: true, repId: rep.id });
+      }
     }
 
     const token = signToken({
@@ -136,6 +175,64 @@ router.post('/rep/login', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Unexpected server error during login' });
+  }
+});
+
+router.post('/rep/verify-otp', async (req, res) => {
+  try {
+    const { repId, code, rememberDevice } = req.body;
+    if (!repId || !code) {
+      return res.status(400).json({ error: 'repId and code are required' });
+    }
+
+    const rep = await prisma.rep.findUnique({ where: { id: repId } });
+    if (!rep) {
+      return res.status(401).json({ error: 'Incorrect code' });
+    }
+
+    const otp = await prisma.repLoginOtp.findFirst({
+      where: { repId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!otp || otp.expiresAt < new Date()) {
+      return res.status(401).json({ error: 'That code has expired. Please log in again to get a new one.' });
+    }
+    if (otp.attempts >= OTP_MAX_ATTEMPTS) {
+      return res.status(429).json({ error: 'Too many incorrect attempts. Please log in again to get a new code.' });
+    }
+
+    const valid = await bcrypt.compare(String(code).trim(), otp.codeHash);
+    if (!valid) {
+      await prisma.repLoginOtp.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+      return res.status(401).json({ error: 'Incorrect code' });
+    }
+
+    await prisma.repLoginOtp.delete({ where: { id: otp.id } });
+
+    let trustedDeviceToken: string | undefined;
+    if (rememberDevice) {
+      trustedDeviceToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = await bcrypt.hash(trustedDeviceToken, 10);
+      await prisma.trustedDevice.create({
+        data: { repId: rep.id, tokenHash, expiresAt: new Date(Date.now() + TRUSTED_DEVICE_TTL_MS) },
+      });
+    }
+
+    const token = signToken({
+      sub: rep.id,
+      role: 'rep',
+      organizationId: rep.organizationId ?? '',
+      verified: rep.verificationStatus === 'VERIFIED',
+    });
+
+    res.json({
+      token,
+      rep: { id: rep.id, name: rep.name, email: rep.email, verificationStatus: rep.verificationStatus },
+      trustedDeviceToken,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Unexpected server error verifying code' });
   }
 });
 

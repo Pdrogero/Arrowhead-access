@@ -270,6 +270,9 @@ model Rep {
   relationshipToCompany String?
   profileImageUrl      String?             // data: URL, resized/compressed client-side
   specialties          String[]            @default([])
+  // Opt-in email login codes — off by default so existing reps aren't
+  // suddenly required to check their inbox to log in.
+  twoFactorEnabled     Boolean             @default(false)
 
   // Manufacturer catalog selection
   manufacturerCompanyId String?
@@ -310,6 +313,36 @@ model Rep {
   marketingMaterials   RepMarketingMaterial[]
   officeInterestRequests OfficeInterestRequest[]
   favoriteLocations    FavoriteLocation[]
+  loginOtps            RepLoginOtp[]
+  trustedDevices       TrustedDevice[]
+}
+
+// A one-time email code issued for a rep's two-factor login. Only the most
+// recent row per rep matters — a fresh login attempt clears any prior one
+// so an old code can't still be guessed after a new one was sent.
+model RepLoginOtp {
+  id        String   @id @default(cuid())
+  repId     String
+  rep       Rep      @relation(fields: [repId], references: [id], onDelete: Cascade)
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([repId])
+}
+
+// A browser/device that already completed two-factor login once, so a rep
+// isn't emailed a code on every login for 30 days from that same device.
+model TrustedDevice {
+  id         String   @id @default(cuid())
+  repId      String
+  rep        Rep      @relation(fields: [repId], references: [id], onDelete: Cascade)
+  tokenHash  String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([repId])
 }
 
 // A rep searched for an office that isn't on Arrowhead Access yet (or has

@@ -125,6 +125,7 @@ router.get('/rep', requireAuth, requireRole('rep'), async (req, res) => {
         manufacturerCompanyId: true,
         profileImageUrl: true,
         verificationStatus: true,
+        twoFactorEnabled: true,
         products: { select: { id: true, name: true } },
       },
     });
@@ -186,6 +187,7 @@ router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
       firstName, lastName, title, roleFunction, phone, mobilePhone,
       additionalEmail, credentials, relationshipToCompany,
       specialties, manufacturerCompanyId, productIds, profileImageUrl,
+      twoFactorEnabled,
     } = req.body;
 
     if (manufacturerCompanyId) {
@@ -223,6 +225,7 @@ router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
         manufacturerCompanyId: manufacturerCompanyId ?? undefined,
         ...(productIds ? { products: { set: productIds.map((id: string) => ({ id })) } } : {}),
         ...('profileImageUrl' in req.body ? { profileImageUrl } : {}),
+        ...('twoFactorEnabled' in req.body ? { twoFactorEnabled: !!twoFactorEnabled } : {}),
       },
       include: { manufacturerCompany: true, products: true },
     });
