@@ -185,6 +185,7 @@ let viewedOfficeDetail = null; // null = loading, false = load failed
 let viewedOfficeDetailReturnScreen = 'dashboard';
 let viewedRepProfile = null;
 let viewedRepProfileName = '';
+let repsDirectoryData = null; // null = loading, false = load failed
 let reviewBookingId = null;
 let reviewCounterpartName = '';
 let reviewRating = 0;
@@ -1906,6 +1907,29 @@ window.viewOfficeStaff = async function(locationId, locationName) {
   } catch (err) {}
 };
 
+function screenRepsDirectory() {
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <h1>Reps</h1>
+      <p class="sub">Reps who have booked a visit at your location. Tap a rep to view their profile and shared marketing materials.</p>
+      <div id="repsDirectoryBox" class="listcard"><div class="empty">Loading…</div></div>
+    </div>`;
+}
+
+async function loadRepsDirectory() {
+  const box = document.getElementById('repsDirectoryBox');
+  try {
+    repsDirectoryData = await api('/api/profile/reps');
+    if (!box) return;
+    if (!repsDirectoryData.length) { box.innerHTML = '<div class="empty">No reps have booked at your location yet.</div>'; return; }
+    box.innerHTML = repsDirectoryData.map(r => `<div class="row" style="cursor:pointer;" onclick="viewRepProfile('${r.id}', '${r.name.replace(/'/g, "\\'")}')"><div class="mid"><div class="who">${r.name}${r.verificationStatus === 'VERIFIED' ? ' ✅' : ''}</div><div class="what">${[r.companyName, r.title].filter(Boolean).join(' · ')}</div></div></div>`).join('');
+  } catch (err) {
+    repsDirectoryData = false;
+    if (box) box.innerHTML = '<div class="msg err">Could not load the reps directory.</div>';
+  }
+}
+
 const CLOSED_DAY_LABELS = { SUNDAY: 'Sun', MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat' };
 
 function screenOfficeDetail() {
@@ -2887,10 +2911,11 @@ function screenDashboardOffice() {
         </label>
         <button type="button" id="removeSelectedLedgerBtn" onclick="removeSelectedLedgerSlots()" disabled style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🗑 Remove selected</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,auto);grid-auto-flow:column;gap:2px 20px;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(5,auto);grid-auto-flow:column;gap:2px 20px;margin-bottom:16px;">
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'officeSettings'})">⚙️ Office Settings</button>
         <button class="link" style="text-align:left;margin:0;" onclick="openOfficeCalendar()">📅 Calendar</button>
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'postSlot'})">➕ Post an open slot</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'repsDirectory'})">📇 Reps</button>
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'messages'})">💬 Messages</button>
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'literature'})">📄 Literature</button>
@@ -4595,6 +4620,7 @@ function render() {
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
   else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); }
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
+  else if (state.screen === 'repsDirectory') { app.innerHTML = screenRepsDirectory(); loadRepsDirectory(); }
   else if (state.screen === 'officeDetail') { app.innerHTML = screenOfficeDetail(); }
   else if (state.screen === 'repProfileView') { app.innerHTML = screenRepProfileView(); }
   else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }

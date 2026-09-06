@@ -137,6 +137,24 @@ router.get('/rep', requireAuth, requireRole('rep'), async (req, res) => {
   }
 });
 
+// --- Office staff: directory of reps who've booked at this location -------
+router.get('/reps', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const reps = await prisma.rep.findMany({
+      where: { bookings: { some: { slot: { locationId: staff.locationId } } } },
+      select: { id: true, name: true, companyName: true, title: true, verificationStatus: true },
+      orderBy: { name: 'asc' },
+    });
+    res.json(reps);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch reps' });
+  }
+});
+
 // --- Office staff: view a rep's profile — only for reps who've actually ---
 // booked at this location, so it's not a way to browse the whole rep list.
 router.get('/rep/:repId', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
