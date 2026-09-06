@@ -41,8 +41,11 @@
     .navgrid{display:flex;justify-content:space-between;gap:4px;margin:20px 0;}
     .navicon{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:none;cursor:pointer;padding:10px 2px;border-radius:10px;color:var(--ink);}
     .navicon:hover{background:var(--paper);}
-    .navicon-emoji{font-size:19px;line-height:1;}
+    .navicon-emoji{font-size:19px;line-height:1;position:relative;display:inline-block;}
     .navicon-label{font-size:10.5px;font-weight:600;color:var(--slate);text-align:center;line-height:1.2;}
+    /* Small unread-message dot overlaid on the 💬 emoji — shared by the
+       rep's nav grid icon and the office dashboard's text menu link. */
+    .badge-dot{position:absolute;top:-3px;right:-6px;width:9px;height:9px;background:#D9684C;border:1.5px solid #fff;border-radius:50%;}
     .listcard{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;}
     .row{display:flex;align-items:center;gap:12px;padding:14px;border-bottom:1px solid var(--line);}
     .row:last-child{border-bottom:none;}
@@ -192,6 +195,7 @@ let reviewBookingId = null;
 let reviewCounterpartName = '';
 let reviewRating = 0;
 let conversationsData = [];
+let unreadMessageCount = 0;
 let activeConversationId = null;
 let activeConversationCounterpart = '';
 let activeConversationTargetId = null;
@@ -2244,6 +2248,22 @@ function screenMessages() {
     </div>`;
 }
 
+// Refreshes the unread-message dot on the Messages nav icon — called on
+// app init and whenever the dashboard (re)loads, and again after opening a
+// conversation, since that marks its messages read server-side.
+async function loadUnreadMessageCount() {
+  try {
+    const res = await api('/api/messages/unread-count');
+    unreadMessageCount = res.count;
+  } catch (err) {
+    unreadMessageCount = 0;
+  }
+  const dot = document.getElementById('messagesBadge');
+  if (dot) dot.style.display = unreadMessageCount > 0 ? 'block' : 'none';
+  const dotOffice = document.getElementById('messagesBadgeOffice');
+  if (dotOffice) dotOffice.style.display = unreadMessageCount > 0 ? 'block' : 'none';
+}
+
 async function loadConversations() {
   const box = document.getElementById('conversationsBox');
   try {
@@ -2365,6 +2385,7 @@ async function loadConversationMessages() {
   try {
     conversationMessages = await api(`/api/messages/conversations/${activeConversationId}/messages`);
     renderMessages();
+    loadUnreadMessageCount(); // opening this conversation just marked its messages read server-side
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
@@ -3085,7 +3106,7 @@ function screenDashboardOffice() {
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'postSlot'})">➕ Post an open slot</button>
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'repsDirectory'})">📇 Reps</button>
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
-        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'messages'})">💬 Messages</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'messages'})"><span style="position:relative;display:inline-block;">💬<span id="messagesBadgeOffice" class="badge-dot" style="display:none;"></span></span> Messages</button>
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'literature'})">📄 Literature</button>
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'visitHistory'})">📜 Visit History</button>
         <a href="mailto:legal@arrowheadaccess.com?subject=Arrowhead%20Access%20Support%20Request" style="display:block;width:100%;background:none;border:none;color:var(--teal);font-size:12px;text-align:left;text-decoration:none;cursor:pointer;">❓ Help</a>
@@ -3107,7 +3128,7 @@ function screenDashboardRep() {
       <div class="navgrid">
         <button class="navicon" onclick="openCalendar()"><span class="navicon-emoji">📅</span><span class="navicon-label">Calendar</span></button>
         <button class="navicon" onclick="setState({screen:'browseSlots'})"><span class="navicon-emoji">🔍</span><span class="navicon-label">Open Slots</span></button>
-        <button class="navicon" onclick="setState({screen:'messages'})"><span class="navicon-emoji">💬</span><span class="navicon-label">Messages</span></button>
+        <button class="navicon" onclick="setState({screen:'messages'})"><span class="navicon-emoji">💬<span id="messagesBadge" class="badge-dot" style="display:none;"></span></span><span class="navicon-label">Messages</span></button>
         <button class="navicon" onclick="setState({screen:'literature'})"><span class="navicon-emoji">📄</span><span class="navicon-label">Literature</span></button>
         <button class="navicon" onclick="setState({screen:'transfers'})"><span class="navicon-emoji">🔄</span><span class="navicon-label">Transfers</span></button>
         <button class="navicon" onclick="toggleProfileMenu()"><span class="navicon-emoji">👤</span><span class="navicon-label">Profile <span style="font-weight:900;font-size:14px;">▾</span></span></button>
@@ -4819,8 +4840,8 @@ function render() {
   else if (state.screen === 'reviewList') { app.innerHTML = screenReviewList(); loadReviewList(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
   else if (state.screen === 'officeCalendar') { app.innerHTML = screenOfficeCalendar(); }
-  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); loadLocationSwitcher(); }
-  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); }
+  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); loadLocationSwitcher(); loadUnreadMessageCount(); }
+  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); loadUnreadMessageCount(); }
   else if (state.screen === 'visitHistory' && state.role === 'office') { app.innerHTML = screenVisitHistory(); loadOfficeHistory(); }
   else if (state.screen === 'visitHistory' && state.role === 'rep') { app.innerHTML = screenVisitHistory(); loadRepHistory(); }
 

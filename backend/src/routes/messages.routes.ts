@@ -36,6 +36,30 @@ async function resolveConversation(user: { sub: string; role: string }, body: an
   return conversation;
 }
 
+// --- Count of messages from the other side still unread, across every one
+// of the caller's conversations — powers the unread dot on the Messages
+// nav icon, so it's kept cheap (a single count query, no message bodies).
+router.get('/unread-count', requireAuth, async (req, res) => {
+  try {
+    let where: { senderType: 'OFFICE'; readAt: null; conversation: { repId: string } }
+      | { senderType: 'REP'; readAt: null; conversation: { locationId: string } };
+
+    if (req.user!.role === 'rep') {
+      where = { senderType: 'OFFICE', readAt: null, conversation: { repId: req.user!.sub } };
+    } else {
+      const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+      if (!staff) return res.status(404).json({ error: 'Staff not found' });
+      where = { senderType: 'REP', readAt: null, conversation: { locationId: staff.locationId } };
+    }
+
+    const count = await prisma.message.count({ where });
+    res.json({ count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch unread count' });
+  }
+});
+
 // --- List the caller's conversations, newest activity first ---------------
 router.get('/conversations', requireAuth, async (req, res) => {
   try {
