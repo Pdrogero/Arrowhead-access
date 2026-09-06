@@ -219,6 +219,16 @@ async function api(path, options = {}) {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
+    // This exact message only ever means the bearer token's role doesn't
+    // match the route it was sent to — in practice that's almost always a
+    // stale token left over from logging into a different account/role in
+    // another tab (localStorage's 'token' key is shared across tabs of the
+    // same origin, so the most recent login anywhere wins for all of them).
+    // Rather than surface that as a cryptic error, force a clean re-login.
+    if (res.status === 403 && error.error === 'Not permitted for this role') {
+      logout();
+      throw new Error("You're logged in as a different account in another tab — please log in again.");
+    }
     const err = new Error(error.error || error.message || 'API error');
     err.status = res.status;
     err.code = error.code;
