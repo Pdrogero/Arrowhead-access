@@ -2272,12 +2272,17 @@ async function loadConversations() {
     box.innerHTML = conversationsData.map(c => {
       const counterpart = state.role === 'rep' ? c.location.name : `${c.rep.name} · ${c.rep.companyName}`;
       const targetId = state.role === 'rep' ? c.location.id : c.rep.id;
-      const preview = c.messages[0] ? c.messages[0].body : 'No messages yet';
+      const lastMessage = c.messages[0];
+      const preview = lastMessage ? lastMessage.body : 'No messages yet';
+      // Bold while the other side's latest message is still unread by me —
+      // a message I sent myself never counts, regardless of its readAt.
+      const otherSenderType = state.role === 'rep' ? 'OFFICE' : 'REP';
+      const isUnread = !!lastMessage && lastMessage.senderType === otherSenderType && !lastMessage.readAt;
       return `
-      <div class="row" style="cursor:pointer;" onclick="openConversation('${c.id}', '${counterpart.replace(/'/g, "\\'")}', '${targetId}')">
+      <div class="row" style="cursor:pointer;${isUnread ? 'font-weight:700;' : ''}" onclick="openConversation('${c.id}', '${counterpart.replace(/'/g, "\\'")}', '${targetId}')">
         <div class="mid">
           <div class="who">${counterpart}</div>
-          <div class="what">${preview.replace(/</g, '&lt;')}</div>
+          <div class="what" style="${isUnread ? 'color:var(--ink);font-weight:700;' : ''}">${preview.replace(/</g, '&lt;')}</div>
         </div>
       </div>`;
     }).join('');
