@@ -197,6 +197,8 @@ let activeConversationEventLabel = null;
 let conversationMessages = [];
 let literatureRows = [];
 let materialsData = [];
+let idVerificationRequest; // undefined = loading, null = none yet, else the latest request object
+let idVerificationUploadedUrl = null;
 let literatureTargetLocationId = '';
 // Office-side literature items currently checked, for emailing more than
 // one at once — cleared whenever the list is reloaded.
@@ -2439,6 +2441,104 @@ function screenMaterials() {
     </div>`;
 }
 
+function screenIdVerification() {
+  const verified = state.me?.verificationStatus === 'VERIFIED';
+  const req = idVerificationRequest;
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <h1>Verify your identity</h1>
+      <p class="sub">We couldn't automatically verify your account from your email address, so we review a photo of your company ID or badge by hand instead.</p>
+      <div class="card" id="idVerificationCard">
+        ${verified
+          ? `<p style="font-size:14px;margin:0;">✅ You're verified — no further action needed.</p>`
+          : req === undefined
+            ? `<div class="empty">Loading…</div>`
+            : req && req.status === 'PENDING_REVIEW'
+              ? `<p style="font-size:14px;margin:0;">⏳ Your photo is under review. We'll email you as soon as it's been checked — usually within one business day.</p>`
+              : idVerificationUploadFormHtml(req)}
+      </div>
+    </div>`;
+}
+
+function idVerificationUploadFormHtml(req) {
+  return `
+    ${req && req.status === 'REJECTED' ? `<div class="msg err" style="margin-bottom:14px;">Your last submission wasn't approved. You can upload a new photo and resubmit below.</div>` : ''}
+    ${state.formErr ? `<div class="msg err" style="margin-bottom:14px;">${state.formErr}</div>` : ''}
+    <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Photo of your company ID/badge or driver's license</label>
+    <input id="idVerificationFileInput" type="file" accept="image/*,.pdf" onchange="handleIdVerificationFileChange(event)" style="margin-bottom:6px;">
+    <div id="idVerificationUploadStatus" style="font-size:12px;color:var(--slate);margin-bottom:10px;"></div>
+    <div id="idVerificationPreview" style="margin-bottom:12px;"></div>
+    <button class="primary" id="idVerificationSubmitBtn" onclick="submitIdVerification()" disabled>Submit for review</button>
+    <p style="font-size:12px;color:var(--slate);margin-top:10px;">Only used to confirm you're a legitimate rep — reviewed by our team, never shown publicly.</p>
+  `;
+}
+
+async function loadIdVerification() {
+  idVerificationRequest = undefined;
+  idVerificationUploadedUrl = null;
+  try {
+    idVerificationRequest = await api('/api/verification/mine');
+  } catch (err) {
+    idVerificationRequest = null;
+  }
+  renderIdVerificationScreen();
+}
+
+function renderIdVerificationScreen() {
+  const app = document.getElementById('app');
+  if (app && state.screen === 'idVerification') app.innerHTML = screenIdVerification();
+}
+
+window.handleIdVerificationFileChange = async function(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  const statusEl = document.getElementById('idVerificationUploadStatus');
+  statusEl.textContent = 'Uploading…';
+  try {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(API_BASE + '/api/verification/upload', {
+      method: 'POST',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(error.error || error.message || 'Upload failed');
+    }
+    const result = await res.json();
+    idVerificationUploadedUrl = result.url;
+    statusEl.textContent = 'Uploaded';
+    const preview = document.getElementById('idVerificationPreview');
+    if (preview) preview.innerHTML = renderAttachmentThumb(result.url);
+    const submitBtn = document.getElementById('idVerificationSubmitBtn');
+    if (submitBtn) submitBtn.disabled = false;
+  } catch (err) {
+    statusEl.textContent = '';
+    alert(err.message);
+  }
+};
+
+window.submitIdVerification = async function() {
+  if (!idVerificationUploadedUrl) return;
+  state.formErr = null;
+  try {
+    await api('/api/verification/submit', {
+      method: 'POST',
+      body: JSON.stringify({ idDocumentUrl: idVerificationUploadedUrl }),
+    });
+    state.me = await api('/api/profile/rep');
+    await loadIdVerification();
+  } catch (err) {
+    state.formErr = err.message;
+    renderIdVerificationScreen();
+  }
+};
+
 function attachmentFilename(url) {
   return decodeURIComponent(url.split('/').pop().replace(/^\d+-/, ''));
 }
@@ -2948,7 +3048,7 @@ function screenDashboardRep() {
 
       <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Your bookings</p>
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
-      ${!verified ? `<div class="note">Not verified yet — booking actions are blocked server-side. Sign up with an @meridianpharma.com email to auto-verify in this demo.</div>` : ''}
+      ${!verified ? `<div class="note">Not verified yet — booking actions are blocked until you're verified. <a href="#" onclick="setState({screen:'idVerification'});return false;" style="color:var(--teal);font-weight:600;">Verify your identity &rarr;</a></div>` : ''}
     </div>`;
 }
 
@@ -4646,6 +4746,7 @@ function render() {
   else if (state.screen === 'conversation') { app.innerHTML = screenConversation(); loadConversationMessages(); }
   else if (state.screen === 'literature') { app.innerHTML = screenLiterature(); loadLiterature(); }
   else if (state.screen === 'materials') { app.innerHTML = screenMaterials(); loadMaterials(); }
+  else if (state.screen === 'idVerification') { app.innerHTML = screenIdVerification(); loadIdVerification(); }
   else if (state.screen === 'attendance') { app.innerHTML = screenAttendance(); loadAttendees(); }
   else if (state.screen === 'reviewList') { app.innerHTML = screenReviewList(); loadReviewList(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
