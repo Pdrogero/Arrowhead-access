@@ -74,6 +74,8 @@
     @media print {
       .no-print{display:none !important;}
       .print-only{display:block !important;}
+      body{background:#fff !important;}
+      .wrap{max-width:none !important;padding:0 !important;margin:0 !important;}
     }
     .msg{padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:12px;}
     .msg.err{background:#FDEAEA;color:#C23C3C;}
@@ -102,7 +104,7 @@
   </style>
 </head>
 <body>
-<header>
+<header class="no-print">
   <div class="title" onclick="goHome()" style="cursor:pointer;"><div class="logo-mark"></div> Arrowhead Access</div>
   <button id="logoutBtn" class="btn-logout" onclick="logout()">Log out</button>
 </header>
@@ -1514,8 +1516,8 @@ function screenAttendance() {
   return `
     <div class="wrap">
       <button class="link no-print" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
-      <h1>Visit attendance</h1>
-      <p class="sub">${attendanceLocationName} — ${attendanceDateStr}</p>
+      <h1 class="no-print">Visit attendance</h1>
+      <p class="sub no-print">${attendanceLocationName} — ${attendanceDateStr}</p>
       <p class="no-print" style="font-size:12px;color:var(--slate);margin-bottom:16px;">Check off everyone who attended, for your own expense report. NPI is optional.</p>
       <div class="card no-print">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
@@ -1605,32 +1607,59 @@ function attendanceDetailRowsHtml() {
     </tr>`).join('');
 }
 
+// One roster row for the print-out — a filled checkmark box for someone
+// checked as attending, an empty box for a staff member who wasn't. Manual
+// "other attendees" rows have no unchecked state (they're only ever added
+// because they attended), so they always render checked.
+function attendanceRosterRowHtml(label, checked) {
+  return `
+    <li style="display:flex;align-items:center;gap:11px;padding:8px 0;border-bottom:1px solid #EEF1EF;font-size:13.5px;${checked ? '' : 'color:#9CA3AF;'}">
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:3px;border:1.5px solid ${checked ? '#2E6F5E' : '#C7CFCB'};background:${checked ? '#2E6F5E' : 'transparent'};flex-shrink:0;">
+        ${checked ? '<span style="color:#fff;font-size:10px;line-height:1;">&#10003;</span>' : ''}
+      </span>
+      <span>${label}</span>
+    </li>`;
+}
+
+// Full roster for print: every office staff member (checked if they
+// attended, unchecked if not) plus anyone added manually — unlike
+// attendanceListLines() (used for copy), which only lists who attended.
+function attendanceRosterHtml() {
+  const staffRows = attendanceOfficeStaff.map(e => {
+    const label = [e.name, e.title].filter(Boolean).join(' — ') + (e.npi ? ` (NPI: ${e.npi})` : '');
+    return attendanceRosterRowHtml(label.replace(/</g, '&lt;'), e.checked);
+  });
+  const otherRows = attendeeRows
+    .filter(a => (a.firstName || '').trim() || (a.lastName || '').trim())
+    .map(a => {
+      const name = [a.firstName, a.lastName].filter(Boolean).join(' ').trim();
+      const label = a.npi ? `${name} (NPI: ${a.npi})` : name;
+      return attendanceRosterRowHtml(label.replace(/</g, '&lt;'), true);
+    });
+  const rows = [...staffRows, ...otherRows];
+  return rows.length
+    ? `<ul style="list-style:none;padding:0;margin:0;">${rows.join('')}</ul>`
+    : `<p style="font-size:13px;color:#6E7C77;">No attendees logged.</p>`;
+}
+
 window.printAttendance = function() {
   const block = document.getElementById('attendancePrintBlock');
   if (block) {
-    const hasAnyAttendees = attendanceOfficeStaff.some(e => e.checked)
-      || attendeeRows.some(a => (a.firstName || '').trim() || (a.lastName || '').trim());
-    const listHtml = hasAnyAttendees
-      ? `<ul style="list-style:none;padding:0;margin:0;">${attendanceListLines().map(l => `
-          <li style="padding:9px 0;border-bottom:1px solid #E4EAE3;font-size:14px;">
-            <span style="color:#2E6F5E;font-weight:700;margin-right:8px;">&#10003;</span>${l.replace(/</g, '&lt;')}
-          </li>`).join('')}</ul>`
-      : `<p style="font-size:13px;color:#6E7C77;">No attendees logged.</p>`;
     const printedAt = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 
     block.innerHTML = `
-      <div style="max-width:680px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#16241F;">
-        <div style="display:flex;align-items:center;gap:12px;border-bottom:3px solid #2E6F5E;padding-bottom:16px;margin-bottom:20px;">
-          <img src="icon-192.png" width="40" height="40" style="border-radius:8px;">
+      <div style="max-width:640px;margin:0 auto;padding:40px 8px;font-family:Arial,Helvetica,sans-serif;color:#16241F;">
+        <div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #2E6F5E;padding-bottom:18px;margin-bottom:24px;">
+          <img src="icon-192.png" width="36" height="36" style="border-radius:8px;">
           <div>
-            <div style="font-size:19px;font-weight:700;">Arrowhead Access</div>
-            <div style="font-size:11px;color:#6E7C77;letter-spacing:0.04em;text-transform:uppercase;">Visit Attendance Record</div>
+            <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;">Arrowhead Access</div>
+            <div style="font-size:10.5px;color:#6E7C77;letter-spacing:0.06em;text-transform:uppercase;margin-top:1px;">Visit Attendance Record</div>
           </div>
         </div>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:22px;">${attendanceDetailRowsHtml()}</table>
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#2E6F5E;border-bottom:1px solid #CBD6CD;padding-bottom:6px;margin-bottom:4px;">Attendees</div>
-        ${listHtml}
-        <div style="margin-top:36px;padding-top:12px;border-top:1px solid #CBD6CD;font-size:11px;color:#6E7C77;">Printed from Arrowhead Access on ${printedAt}</div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:26px;">${attendanceDetailRowsHtml()}</table>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#2E6F5E;border-bottom:1px solid #DDE4E0;padding-bottom:7px;margin-bottom:2px;">Attendees</div>
+        ${attendanceRosterHtml()}
+        <div style="margin-top:40px;padding-top:14px;border-top:1px solid #DDE4E0;font-size:10.5px;color:#9CA3AF;">Printed from Arrowhead Access on ${printedAt}</div>
       </div>`;
   }
   window.print();
