@@ -450,6 +450,12 @@ model Slot {
   foodOrderNotes   String?
   repHandlesOrder  Boolean        @default(false)
 
+  // Free-text note from the office to whichever rep books this slot — only
+  // meaningful (and only shown as an editable field) when eventType is
+  // STAFF_TRAINING, in place of the general Visit Policies section, which
+  // doesn't apply to an internal-facing training session the same way.
+  staffTrainingNote String?
+
   booking Booking?
 
   @@index([locationId, startTime])

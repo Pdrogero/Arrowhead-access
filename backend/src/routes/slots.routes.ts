@@ -105,7 +105,7 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Only office staff can post slots' });
   }
   try {
-    const { startTime, endTime, eventType, headCount, allergyNotes, foodOrderNotes, repHandlesOrder, repeatInterval, daysOfWeek } = req.body;
+    const { startTime, endTime, eventType, headCount, allergyNotes, foodOrderNotes, repHandlesOrder, repeatInterval, daysOfWeek, staffTrainingNote } = req.body;
     if (!startTime || !endTime) {
       return res.status(400).json({ error: 'startTime and endTime are required' });
     }
@@ -123,6 +123,11 @@ router.post('/', requireAuth, async (req, res) => {
       foodOrderNotes: foodOrderNotes || null,
       repHandlesOrder: !!repHandlesOrder,
     } : {};
+    // Staff training swaps the office's general Visit Policies for a
+    // one-off free-text note to whichever rep books this slot.
+    const staffTrainingDetails = eventType === 'STAFF_TRAINING'
+      ? { staffTrainingNote: staffTrainingNote || null }
+      : {};
 
     // A lunch/breakfast posted for specific weekdays (e.g. every Mon/Wed)
     // replaces the single-slot + same-date-repeat path below:
@@ -185,6 +190,7 @@ router.post('/', requireAuth, async (req, res) => {
         eventType: eventType || 'REP_VISIT',
         createdByStaffId: staff.id,
         ...lunchDetails,
+        ...staffTrainingDetails,
       },
     });
 

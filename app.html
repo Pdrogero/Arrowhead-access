@@ -730,29 +730,39 @@ function screenPostSlot() {
         <button class="primary" id="postSlotBtn" onclick="submitPostSlot()">Post slot</button>
       </div>
 
-      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Visit Policies</p>
-      <div class="card">
-        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Max visits per rep per month</label>
-        <input id="maxVisitsPerRep" type="number" value="1" min="1">
+      <div id="visitPoliciesSection">
+        <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Visit Policies</p>
+        <div class="card">
+          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Max visits per rep per month</label>
+          <input id="maxVisitsPerRep" type="number" value="1" min="1">
 
-        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Max visits per company per month</label>
-        <input id="maxVisitsPerCompany" type="number" value="2" min="1">
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Max visits per company per month</label>
+          <input id="maxVisitsPerCompany" type="number" value="2" min="1">
 
-        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Confirmation deadline</label>
-        <select id="confirmationDeadlinePreset" onchange="applyConfirmationDeadlinePreset()" style="margin-bottom:8px;">
-          <option value="">Select common option…</option>
-          <option value="24 hours">24 hours</option>
-          <option value="48 hours">48 hours</option>
-          <option value="72 hours">72 hours</option>
-          <option value="1 week">1 week</option>
-        </select>
-        <input id="confirmationDeadline" type="text" placeholder="e.g. 48 hours, 2 business days, by 5pm the day before">
-        <p style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">Pick a common option above, or type your own for more specific wording.</p>
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Confirmation deadline</label>
+          <select id="confirmationDeadlinePreset" onchange="applyConfirmationDeadlinePreset()" style="margin-bottom:8px;">
+            <option value="">Select common option…</option>
+            <option value="24 hours">24 hours</option>
+            <option value="48 hours">48 hours</option>
+            <option value="72 hours">72 hours</option>
+            <option value="1 week">1 week</option>
+          </select>
+          <input id="confirmationDeadline" type="text" placeholder="e.g. 48 hours, 2 business days, by 5pm the day before">
+          <p style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">Pick a common option above, or type your own for more specific wording.</p>
 
-        <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Allergies / dietary notes for reps to know about</label>
-        <textarea id="generalAllergyNotes" rows="3" placeholder="e.g. Please avoid peanuts — a staff member has a severe allergy." style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Allergies / dietary notes for reps to know about</label>
+          <textarea id="generalAllergyNotes" rows="3" placeholder="e.g. Please avoid peanuts — a staff member has a severe allergy." style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
 
-        <button class="primary" onclick="saveOfficePolicy()">Save Policy</button>
+          <button class="primary" onclick="saveOfficePolicy()">Save Policy</button>
+        </div>
+      </div>
+
+      <div id="staffTrainingNoteSection" style="display:none;">
+        <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Notes for the rep</p>
+        <div class="card">
+          <p style="font-size:12px;color:var(--slate);margin:0 0 8px;">Anything the rep who books this training should know beforehand — topic, what to bring, where to check in, etc.</p>
+          <textarea id="staffTrainingNote" rows="4" placeholder="e.g. Meet at the back entrance and ask for the office manager. Bring materials for 8 staff." style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;font-family:inherit;"></textarea>
+        </div>
       </div>
 
       <button class="primary" id="saveAllPostSlotBtn" style="margin-top:8px;" onclick="saveAllPostSlot()">Save All</button>
@@ -987,10 +997,16 @@ function readLunchDetailsFields(prefix) {
 window.togglePostSlotLunchFields = function() {
   const eventType = document.getElementById('eventType').value;
   const hasOrderDetails = eventType === 'LUNCH' || eventType === 'BREAKFAST';
+  const isStaffTraining = eventType === 'STAFF_TRAINING';
   const label = eventType === 'LUNCH' ? 'lunch' : 'breakfast';
   document.getElementById('postSlotLunchFields').style.display = hasOrderDetails ? '' : 'none';
   document.getElementById('startTimeLabel').textContent = hasOrderDetails ? `Start time for ${label}` : 'Start time';
   document.getElementById('endTimeLabel').textContent = hasOrderDetails ? `End time for ${label}` : 'End time';
+  // Staff training swaps the general Visit Policies section (max visits,
+  // confirmation deadline, allergy notes — none of which apply to an
+  // internal training session) for a simple free-text note to the rep.
+  document.getElementById('visitPoliciesSection').style.display = isStaffTraining ? 'none' : '';
+  document.getElementById('staffTrainingNoteSection').style.display = isStaffTraining ? '' : 'none';
 };
 
 const SHORT_VISIT_NOTES = {
@@ -1049,10 +1065,19 @@ window.updateLunchRepeatHint = function() {
   }
 };
 
-// Renders a read-only summary of a lunch/breakfast's order details, for
-// reps looking at an open slot or their own booking. Returns '' for event
-// types with no order details, or ones with nothing filled in yet.
+// Renders a read-only summary of a lunch/breakfast's order details, or a
+// staff-training slot's notes for the rep — wherever a slot/booking row is
+// shown to a rep or office. Returns '' for event types with nothing to
+// show, or ones with nothing filled in yet.
 function lunchDetailsSummaryHtml(slot) {
+  if (slot.eventType === 'STAFF_TRAINING') {
+    if (!slot.staffTrainingNote) return '';
+    return `
+      <div style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:12px;color:var(--ink);">
+        📋 <strong>Notes for the rep</strong>
+        <div>${slot.staffTrainingNote.replace(/</g, '&lt;')}</div>
+      </div>`;
+  }
   if (slot.eventType !== 'LUNCH' && slot.eventType !== 'BREAKFAST') return '';
   const hasAnything = slot.headCount || slot.allergyNotes || slot.foodOrderNotes || slot.repHandlesOrder;
   if (!hasAnything) return '';
@@ -3800,6 +3825,8 @@ async function submitPostSlot(silent) {
     const daysOfWeek = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
       .filter(d => document.getElementById('postSlotDay-' + d).checked);
     if (daysOfWeek.length) payload.daysOfWeek = daysOfWeek;
+  } else if (eventType === 'STAFF_TRAINING') {
+    payload.staffTrainingNote = document.getElementById('staffTrainingNote').value.trim();
   }
 
   if (!silent) { btn.disabled = true; btn.textContent = 'Posting…'; }
