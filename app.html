@@ -3360,8 +3360,23 @@ window.doVerifyRepOtp = async function() {
       method: 'POST',
       body: JSON.stringify({ repId: repOtpRepId, code, rememberDevice }),
     });
-    if (res.trustedDeviceToken) {
-      localStorage.setItem('repTrustedDevice:' + repOtpEmail, res.trustedDeviceToken);
+    if (rememberDevice) {
+      if (res.trustedDeviceToken) {
+        const storageKey = 'repTrustedDevice:' + repOtpEmail;
+        try {
+          localStorage.setItem(storageKey, res.trustedDeviceToken);
+          // Read it back immediately — some browsers (Safari private mode,
+          // very low storage) silently no-op a write instead of throwing,
+          // so this is the only reliable way to confirm it actually stuck.
+          if (localStorage.getItem(storageKey) !== res.trustedDeviceToken) {
+            alert("Couldn't save this device as remembered — your browser may be blocking site storage (e.g. Private Browsing). You'll be asked for a code again next time you log in.");
+          }
+        } catch (storageErr) {
+          alert("Couldn't save this device as remembered — your browser may be blocking site storage (e.g. Private Browsing). You'll be asked for a code again next time you log in.");
+        }
+      } else {
+        alert("Something went wrong remembering this device — you'll be asked for a code again next time you log in. Please try again or contact support if this keeps happening.");
+      }
     }
     localStorage.setItem('token', res.token);
     state.me = res.rep;
