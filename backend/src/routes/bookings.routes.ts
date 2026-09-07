@@ -17,6 +17,14 @@ const router = Router();
 // matches the API_BASE hardcoded in app.html.
 const API_URL = process.env.RENDER_EXTERNAL_URL || 'https://arrowhead-access-api.onrender.com';
 
+const EVENT_TYPE_LABEL: Record<string, string> = {
+  REP_VISIT: 'Rep visit',
+  LUNCH: 'Lunch',
+  BREAKFAST: 'Breakfast',
+  COFFEE_SNACK: 'Coffee/Snack',
+  STAFF_TRAINING: 'Staff training',
+};
+
 function icsEscape(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
 }
@@ -856,53 +864,89 @@ router.post('/:bookingId/attendees', requireAuth, requireRole('rep'), async (req
 // --- Daily lunch-reminder check, called by a scheduled trigger --------------
 // Not behind requireAuth — guarded by the same shared cron secret used for
 // the renewal-reminder check. Sends a rep one email the calendar day before
-// a confirmed lunch, and one on the day of.
+// every confirmed visit (any event type, all grouped into a single email
+// if there's more than one), plus a same-day reminder for lunches
+// specifically, same as before.
 router.post('/check-lunch-reminders', async (req, res) => {
   if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
-    const bookings = await prisma.booking.findMany({
+    const now = new Date();
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const todayStart = startOfDay(now);
+    const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    const tomorrowEnd = new Date(tomorrowStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+    // 1-day-out reminder — every confirmed event type, one email per rep
+    // even if they have several visits tomorrow. Still keyed off
+    // lunchReminder1dSent: the field predates this covering more than
+    // lunch, but it means the same thing either way — "the 1-day-before
+    // reminder for this booking has been sent."
+    const dayBeforeBookings = await prisma.booking.findMany({
       where: {
         status: 'CONFIRMED',
-        slot: { eventType: 'LUNCH' },
-        OR: [{ lunchReminder1dSent: false }, { lunchReminderDaySent: false }],
+        lunchReminder1dSent: false,
+        slot: { startTime: { gte: tomorrowStart, lte: tomorrowEnd } },
+      },
+      include: { rep: true, slot: { include: { location: true } } },
+      orderBy: { slot: { startTime: 'asc' } },
+    });
+
+    const dayBeforeByRep = new Map<string, typeof dayBeforeBookings>();
+    for (const booking of dayBeforeBookings) {
+      const list = dayBeforeByRep.get(booking.repId) || [];
+      list.push(booking);
+      dayBeforeByRep.set(booking.repId, list);
+    }
+
+    let dayBeforeRemindersSent = 0;
+    for (const repBookings of dayBeforeByRep.values()) {
+      const dateLabel = tomorrowStart.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+      const itemsHtml = repBookings.map(b => {
+        const timeStr = b.slot.startTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+        return `<li><strong>${timeStr}</strong> — ${EVENT_TYPE_LABEL[b.slot.eventType] || b.slot.eventType} at ${b.slot.location.name}</li>`;
+      }).join('');
+      sendEmail({
+        to: repBookings[0].rep.email,
+        subject: repBookings.length > 1
+          ? `Reminder: ${repBookings.length} visits tomorrow`
+          : `Reminder: ${EVENT_TYPE_LABEL[repBookings[0].slot.eventType] || 'visit'} at ${repBookings[0].slot.location.name} tomorrow`,
+        html: `${emailLogoHeader()}<p>Just a reminder — you have ${repBookings.length > 1 ? `${repBookings.length} visits` : 'a visit'} scheduled tomorrow, ${dateLabel}:</p><ul>${itemsHtml}</ul>`,
+      }).catch(() => {});
+      await prisma.booking.updateMany({
+        where: { id: { in: repBookings.map(b => b.id) } },
+        data: { lunchReminder1dSent: true },
+      });
+      dayBeforeRemindersSent += repBookings.length;
+    }
+
+    // Same-day reminder — unchanged from before: lunch only, one email
+    // per booking (a rep rarely has more than one lunch in a day, so
+    // grouping wasn't asked for here).
+    const dayOfBookings = await prisma.booking.findMany({
+      where: {
+        status: 'CONFIRMED',
+        lunchReminderDaySent: false,
+        slot: { eventType: 'LUNCH', startTime: { gte: todayStart, lt: tomorrowStart } },
       },
       include: { rep: true, slot: { include: { location: true } } },
     });
 
-    const now = new Date();
-    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const todayStart = startOfDay(now).getTime();
-
-    let remindersSent = 0;
-
-    for (const booking of bookings) {
-      const lunchDayStart = startOfDay(booking.slot.startTime).getTime();
-      const dayDiff = Math.round((lunchDayStart - todayStart) / (1000 * 60 * 60 * 24));
+    let dayOfRemindersSent = 0;
+    for (const booking of dayOfBookings) {
       const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-
-      if (dayDiff === 1 && !booking.lunchReminder1dSent) {
-        await sendEmail({
-          to: booking.rep.email,
-          subject: `Reminder: lunch at ${booking.slot.location.name} tomorrow`,
-          html: `${emailLogoHeader()}<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> tomorrow, ${dateStr}.</p>`,
-        });
-        await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminder1dSent: true } });
-        remindersSent++;
-      } else if (dayDiff === 0 && !booking.lunchReminderDaySent) {
-        await sendEmail({
-          to: booking.rep.email,
-          subject: `Reminder: lunch at ${booking.slot.location.name} today`,
-          html: `${emailLogoHeader()}<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> today, ${dateStr}.</p>`,
-        });
-        await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminderDaySent: true } });
-        remindersSent++;
-      }
+      await sendEmail({
+        to: booking.rep.email,
+        subject: `Reminder: lunch at ${booking.slot.location.name} today`,
+        html: `${emailLogoHeader()}<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> today, ${dateStr}.</p>`,
+      });
+      await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminderDaySent: true } });
+      dayOfRemindersSent++;
     }
 
-    res.json({ checked: bookings.length, remindersSent });
+    res.json({ dayBeforeRemindersSent, dayOfRemindersSent });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not check lunch reminders' });
@@ -1005,63 +1049,102 @@ router.post('/:bookingId/nudge', requireAuth, requireRole('rep'), async (req, re
   }
 });
 
-// --- Monthly new-month reminder, called by the same daily scheduled -------
-// trigger — a no-op on every day except the 1st. Nudges offices to set up
-// their lunch schedule for the new month, and reps to book their visits,
-// each with a link back into the app.
+// --- Monthly new-month + weekly Sunday reminders, called by the same daily
+// scheduled trigger that hits the other check-* routes — the monthly half
+// is a no-op except on the 1st, and the weekly half a no-op except on
+// Sunday, so both live in one handler that already runs every day rather
+// than needing a second cron job wired up just for the weekly one.
 router.post('/check-monthly-schedule-reminders', async (req, res) => {
   if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const now = new Date();
-  if (now.getDate() !== 1) {
-    return res.json({ skipped: true, reason: 'Not the 1st of the month' });
-  }
+  const appUrl = process.env.APP_URL;
+  let officeRemindersSent = 0;
+  let repRemindersSent = 0;
+  let weeklyRemindersSent = 0;
 
   try {
-    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const monthLabel = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-    const appUrl = process.env.APP_URL;
+    if (now.getDate() === 1) {
+      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
-    const locations = await prisma.location.findMany({
-      where: { OR: [{ lastMonthlyReminderMonth: null }, { lastMonthlyReminderMonth: { not: monthKey } }] },
-      include: { staff: true },
-    });
-    let officeRemindersSent = 0;
-    for (const location of locations) {
-      for (const staff of location.staff) {
-        sendEmail({
-          to: staff.email,
-          subject: `Set up your ${monthLabel} lunch schedule on Arrowhead Access`,
-          html: `${emailLogoHeader()}<p>A new month has started — now's a good time to set up your lunch schedule and open slots for <strong>${monthLabel}</strong> so reps know when they're welcome to visit.</p><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to post open slots or set up recurring lunches.</p>`,
-        }).catch(() => {});
+      const locations = await prisma.location.findMany({
+        where: { OR: [{ lastMonthlyReminderMonth: null }, { lastMonthlyReminderMonth: { not: monthKey } }] },
+        include: { staff: true },
+      });
+      for (const location of locations) {
+        for (const staff of location.staff) {
+          sendEmail({
+            to: staff.email,
+            subject: `Set up your ${monthLabel} lunch schedule on Arrowhead Access`,
+            html: `${emailLogoHeader()}<p>A new month has started — now's a good time to set up your lunch schedule and open slots for <strong>${monthLabel}</strong> so reps know when they're welcome to visit.</p><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to post open slots or set up recurring lunches.</p>`,
+          }).catch(() => {});
+        }
+        await prisma.location.update({ where: { id: location.id }, data: { lastMonthlyReminderMonth: monthKey } });
+        officeRemindersSent++;
       }
-      await prisma.location.update({ where: { id: location.id }, data: { lastMonthlyReminderMonth: monthKey } });
-      officeRemindersSent++;
+
+      const reps = await prisma.rep.findMany({
+        where: {
+          OR: [{ lastMonthlyReminderMonth: null }, { lastMonthlyReminderMonth: { not: monthKey } }],
+          verificationStatus: 'VERIFIED',
+        },
+      });
+      for (const rep of reps) {
+        sendEmail({
+          to: rep.email,
+          subject: `Book your ${monthLabel} visits on Arrowhead Access`,
+          html: `${emailLogoHeader()}<p>A new month has started — now's a good time to book your visits for <strong>${monthLabel}</strong> before the best times get taken.</p><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to browse open slots and book now.</p>`,
+        }).catch(() => {});
+        await prisma.rep.update({ where: { id: rep.id }, data: { lastMonthlyReminderMonth: monthKey } });
+        repRemindersSent++;
+      }
     }
 
-    const reps = await prisma.rep.findMany({
-      where: {
-        OR: [{ lastMonthlyReminderMonth: null }, { lastMonthlyReminderMonth: { not: monthKey } }],
-        verificationStatus: 'VERIFIED',
-      },
-    });
-    let repRemindersSent = 0;
-    for (const rep of reps) {
-      sendEmail({
-        to: rep.email,
-        subject: `Book your ${monthLabel} visits on Arrowhead Access`,
-        html: `${emailLogoHeader()}<p>A new month has started — now's a good time to book your visits for <strong>${monthLabel}</strong> before the best times get taken.</p><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to browse open slots and book now.</p>`,
-      }).catch(() => {});
-      await prisma.rep.update({ where: { id: rep.id }, data: { lastMonthlyReminderMonth: monthKey } });
-      repRemindersSent++;
+    // Sunday: email each rep their upcoming Monday-Friday confirmed
+    // visits, in chronological order, all in one email.
+    if (now.getDay() === 0) {
+      const mondayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      const fridayEnd = new Date(mondayStart.getFullYear(), mondayStart.getMonth(), mondayStart.getDate() + 4, 23, 59, 59, 999);
+      // Keyed off the upcoming Monday's date so this only ever sends once
+      // per week per rep, even if the daily trigger somehow fires twice.
+      const weekKey = `${mondayStart.getFullYear()}-${String(mondayStart.getMonth() + 1).padStart(2, '0')}-${String(mondayStart.getDate()).padStart(2, '0')}`;
+
+      const repsWithBookings = await prisma.rep.findMany({
+        where: {
+          OR: [{ lastWeeklyReminderWeek: null }, { lastWeeklyReminderWeek: { not: weekKey } }],
+          bookings: { some: { status: 'CONFIRMED', slot: { startTime: { gte: mondayStart, lte: fridayEnd } } } },
+        },
+        include: {
+          bookings: {
+            where: { status: 'CONFIRMED', slot: { startTime: { gte: mondayStart, lte: fridayEnd } } },
+            include: { slot: { include: { location: true } } },
+            orderBy: { slot: { startTime: 'asc' } },
+          },
+        },
+      });
+
+      for (const rep of repsWithBookings) {
+        const itemsHtml = rep.bookings.map(b => {
+          const dateStr = b.slot.startTime.toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+          return `<li><strong>${dateStr}</strong> — ${EVENT_TYPE_LABEL[b.slot.eventType] || b.slot.eventType} at ${b.slot.location.name}</li>`;
+        }).join('');
+        sendEmail({
+          to: rep.email,
+          subject: `Your week ahead: ${rep.bookings.length} booked visit${rep.bookings.length > 1 ? 's' : ''}`,
+          html: `${emailLogoHeader()}<p>Here's what you have booked this week:</p><ul>${itemsHtml}</ul><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to see full details or make changes.</p>`,
+        }).catch(() => {});
+        await prisma.rep.update({ where: { id: rep.id }, data: { lastWeeklyReminderWeek: weekKey } });
+        weeklyRemindersSent++;
+      }
     }
 
-    res.json({ officeRemindersSent, repRemindersSent });
+    res.json({ officeRemindersSent, repRemindersSent, weeklyRemindersSent });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Could not check monthly schedule reminders' });
+    res.status(500).json({ error: 'Could not check monthly/weekly schedule reminders' });
   }
 });
 
