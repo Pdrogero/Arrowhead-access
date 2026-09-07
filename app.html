@@ -3758,7 +3758,10 @@ async function loadOfficePolicy() {
     const policy = await api('/api/policies');
     document.getElementById('maxVisitsPerRep').value = policy.maxVisitsPerRepPerMonth ?? 4;
     document.getElementById('maxVisitsPerCompany').value = policy.maxVisitsPerCompanyPerMonth ?? 8;
-    document.getElementById('confirmationDeadline').value = policy.confirmationDeadline || '';
+    // Deliberately left blank rather than pre-filled with whatever's
+    // already saved — the office either types their own wording or picks
+    // a preset from the dropdown each time. Leaving this blank on save
+    // does NOT clear the saved deadline (see policies.routes.ts).
     document.getElementById('generalAllergyNotes').value = policy.generalAllergyNotes || '';
   } catch (err) {}
 }

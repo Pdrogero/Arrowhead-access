@@ -46,7 +46,14 @@ router.post('/', requireAuth, async (req, res) => {
       update: {
         maxVisitsPerRepPerMonth: maxVisitsPerRepPerMonth || 4,
         maxVisitsPerCompanyPerMonth: maxVisitsPerCompanyPerMonth || 8,
-        confirmationDeadline: confirmationDeadline || null,
+        // The confirmation-deadline box on the frontend always starts blank
+        // (filled only by typing or picking a preset, never pre-populated
+        // from what's already saved) — so a blank value here just means
+        // "the office didn't touch this field," not "clear it." Omitting
+        // the key entirely leaves whatever deadline was already saved
+        // untouched, instead of wiping it out on every unrelated policy
+        // save (e.g. posting a new slot via "Save All").
+        ...(confirmationDeadline ? { confirmationDeadline } : {}),
         closedDays: closedDays || [],
         generalAllergyNotes: generalAllergyNotes || null,
       },
