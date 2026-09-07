@@ -628,7 +628,8 @@ function screenAccountSettings() {
             🔒 Email me a login code each time I sign in (extra account security)
           </label>
           <div id="twoFactorSavedMsg" style="font-size:12px;color:var(--teal-dark);margin-top:8px;display:none;">Saved.</div>
-        </div>` : ''}
+        </div>
+        <button class="primary" style="margin-top:8px;" onclick="saveAllAccountSettings()">Save All</button>` : ''}
     </div>`;
 }
 
@@ -647,6 +648,24 @@ window.saveTwoFactorSetting = async function(checked) {
     setTimeout(() => { msg.style.display = 'none'; }, 2000);
   } catch (err) {
     alert(err.message);
+  }
+};
+
+// The two-factor checkbox already saves itself the instant it's toggled,
+// so Save All only needs to actually submit anything for the password
+// fields — but only if the rep typed something, so clicking Save All just
+// to confirm the 2FA toggle doesn't throw a "password too short" error on
+// three empty fields. Re-saving the (unchanged) two-factor checkbox here
+// too is a harmless no-op that keeps this button a genuine "save everything".
+window.saveAllAccountSettings = async function() {
+  const newPassword = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+  if (newPassword || confirmPassword) {
+    await doChangePassword();
+  }
+  const twoFactorCb = document.getElementById('twoFactorEnabled');
+  if (twoFactorCb) {
+    await saveTwoFactorSetting(twoFactorCb.checked);
   }
 };
 
