@@ -703,8 +703,10 @@ function screenPostSlot() {
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
         <p id="quickVisitNote" style="display:none;font-size:12px;color:var(--slate);margin:-8px 0 12px;"></p>
-        <div id="postSlotLunchFields" style="display:none;">
+        <div id="postSlotOrderDetailsFields" style="display:none;">
           ${lunchDetailsFieldsHtml('postSlot')}
+        </div>
+        <div id="postSlotRepeatFields" style="display:none;">
           <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Repeat weekly on (optional)</label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
             ${['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'].map(day => `
@@ -998,14 +1000,20 @@ window.togglePostSlotLunchFields = function() {
   const eventType = document.getElementById('eventType').value;
   const hasOrderDetails = eventType === 'LUNCH' || eventType === 'BREAKFAST';
   const isStaffTraining = eventType === 'STAFF_TRAINING';
+  const isOfficeClosed = eventType === 'OFFICE_CLOSED';
+  // Repeating on a weekly schedule is also useful for a recurring closure
+  // (e.g. "closed every Wednesday"), not just lunch/breakfast — but the
+  // headcount/allergy/order-details fields only make sense for a meal.
+  const supportsRepeat = hasOrderDetails || isOfficeClosed;
   const label = eventType === 'LUNCH' ? 'lunch' : 'breakfast';
-  document.getElementById('postSlotLunchFields').style.display = hasOrderDetails ? '' : 'none';
+  document.getElementById('postSlotOrderDetailsFields').style.display = hasOrderDetails ? '' : 'none';
+  document.getElementById('postSlotRepeatFields').style.display = supportsRepeat ? '' : 'none';
   document.getElementById('startTimeLabel').textContent = hasOrderDetails ? `Start time for ${label}` : 'Start time';
   document.getElementById('endTimeLabel').textContent = hasOrderDetails ? `End time for ${label}` : 'End time';
-  // Staff training swaps the general Visit Policies section (max visits,
-  // confirmation deadline, allergy notes — none of which apply to an
-  // internal training session) for a simple free-text note to the rep.
-  document.getElementById('visitPoliciesSection').style.display = isStaffTraining ? 'none' : '';
+  // Staff training swaps Visit Policies for a free-text note to the rep;
+  // office-closed slots don't need Visit Policies at all since nobody can
+  // book a visit against them — for either, just Save All stays.
+  document.getElementById('visitPoliciesSection').style.display = (isStaffTraining || isOfficeClosed) ? 'none' : '';
   document.getElementById('staffTrainingNoteSection').style.display = isStaffTraining ? '' : 'none';
 };
 
@@ -1051,7 +1059,8 @@ const REPEAT_LENGTH_LABELS = { MONTHLY: '1 month', QUARTERLY: '3 months', SEMIAN
 window.updateLunchRepeatHint = function() {
   const hint = document.getElementById('postSlotRepeatHint');
   if (!hint) return;
-  const eventLabel = document.getElementById('eventType')?.value === 'BREAKFAST' ? 'breakfast' : 'lunch';
+  const eventType = document.getElementById('eventType')?.value;
+  const eventLabel = eventType === 'BREAKFAST' ? 'breakfast' : eventType === 'OFFICE_CLOSED' ? 'closure' : 'lunch';
   const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
     .filter(d => document.getElementById('postSlotDay-' + d)?.checked);
   const repeat = document.getElementById('postSlotRepeat').value;
@@ -1060,6 +1069,8 @@ window.updateLunchRepeatHint = function() {
     hint.textContent = repeat
       ? `Will post a ${eventLabel} every ${dayLabel} until about ${REPEAT_LENGTH_LABELS[repeat]} out, all with the same details.`
       : `Will post a ${eventLabel} on the next ${dayLabel} this week only. Pick a repeat length above to keep it going.`;
+  } else if (eventType === 'OFFICE_CLOSED') {
+    hint.textContent = 'Same closure will be copied to each repeat, about 2 years out.';
   } else {
     hint.textContent = 'Same headcount, allergy notes, and order details will be copied to each repeat, about 2 years out.';
   }
@@ -3820,13 +3831,16 @@ async function submitPostSlot(silent) {
   const payload = { startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), eventType };
   if (eventType === 'LUNCH' || eventType === 'BREAKFAST') {
     Object.assign(payload, readLunchDetailsFields('postSlot'));
+  } else if (eventType === 'STAFF_TRAINING') {
+    payload.staffTrainingNote = document.getElementById('staffTrainingNote').value.trim();
+  }
+  // Repeating weekly applies to lunch/breakfast and office-closed alike.
+  if (eventType === 'LUNCH' || eventType === 'BREAKFAST' || eventType === 'OFFICE_CLOSED') {
     const repeat = document.getElementById('postSlotRepeat').value;
     if (repeat) payload.repeatInterval = repeat;
     const daysOfWeek = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
       .filter(d => document.getElementById('postSlotDay-' + d).checked);
     if (daysOfWeek.length) payload.daysOfWeek = daysOfWeek;
-  } else if (eventType === 'STAFF_TRAINING') {
-    payload.staffTrainingNote = document.getElementById('staffTrainingNote').value.trim();
   }
 
   if (!silent) { btn.disabled = true; btn.textContent = 'Posting…'; }

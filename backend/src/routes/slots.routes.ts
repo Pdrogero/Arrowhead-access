@@ -128,14 +128,17 @@ router.post('/', requireAuth, async (req, res) => {
     const staffTrainingDetails = eventType === 'STAFF_TRAINING'
       ? { staffTrainingNote: staffTrainingNote || null }
       : {};
+    // A recurring closure (e.g. "closed every Wednesday") is just as useful
+    // as a recurring lunch/breakfast, even though it carries none of the
+    // order details those do.
+    const supportsRepeat = hasOrderDetails || eventType === 'OFFICE_CLOSED';
 
-    // A lunch/breakfast posted for specific weekdays (e.g. every Mon/Wed)
-    // replaces the single-slot + same-date-repeat path below:
-    // startTime/endTime supply the starting date, time-of-day, and
-    // duration, and a slot is created for every matching weekday out to
-    // the chosen repeat length (or just the current week if no repeat
-    // length was chosen).
-    if (hasOrderDetails && Array.isArray(daysOfWeek) && daysOfWeek.length) {
+    // An event posted for specific weekdays (e.g. every Mon/Wed) replaces
+    // the single-slot + same-date-repeat path below: startTime/endTime
+    // supply the starting date, time-of-day, and duration, and a slot is
+    // created for every matching weekday out to the chosen repeat length
+    // (or just the current week if no repeat length was chosen).
+    if (supportsRepeat && Array.isArray(daysOfWeek) && daysOfWeek.length) {
       const selectedDays: number[] = daysOfWeek
         .map((d: string) => DAY_NAME_TO_INDEX[d])
         .filter((i: number | undefined): i is number => i !== undefined);
@@ -194,7 +197,7 @@ router.post('/', requireAuth, async (req, res) => {
       },
     });
 
-    const months = hasOrderDetails ? REPEAT_INTERVAL_MONTHS[repeatInterval] : undefined;
+    const months = supportsRepeat ? REPEAT_INTERVAL_MONTHS[repeatInterval] : undefined;
     if (months) {
       const horizon = new Date(startTime);
       horizon.setFullYear(horizon.getFullYear() + REPEAT_HORIZON_YEARS);
