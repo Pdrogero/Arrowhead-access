@@ -45,6 +45,14 @@
     border-bottom:1px solid var(--line);
   }
   .nav{display:flex;align-items:center;justify-content:space-between;padding:20px 32px;max-width:1160px;margin:0 auto;}
+
+  /* Jumping to one of these sections (from the nav, the mobile topic
+     nav, or a pricing.html link back here) would otherwise land the
+     section's own heading right underneath the sticky header, cutting
+     it off — this pushes the scroll target down clear of it. Sized for
+     the header's taller two-line mobile height ("Arrowhead" / "Access"
+     wrapping), which comfortably covers the shorter one-line desktop one too. */
+  #how, #offices, #reps, #trust{scroll-margin-top:120px;}
   .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-0.01em;}
   .logo-mark{width:28px;height:28px;border-radius:6px;background:var(--teal);position:relative;flex-shrink:0;}
   .logo-mark::after{content:"";position:absolute;top:7px;left:7px;width:8px;height:8px;background:var(--coral);border-radius:1px;transform:rotate(45deg);}
