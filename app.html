@@ -263,6 +263,12 @@ function goHome() {
   }
 }
 function fmtTime(isoStr) { return new Date(isoStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+// Same as fmtTime, but with the end time's hour/minute appended after the
+// date and start time (e.g. "Sep 15, 1:00 PM – 2:00 PM").
+function fmtTimeRange(startIso, endIso) {
+  const endTime = new Date(endIso).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${fmtTime(startIso)} – ${endTime}`;
+}
 
 // A password <input> with a small text toggle ("Show"/"Hide") to reveal
 // what's typed — margin moves onto the wrapper (with the input's own
@@ -3989,7 +3995,7 @@ async function loadOfficeLedger() {
     box.innerHTML = slots.map(s => `
       <div class="row" style="flex-wrap:wrap;">
         ${s.status === 'OPEN' ? `<input type="checkbox" class="ledgerSelectCb" style="margin-right:8px;align-self:center;" onchange="toggleLedgerSelect('${s.id}', this.checked)">` : ''}
-        <div class="time">${fmtTime(s.startTime)}</div>
+        <div class="time" style="width:190px;">${fmtTimeRange(s.startTime, s.endTime)}</div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">${s.eventType === 'OFFICE_CLOSED' ? 'Not available for booking' : 'Open slot'}</div>`}
           <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
