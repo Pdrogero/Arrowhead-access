@@ -728,7 +728,12 @@ function screenPostSlot() {
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
         <p id="quickVisitNote" style="display:none;font-size:12px;color:var(--slate);margin:-8px 0 12px;"></p>
-        <div id="officeClosedHolidaysBox" style="display:none;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:-4px 0 12px;font-size:12.5px;"></div>
+        <div id="officeClosedHolidaysBox" style="display:none;margin:-4px 0 12px;">
+          <details>
+            <summary style="cursor:pointer;font-size:12.5px;font-weight:600;color:var(--teal);">Major U.S. holidays (ET) — for reference</summary>
+            <ul id="officeClosedHolidaysList" style="margin:8px 0 0;padding:10px 12px 10px 28px;font-size:12.5px;background:var(--paper);border:1px solid var(--line);border-radius:8px;"></ul>
+          </details>
+        </div>
         <div id="postSlotOrderDetailsFields" style="display:none;">
           ${lunchDetailsFieldsHtml('postSlot')}
         </div>
@@ -1045,8 +1050,8 @@ window.togglePostSlotLunchFields = function() {
   const holidaysBox = document.getElementById('officeClosedHolidaysBox');
   holidaysBox.style.display = isOfficeClosed ? '' : 'none';
   if (isOfficeClosed && !holidaysBox.dataset.filled) {
-    const items = upcomingUsHolidays().map(h => `<li>${h.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} — ${h.name}</li>`).join('');
-    holidaysBox.innerHTML = `<strong>Major U.S. holidays (ET)</strong>, for reference:<ul style="margin:6px 0 0;padding-left:18px;">${items}</ul>`;
+    const list = document.getElementById('officeClosedHolidaysList');
+    list.innerHTML = upcomingUsHolidays().map(h => `<li>${h.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} — ${h.name}</li>`).join('');
     holidaysBox.dataset.filled = '1';
   }
 };
