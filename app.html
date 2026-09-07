@@ -4113,7 +4113,7 @@ async function loadMyBookings() {
     const officeRatings = await fetchRatingAverages(bookings.map(b => b.slot.location.id), 'office');
     box.innerHTML = bookings.map(b => `
       <div class="row" style="flex-wrap:wrap;">
-        <div class="time">${fmtTime(b.slot.startTime)}</div>
+        <div class="time" style="width:190px;">${fmtTimeRange(b.slot.startTime, b.slot.endTime)}</div>
         <div class="mid">
           <div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${b.slot.location.id}')">${favoriteStarHtml(b.slot.location.id)} ${b.slot.location.name}</div>
           <div class="what">${addressLinkHtml(b.slot.location.address)}</div>
