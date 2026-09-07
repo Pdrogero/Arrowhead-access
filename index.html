@@ -50,6 +50,34 @@
   .logo-mark::after{content:"";position:absolute;top:7px;left:7px;width:8px;height:8px;background:var(--coral);border-radius:1px;transform:rotate(45deg);}
   nav.links{display:flex;gap:32px;font-size:14px;font-weight:500;color:var(--slate);}
   nav.links a:hover{color:var(--ink);}
+
+  /* Mobile/tablet only — the desktop nav links hide below 860px, so this
+     horizontally-scrollable strip of the same topics takes their place,
+     letting a tap jump straight to a section (e.g. Pricing) instead of
+     having to scroll to find it. */
+  .mobile-topic-nav{
+    display:none;
+    gap:8px;
+    padding:12px 32px;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    border-bottom:1px solid var(--line);
+    background:#fff;
+  }
+  .mobile-topic-nav::-webkit-scrollbar{display:none;}
+  .mobile-topic-nav a{
+    flex:0 0 auto;
+    background:var(--paper-raised);
+    color:var(--ink);
+    font-size:13px;
+    font-weight:600;
+    padding:8px 14px;
+    border-radius:20px;
+    white-space:nowrap;
+    text-decoration:none;
+  }
+  .mobile-topic-nav a.pricing{background:var(--teal);color:#fff;}
   .btn{
     display:inline-flex;align-items:center;gap:8px;
     padding:11px 20px;border-radius:7px;font-size:14px;font-weight:600;
@@ -183,6 +211,7 @@
     .split{grid-template-columns:1fr;}
     .trust-grid{grid-template-columns:1fr;gap:32px;}
     nav.links{display:none;}
+    .mobile-topic-nav{display:flex;}
     .step{grid-template-columns:50px 1fr;}
   }
 </style>
@@ -205,6 +234,14 @@
     </div>
   </div>
 </header>
+
+<nav class="mobile-topic-nav">
+  <a href="#how">How it works</a>
+  <a href="#offices">For offices</a>
+  <a href="#reps">For reps</a>
+  <a href="#trust">Verification</a>
+  <a href="pricing.html" class="pricing">Pricing</a>
+</nav>
 
 <section class="hero">
   <div class="wrap hero-grid">
