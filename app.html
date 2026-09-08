@@ -610,6 +610,30 @@ function screenProfile() {
     </div>`;
 }
 
+// Set by doRepSignup() so the identity-verification nudge below knows
+// whether to continue on to the two-factor nudge or straight to profile
+// once the rep is done with (or skips) the ID upload step.
+let signupSkippedTwoFactor = false;
+
+// Shown right after signup for a rep whose email domain didn't auto-verify
+// — pushes them to upload an ID/badge photo immediately instead of leaving
+// it to a "not verified" note they might not notice on the dashboard later.
+function screenVerifyIdentityNudge() {
+  return `
+    <div class="wrap">
+      <h1>🪪 Get verified to start booking</h1>
+      <p class="sub">We couldn't automatically confirm your account from your email address. Upload a quick photo of your company ID or badge and our team will review it — usually within one business day. Booking is on hold until then.</p>
+      <div class="card">
+        <button class="primary" onclick="setState({screen:'idVerification'})">Upload ID or badge now</button>
+        <button class="link" onclick="skipVerifyIdentityNudge()">I'll do this later</button>
+      </div>
+    </div>`;
+}
+
+window.skipVerifyIdentityNudge = function() {
+  setState({ screen: signupSkippedTwoFactor ? 'twoFactorNudge' : 'profile', role: 'rep' });
+};
+
 // A one-time nudge shown right after a rep signs up without checking the
 // email-login-codes box on the signup form — that checkbox is easy to miss,
 // so this gives them a second, more deliberate chance to turn it on.
@@ -3345,12 +3369,21 @@ function screenDashboardOffice() {
 }
 
 function screenDashboardRep() {
-  const verified = state.me?.verificationStatus === 'VERIFIED';
+  const status = state.me?.verificationStatus;
+  const verified = status === 'VERIFIED';
+  const pending = status === 'PENDING_REVIEW';
   const firstName = (state.me?.name || '').trim().split(' ')[0] || state.me?.email || 'there';
   return `
     <div class="wrap wide">
       <h1>Hello, ${firstName}</h1>
-      <p class="sub">${verified ? '✅ verified' : '⏳ not verified'}</p>
+      <p class="sub">${verified ? '✅ verified' : pending ? '⏳ verification pending' : '⏳ not verified'}</p>
+
+      ${!verified ? `
+        <div style="background:#FFF7E8;border:1px solid #EBCB8B;border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+          ${pending
+            ? `<p style="margin:0;font-size:13.5px;font-weight:600;">⏳ Your ID is under review</p><p style="margin:4px 0 0;font-size:12.5px;color:var(--slate);">We'll email you as soon as it's been checked — usually within one business day.</p>`
+            : `<p style="margin:0;font-size:13.5px;font-weight:600;">🪪 Your account isn't verified yet</p><p style="margin:4px 0 10px;font-size:12.5px;color:var(--slate);">Booking is on hold until you're verified. Upload a photo of your company ID or badge — it only takes a minute.</p><button class="primary" style="margin:0;padding:9px 16px;font-size:13px;" onclick="setState({screen:'idVerification'})">Verify your identity now</button>`}
+        </div>` : ''}
 
       <div id="billingBox" class="card" style="margin-bottom:24px;"><div class="empty">Loading plan…</div></div>
 
@@ -3366,7 +3399,6 @@ function screenDashboardRep() {
 
       <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Your bookings</p>
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
-      ${!verified ? `<div class="note">Not verified yet — booking actions are blocked until you're verified. <a href="#" onclick="setState({screen:'idVerification'});return false;" style="color:var(--teal);font-weight:600;">Verify your identity &rarr;</a></div>` : ''}
     </div>`;
 }
 
@@ -3550,9 +3582,14 @@ async function doRepSignup() {
     const res = await api('/api/auth/rep/signup', { method: 'POST', body: JSON.stringify({ name, companyName, email, password, twoFactorEnabled, turnstileToken }) });
     localStorage.setItem('token', res.token);
     state.me = res.rep;
-    // Give reps who skipped the signup checkbox one more, harder-to-miss
-    // chance to turn on email login codes before they move on.
-    setState({ screen: twoFactorEnabled ? 'profile' : 'twoFactorNudge', role: 'rep' });
+    signupSkippedTwoFactor = !twoFactorEnabled;
+    // Reps whose domain didn't auto-verify get pushed straight to the ID
+    // upload step; everyone else gets the same two-factor nudge as before
+    // (or straight to profile if they already opted in at signup).
+    const nextScreen = res.rep.verificationStatus !== 'VERIFIED'
+      ? 'verifyIdentityNudge'
+      : (twoFactorEnabled ? 'profile' : 'twoFactorNudge');
+    setState({ screen: nextScreen, role: 'rep' });
   } catch (err) {
     setState({ formErr: err.message });
   }
@@ -5086,6 +5123,7 @@ function render() {
   else if (state.screen === 'forgotPassword') app.innerHTML = screenForgotPassword();
   else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
   else if (state.screen === 'signup') { app.innerHTML = screenSignup(); renderTurnstile(); }
+  else if (state.screen === 'verifyIdentityNudge') { app.innerHTML = screenVerifyIdentityNudge(); }
   else if (state.screen === 'twoFactorNudge') { app.innerHTML = screenTwoFactorNudge(); }
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
   else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); }

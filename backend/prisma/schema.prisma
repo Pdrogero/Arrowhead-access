@@ -286,6 +286,9 @@ model Rep {
   passwordHash         String
   verificationStatus   VerificationStatus  @default(UNVERIFIED)
   verificationMethod   VerificationMethod?
+  // Set once the day-2-after-signup "you're still unverified" email has
+  // gone out, so the daily cron check never sends it twice.
+  unverifiedReminder2dSent Boolean         @default(false)
   createdAt            DateTime            @default(now())
 
   // Profile (RxVantage-style personal info)

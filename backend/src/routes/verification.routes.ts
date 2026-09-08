@@ -104,7 +104,7 @@ router.post('/submit', requireAuth, requireRole('rep'), async (req, res) => {
     // A signed link IS the approval action — clicking it (no login) hits
     // GET /review below and applies the decision. Mirrors the password
     // reset token pattern (signed JWT, no separate DB table needed).
-    const reviewLink = (decision: 'approve' | 'reject') => {
+    const reviewLink = (decision: 'approve' | 'reject' | 'approve_trust_domain') => {
       const token = jwt.sign(
         { requestId: request.id, decision, type: 'verification_review' },
         process.env.JWT_SECRET!,
@@ -113,6 +113,8 @@ router.post('/submit', requireAuth, requireRole('rep'), async (req, res) => {
       return `${API_URL}/api/verification/review?token=${token}`;
     };
 
+    const repDomain = rep.email.split('@')[1]?.toLowerCase();
+
     notifyAdmin(
       `ID verification request — ${rep.name}`,
       `<p><strong>${rep.name}</strong> (${rep.companyName}, ${rep.email}) submitted a photo for manual identity verification, since their email didn't match a known company domain.</p>
@@ -120,7 +122,8 @@ router.post('/submit', requireAuth, requireRole('rep'), async (req, res) => {
        <p>
          <a href="${reviewLink('approve')}" style="display:inline-block;background:#2E6F5E;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;margin-right:10px;">Approve</a>
          <a href="${reviewLink('reject')}" style="display:inline-block;background:#C23C3C;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;">Reject</a>
-       </p>`
+       </p>
+       ${repDomain ? `<p><a href="${reviewLink('approve_trust_domain')}" style="color:#2E6F5E;font-size:13px;">Approve &amp; trust @${repDomain} for future signups &rarr;</a><br><span style="font-size:12px;color:#6E7C77;">Future signups from this domain will auto-verify without needing manual review — only use this if ${rep.companyName} legitimately owns this domain.</span></p>` : ''}`
     );
 
     res.status(201).json(request);
@@ -147,7 +150,7 @@ function reviewResultPage(res: import('express').Response, title: string, messag
 router.get('/review', async (req, res) => {
   try {
     const token = String(req.query.token || '');
-    let payload: { requestId: string; decision: 'approve' | 'reject'; type: string };
+    let payload: { requestId: string; decision: 'approve' | 'reject' | 'approve_trust_domain'; type: string };
     try {
       payload = jwt.verify(token, process.env.JWT_SECRET!) as typeof payload;
     } catch {
@@ -172,7 +175,8 @@ router.get('/review', async (req, res) => {
       );
     }
 
-    const approved = payload.decision === 'approve';
+    const trustDomain = payload.decision === 'approve_trust_domain';
+    const approved = payload.decision === 'approve' || trustDomain;
     const newStatus = approved ? 'VERIFIED' : 'REJECTED';
 
     await prisma.verificationRequest.update({
@@ -187,6 +191,15 @@ router.get('/review', async (req, res) => {
       },
     });
 
+    let trustedDomain: string | null = null;
+    if (trustDomain) {
+      const domain = request.rep.email.split('@')[1]?.toLowerCase();
+      if (domain) {
+        await prisma.knownManufacturerDomain.upsert({ where: { domain }, update: {}, create: { domain } });
+        trustedDomain = domain;
+      }
+    }
+
     sendEmail({
       to: request.rep.email,
       subject: approved ? "You're verified on Arrowhead Access" : 'Your ID verification was not approved',
@@ -198,11 +211,44 @@ router.get('/review', async (req, res) => {
     reviewResultPage(
       res,
       approved ? 'Approved' : 'Rejected',
-      `${request.rep.name} (${request.rep.email}) has been marked ${approved ? 'verified' : 'rejected'}. They've been notified by email.`
+      `${request.rep.name} (${request.rep.email}) has been marked ${approved ? 'verified' : 'rejected'}. They've been notified by email.${trustedDomain ? ` Future signups from @${trustedDomain} will now auto-verify.` : ''}`
     );
   } catch (err) {
     console.error(err);
     reviewResultPage(res, 'Error', 'Something went wrong processing this request.');
+  }
+});
+
+// --- Daily check: nudge reps who are still unverified two days after -------
+// signup, called by an external scheduled trigger. Guarded by the same
+// shared cron secret as the other daily reminder checks.
+const UNVERIFIED_REMINDER_DELAY_MS = 2 * 24 * 60 * 60 * 1000;
+
+router.post('/check-unverified-reminders', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  try {
+    const cutoff = new Date(Date.now() - UNVERIFIED_REMINDER_DELAY_MS);
+    const reps = await prisma.rep.findMany({
+      where: { verificationStatus: 'UNVERIFIED', unverifiedReminder2dSent: false, createdAt: { lte: cutoff } },
+    });
+
+    let remindersSent = 0;
+    for (const rep of reps) {
+      sendEmail({
+        to: rep.email,
+        subject: "You're not verified yet on Arrowhead Access",
+        html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>Your Arrowhead Access account is still unverified — we couldn't automatically confirm it from your email address, so booking is on hold until you upload a quick photo of your company ID or badge. It only takes a minute, and our team usually reviews it within a business day.</p>${emailLoginButton('Upload ID to get verified')}`,
+      }).catch(() => {});
+      await prisma.rep.update({ where: { id: rep.id }, data: { unverifiedReminder2dSent: true } });
+      remindersSent++;
+    }
+
+    res.json({ checked: reps.length, remindersSent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check unverified reminders' });
   }
 });
 

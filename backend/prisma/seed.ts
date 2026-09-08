@@ -22,6 +22,30 @@ const CATALOG: Record<string, string[]> = {
   'MiMedx Group': ['EpiFix', 'AmnioFix', 'EpiCord'],
 };
 
+// Verified corporate email domains for the manufacturers above — a rep
+// signing up with one of these auto-verifies instead of going through
+// manual ID review. Confirmed against each company's own site/investor
+// pages rather than guessed, since a wrong entry here is a trust decision.
+// Always seeded (not demo-gated) so production actually has real coverage;
+// admins can grow this list over time too — approving a rep's manual ID
+// review from the notification email includes an "Approve & trust this
+// domain" option that adds their domain here for future signups.
+const KNOWN_MANUFACTURER_DOMAINS = [
+  'smith-nephew.com',
+  'organogenesis.com',
+  'integralife.com',
+  'mtfbiologics.org',
+  'medtronic.com',
+  'stryker.com',
+  'bostonscientific.com',
+  'bsci.com',
+  '3m.com',
+  'convatec.com',
+  'coloplast.com',
+  'molnlycke.com',
+  'mimedx.com',
+];
+
 async function main() {
   // The demo office (and its known-manufacturer-domain used for rep
   // auto-verification testing) is test data — it only gets created when
@@ -76,6 +100,17 @@ async function main() {
     console.log('  password: demo1234');
     console.log(`  locationId: ${location.id}`);
   }
+
+  // --- Known manufacturer domains (always seeded — production needs this ---
+  // --- table populated for rep auto-verification to actually work) --------
+  for (const domain of KNOWN_MANUFACTURER_DOMAINS) {
+    await prisma.knownManufacturerDomain.upsert({
+      where: { domain },
+      update: {},
+      create: { domain },
+    });
+  }
+  console.log(`Seeded ${KNOWN_MANUFACTURER_DOMAINS.length} known manufacturer domains.`);
 
   // --- Manufacturer / product catalog (always seeded — real data the ---
   // --- rep profile's company picker needs in production too) ----------
