@@ -137,6 +137,38 @@ router.get('/rep', requireAuth, requireRole('rep'), async (req, res) => {
   }
 });
 
+// --- Get the logged-in office staff's own account settings ----------------
+// Currently just backs the Account Settings two-factor toggle — office
+// accounts have no other self-editable profile fields yet.
+router.get('/staff', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({
+      where: { id: req.user!.sub },
+      select: { id: true, email: true, role: true, twoFactorEnabled: true },
+    });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+    res.json(staff);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch account settings' });
+  }
+});
+
+router.patch('/staff', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const { twoFactorEnabled } = req.body;
+    const staff = await prisma.staffUser.update({
+      where: { id: req.user!.sub },
+      data: { ...('twoFactorEnabled' in req.body ? { twoFactorEnabled: !!twoFactorEnabled } : {}) },
+      select: { id: true, email: true, role: true, twoFactorEnabled: true },
+    });
+    res.json({ staff });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not update account settings' });
+  }
+});
+
 // --- Office staff: directory of reps who've booked at this location -------
 router.get('/reps', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {

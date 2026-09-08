@@ -220,9 +220,37 @@ model StaffUser {
   email          String        @unique
   passwordHash   String
   role           StaffRole     @default(STAFF)
+  twoFactorEnabled Boolean     @default(false)
   createdAt      DateTime      @default(now())
 
   createdSlots   Slot[]
+  loginOtps      StaffLoginOtp[]
+  trustedDevices StaffTrustedDevice[]
+}
+
+// Mirrors RepLoginOtp, but for office staff logins.
+model StaffLoginOtp {
+  id        String    @id @default(cuid())
+  staffId   String
+  staff     StaffUser @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([staffId])
+}
+
+// Mirrors TrustedDevice, but for office staff logins.
+model StaffTrustedDevice {
+  id        String    @id @default(cuid())
+  staffId   String
+  staff     StaffUser @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  @@index([staffId])
 }
 
 // --- Manufacturer catalog (like RxVantage's company/product picker) -------

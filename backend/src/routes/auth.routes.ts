@@ -256,11 +256,43 @@ async function resolveStaffOrgId(staff: { id: string; organizationId: string | n
 
 router.post('/staff/login', async (req, res) => {
   try {
-    const { password } = req.body;
+    const { password, trustedDeviceToken } = req.body;
     const email = String(req.body.email || '').trim();
     const staff = await prisma.staffUser.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
     if (!staff || !(await bcrypt.compare(password, staff.passwordHash))) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Same opt-in email login codes as reps, mirrored for office accounts.
+    if (staff.twoFactorEnabled) {
+      let deviceTrusted = false;
+      if (trustedDeviceToken) {
+        const devices = await prisma.staffTrustedDevice.findMany({
+          where: { staffId: staff.id, expiresAt: { gt: new Date() } },
+        });
+        for (const device of devices) {
+          if (await bcrypt.compare(trustedDeviceToken, device.tokenHash)) {
+            deviceTrusted = true;
+            break;
+          }
+        }
+      }
+
+      if (!deviceTrusted) {
+        await prisma.staffLoginOtp.deleteMany({ where: { staffId: staff.id } });
+        const code = String(crypto.randomInt(100000, 1000000));
+        const codeHash = await bcrypt.hash(code, 10);
+        await prisma.staffLoginOtp.create({
+          data: { staffId: staff.id, codeHash, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+        });
+        sendEmail({
+          to: staff.email,
+          subject: `Your Arrowhead Access login code: ${code}`,
+          html: `${emailLogoHeader()}<p>Your login code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:4px;">${code}</p><p>It expires in 10 minutes. If you didn't just try to log in, you can ignore this email.</p>`,
+        }).catch(() => {});
+
+        return res.json({ requiresOtp: true, staffId: staff.id });
+      }
     }
 
     const organizationId = await resolveStaffOrgId(staff);
@@ -276,6 +308,66 @@ router.post('/staff/login', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Unexpected server error during login' });
+  }
+});
+
+router.post('/staff/verify-otp', async (req, res) => {
+  try {
+    const { staffId, code, rememberDevice } = req.body;
+    if (!staffId || !code) {
+      return res.status(400).json({ error: 'staffId and code are required' });
+    }
+
+    const staff = await prisma.staffUser.findUnique({ where: { id: staffId } });
+    if (!staff) {
+      return res.status(401).json({ error: 'Incorrect code' });
+    }
+
+    const otp = await prisma.staffLoginOtp.findFirst({
+      where: { staffId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!otp || otp.expiresAt < new Date()) {
+      return res.status(401).json({ error: 'That code has expired. Please log in again to get a new one.' });
+    }
+    if (otp.attempts >= OTP_MAX_ATTEMPTS) {
+      return res.status(429).json({ error: 'Too many incorrect attempts. Please log in again to get a new code.' });
+    }
+
+    const valid = await bcrypt.compare(String(code).trim(), otp.codeHash);
+    if (!valid) {
+      await prisma.staffLoginOtp.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+      return res.status(401).json({ error: 'Incorrect code' });
+    }
+
+    await prisma.staffLoginOtp.delete({ where: { id: otp.id } });
+
+    let trustedDeviceToken: string | undefined;
+    if (rememberDevice) {
+      trustedDeviceToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = await bcrypt.hash(trustedDeviceToken, 10);
+      await prisma.staffTrustedDevice.create({
+        data: { staffId: staff.id, tokenHash, expiresAt: new Date(Date.now() + TRUSTED_DEVICE_TTL_MS) },
+      });
+    }
+
+    const organizationId = await resolveStaffOrgId(staff);
+
+    const token = signToken({
+      sub: staff.id,
+      role: staff.role === 'ADMIN' ? 'office_admin' : 'office_staff',
+      organizationId: organizationId ?? '',
+      locationId: staff.locationId,
+    });
+
+    res.json({
+      token,
+      staff: { id: staff.id, email: staff.email, role: staff.role, locationId: staff.locationId },
+      trustedDeviceToken,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Unexpected server error verifying code' });
   }
 });
 
@@ -326,7 +418,7 @@ router.post('/switch-location', requireAuth, requireRole('office_admin', 'office
 
 router.post('/office/signup', async (req, res) => {
   try {
-    const { officeName, locationName, address, timezone, password, turnstileToken } = req.body;
+    const { officeName, locationName, address, timezone, password, turnstileToken, twoFactorEnabled } = req.body;
     const email = String(req.body.email || '').trim().toLowerCase();
     if (!officeName || !locationName || !address || !email || !password) {
       return res.status(400).json({ error: 'officeName, locationName, address, email, and password are required' });
@@ -356,7 +448,7 @@ router.post('/office/signup', async (req, res) => {
         },
       });
       const staff = await tx.staffUser.create({
-        data: { email, passwordHash, role: 'ADMIN', locationId: location.id, organizationId: org.id },
+        data: { email, passwordHash, role: 'ADMIN', locationId: location.id, organizationId: org.id, twoFactorEnabled: !!twoFactorEnabled },
       });
       return { org, location, staff };
     });
@@ -413,7 +505,7 @@ router.post('/office/signup', async (req, res) => {
     sendEmail({
       to: result.staff.email,
       subject: 'Welcome to Arrowhead Access',
-      html: `${emailLogoHeader()}<p>Hi,</p><p>Your Arrowhead Access office account for <strong>${result.location.name}</strong> is set up. You can now post open slots, review visit requests, and manage your office's availability for sales reps.</p>${emailLoginButton()}`,
+      html: `${emailLogoHeader()}<p>Hi,</p><p>Your Arrowhead Access office account for <strong>${result.location.name}</strong> is set up. You can now post open slots, review visit requests, and manage your office's availability for sales reps.</p>${result.staff.twoFactorEnabled ? `<p>🔒 You turned on email login codes — from now on we'll send a 6-digit code to this address each time you log in from a new device. You can turn this off anytime in Account Settings.</p>` : ''}${emailLoginButton()}`,
     }).catch(() => {});
 
     notifyAdmin(
