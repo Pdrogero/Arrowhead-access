@@ -905,15 +905,16 @@ router.post('/check-lunch-reminders', async (req, res) => {
     for (const repBookings of dayBeforeByRep.values()) {
       const dateLabel = tomorrowStart.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
       const itemsHtml = repBookings.map(b => {
-        const timeStr = b.slot.startTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
-        return `<li><strong>${timeStr}</strong> — ${EVENT_TYPE_LABEL[b.slot.eventType] || b.slot.eventType} at ${b.slot.location.name}</li>`;
+        const startStr = b.slot.startTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const endStr = b.slot.endTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+        return `<li style="margin-bottom:10px;"><strong>${startStr} – ${endStr}</strong> — ${EVENT_TYPE_LABEL[b.slot.eventType] || b.slot.eventType} at ${b.slot.location.name}<br><span style="color:#6b7280;font-size:13px;">${b.slot.location.address}</span></li>`;
       }).join('');
       sendEmail({
         to: repBookings[0].rep.email,
         subject: repBookings.length > 1
           ? `Reminder: ${repBookings.length} visits tomorrow`
           : `Reminder: ${EVENT_TYPE_LABEL[repBookings[0].slot.eventType] || 'visit'} at ${repBookings[0].slot.location.name} tomorrow`,
-        html: `${emailLogoHeader()}<p>Just a reminder — you have ${repBookings.length > 1 ? `${repBookings.length} visits` : 'a visit'} scheduled tomorrow, ${dateLabel}:</p><ul>${itemsHtml}</ul>`,
+        html: `${emailLogoHeader()}<p>Just a reminder — you have ${repBookings.length > 1 ? `${repBookings.length} visits` : 'a visit'} scheduled tomorrow, ${dateLabel}:</p><ul style="padding-left:18px;">${itemsHtml}</ul>${emailLoginButton()}`,
       }).catch(() => {});
       await prisma.booking.updateMany({
         where: { id: { in: repBookings.map(b => b.id) } },
@@ -937,10 +938,11 @@ router.post('/check-lunch-reminders', async (req, res) => {
     let dayOfRemindersSent = 0;
     for (const booking of dayOfBookings) {
       const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const endStr = booking.slot.endTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
       await sendEmail({
         to: booking.rep.email,
         subject: `Reminder: lunch at ${booking.slot.location.name} today`,
-        html: `${emailLogoHeader()}<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> today, ${dateStr}.</p>`,
+        html: `${emailLogoHeader()}<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> today, ${dateStr} – ${endStr}.</p><p style="color:#6b7280;">${booking.slot.location.address}</p>${emailLoginButton()}`,
       });
       await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminderDaySent: true } });
       dayOfRemindersSent++;
@@ -1129,12 +1131,13 @@ router.post('/check-monthly-schedule-reminders', async (req, res) => {
       for (const rep of repsWithBookings) {
         const itemsHtml = rep.bookings.map(b => {
           const dateStr = b.slot.startTime.toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-          return `<li><strong>${dateStr}</strong> — ${EVENT_TYPE_LABEL[b.slot.eventType] || b.slot.eventType} at ${b.slot.location.name}</li>`;
+          const endStr = b.slot.endTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+          return `<li style="margin-bottom:10px;"><strong>${dateStr} – ${endStr}</strong> — ${EVENT_TYPE_LABEL[b.slot.eventType] || b.slot.eventType} at ${b.slot.location.name}<br><span style="color:#6b7280;font-size:13px;">${b.slot.location.address}</span></li>`;
         }).join('');
         sendEmail({
           to: rep.email,
           subject: `Your week ahead: ${rep.bookings.length} booked visit${rep.bookings.length > 1 ? 's' : ''}`,
-          html: `${emailLogoHeader()}<p>Here's what you have booked this week:</p><ul>${itemsHtml}</ul><p><a href="${appUrl}/app.html">Log in to Arrowhead Access</a> to see full details or make changes.</p>`,
+          html: `${emailLogoHeader()}<p>Here's what you have booked this week:</p><ul style="padding-left:18px;">${itemsHtml}</ul>${emailLoginButton()}`,
         }).catch(() => {});
         await prisma.rep.update({ where: { id: rep.id }, data: { lastWeeklyReminderWeek: weekKey } });
         weeklyRemindersSent++;

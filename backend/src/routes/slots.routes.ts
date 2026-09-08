@@ -53,11 +53,14 @@ async function notifyRepsOfNewSlot(locationId: string, startTime: Date, eventTyp
       ? `<p><strong>Doctors at this office include:</strong><br>${location.employees.map(e => e.name + (e.title ? ` (${e.title})` : '')).join(', ')}</p>`
       : '';
     const viewUrl = `${process.env.APP_URL}/app.html?openSlots=1`;
+    const linkStyle = 'color:#2E6F5E;font-weight:600;text-decoration:underline;';
     const html = `${emailLogoHeader()}
-      <p><strong>${eventLabel} available at ${location.name}</strong></p>
-      <p>${whenStr}<br>${location.address}</p>
+      <h2 style="font-size:20px;margin:0 0 12px;color:#16241F;">${eventLabel} Available</h2>
+      <p style="margin:0 0 16px;"><a href="${viewUrl}" style="${linkStyle}font-size:16px;">${eventLabel} on ${whenStr}</a></p>
+      <p>A ${eventLabel.toLowerCase()} just became available at <strong>${location.name}</strong> <a href="${viewUrl}" style="${linkStyle}">on ${whenStr}</a>.<br>${location.address}</p>
       ${doctorsHtml}
-      <p><a href="${viewUrl}" style="display:inline-block;background:#2E6F5E;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;">View Open Slots</a></p>
+      <p>Please follow <a href="${viewUrl}" style="${linkStyle}">this link</a> to view the details and book it if you want it.</p>
+      <p><a href="${viewUrl}" style="display:inline-block;background:#2E6F5E;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;">View Open Slot</a></p>
       <p style="font-size:12px;color:#6b7280;">Act fast — open slots go quickly. This alert went out to every verified rep with an active Arrowhead Access subscription.</p>`;
 
     reps.forEach(rep => {
