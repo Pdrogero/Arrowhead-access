@@ -3715,11 +3715,56 @@ function screenFavoriteOffices() {
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
       <h1>⭐ Favorite Offices</h1>
       <p class="sub">Offices you've starred while browsing — kept here for quick access.</p>
+      <div style="position:relative;margin-bottom:16px;">
+        <input id="favSearchInput" type="text" placeholder="🔍 Search offices to add a favorite…" autocomplete="off" oninput="filterFavoriteOfficeSearch()" onblur="setTimeout(hideFavoriteOfficeSearchSuggestions, 150)" style="margin-bottom:0;width:100%;">
+        <div id="favSearchSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:10;max-height:280px;overflow-y:auto;"></div>
+      </div>
       <div class="card">
         <div id="favoriteOfficesBox"><div class="empty">Loading…</div></div>
       </div>
     </div>`;
 }
+
+let favSearchDebounceTimer = null;
+
+function filterFavoriteOfficeSearch() {
+  const query = (document.getElementById('favSearchInput')?.value || '').trim();
+  clearTimeout(favSearchDebounceTimer);
+  if (!query) { hideFavoriteOfficeSearchSuggestions(); return; }
+  favSearchDebounceTimer = setTimeout(() => loadFavoriteOfficeSearchSuggestions(query), 250);
+}
+
+async function loadFavoriteOfficeSearchSuggestions(query) {
+  try {
+    const results = await api('/api/locations/search?q=' + encodeURIComponent(query));
+    // Ignore a stale response if the rep kept typing after this request went out.
+    if ((document.getElementById('favSearchInput')?.value || '').trim() !== query) return;
+    showFavoriteOfficeSearchSuggestions(results);
+  } catch (err) {
+    hideFavoriteOfficeSearchSuggestions();
+  }
+}
+
+function showFavoriteOfficeSearchSuggestions(results) {
+  const box = document.getElementById('favSearchSuggestions');
+  if (!box) return;
+  if (!results.length) { box.innerHTML = '<div class="empty" style="padding:12px;">No offices match that search.</div>'; box.style.display = 'block'; return; }
+  box.innerHTML = results.slice(0, 8).map(r => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);">
+      <div style="flex:1;min-width:0;cursor:pointer;" onmousedown="viewOfficeDetail('${r.id}')">
+        <div style="font-weight:600;font-size:13px;">${r.name}</div>
+        <div style="font-size:11px;color:var(--slate);">${r.address}${r.openSlotCount ? ` · ${r.openSlotCount} open slot${r.openSlotCount === 1 ? '' : 's'}` : ' · no open slots right now'}</div>
+      </div>
+      ${favoriteStarHtml(r.id)}
+    </div>
+  `).join('');
+  box.style.display = 'block';
+}
+
+window.hideFavoriteOfficeSearchSuggestions = function() {
+  const box = document.getElementById('favSearchSuggestions');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+};
 
 async function loadFavoriteOffices() {
   const box = document.getElementById('favoriteOfficesBox');
@@ -3771,9 +3816,11 @@ window.toggleFavoriteOffice = async function(locationId) {
       btn.style.color = nowFav ? '#D9A441' : 'var(--slate)';
       btn.title = nowFav ? 'Remove from favorites' : 'Add to favorites';
     });
-    // The profile page's list is filtered to favorites only, so a removal
-    // there needs the row gone, not just the star flipped.
-    if (state.screen === 'profile' && !nowFav) loadFavoriteOffices();
+    // The Favorite Offices screen's list is filtered to favorites only, so
+    // adding or removing one needs the list itself refreshed, not just the
+    // star icon flipped (e.g. a newly-favorited office from the search box
+    // needs to actually appear in the list below it).
+    if (state.screen === 'favoriteOffices') loadFavoriteOffices();
   } catch (err) {
     alert(err.message);
   }
