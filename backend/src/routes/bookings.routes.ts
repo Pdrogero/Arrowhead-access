@@ -117,8 +117,12 @@ router.get('/mine', requireAuth, requireRole('rep'), async (req, res) => {
       repId: req.user!.sub,
       hiddenFromRepBookings: false,
       OR: [
-        { status: { notIn: ['CANCELLED', 'DECLINED'] } },
-        { slot: { startTime: { gte: new Date() } } },
+        { status: 'REQUESTED' },
+        // Confirmed (or otherwise resolved) visits stay here only while the
+        // event itself hasn't happened yet — once it's over they belong in
+        // Visit History instead, not still cluttering the active list.
+        { status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] }, slot: { endTime: { gte: new Date() } } },
+        { status: { in: ['CANCELLED', 'DECLINED'] }, slot: { startTime: { gte: new Date() } } },
       ],
     },
     include: { slot: { include: { location: true } } },
