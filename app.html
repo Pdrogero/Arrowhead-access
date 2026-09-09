@@ -2267,27 +2267,40 @@ function screenRepsDirectory() {
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
       <h1>Reps</h1>
       <p class="sub">Reps who have booked a visit at your location. Tap a rep to view their profile and shared marketing materials.</p>
+      <input id="repsDirectorySearch" type="text" placeholder="Search by name or company…" style="margin-bottom:12px;" oninput="renderRepsDirectory()">
       <div id="repsDirectoryBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
+
+function renderRepsDirectory() {
+  const box = document.getElementById('repsDirectoryBox');
+  if (!box || !repsDirectoryData) return;
+  const query = (document.getElementById('repsDirectorySearch')?.value || '').trim().toLowerCase();
+  const reps = query
+    ? repsDirectoryData.filter(r => [r.name, r.companyName, r.title].filter(Boolean).some(f => f.toLowerCase().includes(query)))
+    : repsDirectoryData;
+
+  if (!repsDirectoryData.length) { box.innerHTML = '<div class="empty">No reps have booked at your location yet.</div>'; return; }
+  if (!reps.length) { box.innerHTML = '<div class="empty">No reps match your search.</div>'; return; }
+  box.innerHTML = reps.map(r => `
+    <div class="row" style="cursor:pointer;" onclick="viewRepProfile('${r.id}', '${r.name.replace(/'/g, "\\'")}')">
+      ${r.profileImageUrl
+        ? `<img src="${r.profileImageUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+        : `<div style="width:40px;height:40px;border-radius:50%;background:var(--paper-raised,#E4EAE3);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--teal);flex-shrink:0;">${(r.name || '?').charAt(0)}</div>`}
+      <div class="mid">
+        <div class="who">${r.name}</div>
+        <div class="what">${[r.companyName, r.title].filter(Boolean).join(' · ')}</div>
+        ${r.verificationStatus === 'VERIFIED' ? `<div style="font-size:11.5px;font-weight:600;color:#2D6F5E;margin-top:2px;">✅ Verified Professional</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+window.renderRepsDirectory = renderRepsDirectory;
 
 async function loadRepsDirectory() {
   const box = document.getElementById('repsDirectoryBox');
   try {
     repsDirectoryData = await api('/api/profile/reps');
-    if (!box) return;
-    if (!repsDirectoryData.length) { box.innerHTML = '<div class="empty">No reps have booked at your location yet.</div>'; return; }
-    box.innerHTML = repsDirectoryData.map(r => `
-      <div class="row" style="cursor:pointer;" onclick="viewRepProfile('${r.id}', '${r.name.replace(/'/g, "\\'")}')">
-        ${r.profileImageUrl
-          ? `<img src="${r.profileImageUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
-          : `<div style="width:40px;height:40px;border-radius:50%;background:var(--paper-raised,#E4EAE3);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--teal);flex-shrink:0;">${(r.name || '?').charAt(0)}</div>`}
-        <div class="mid">
-          <div class="who">${r.name}</div>
-          <div class="what">${[r.companyName, r.title].filter(Boolean).join(' · ')}</div>
-          ${r.verificationStatus === 'VERIFIED' ? `<div style="font-size:11.5px;font-weight:600;color:#2D6F5E;margin-top:2px;">✅ Verified Professional</div>` : ''}
-        </div>
-      </div>`).join('');
+    renderRepsDirectory();
   } catch (err) {
     repsDirectoryData = false;
     if (box) box.innerHTML = '<div class="msg err">Could not load the reps directory.</div>';
