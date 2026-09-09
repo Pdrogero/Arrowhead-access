@@ -184,6 +184,8 @@ let attendeeRows = [];
 let attendanceOfficeStaff = []; // office's staff directory for this visit, each with a checked flag
 let attendanceSlot = null; // full slot details (address, event type, lunch order info) for the print letterhead
 let myBookingsData = [];
+let myBookingsFilter = 'ALL'; // status the "Your bookings" dropdown is currently filtered to
+let myBookingsRatings = {}; // cached per-office rating averages, fetched once per loadMyBookings() call
 let employeeRows = [];
 let officeLocationsData = [];
 let editingLocationId = null;
@@ -3401,7 +3403,16 @@ function screenDashboardRep() {
       </div>
       <div id="profileMenuBox"></div>
 
-      <p style="font-size:13px;font-weight:600;margin:18px 0 4px;">Your bookings</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 4px;flex-wrap:wrap;">
+        <p style="font-size:13px;font-weight:600;margin:0;">Your bookings</p>
+        <select id="bookingsFilterSelect" onchange="filterMyBookings(this.value)" style="width:auto;margin:0;padding:5px 8px;font-size:12.5px;">
+          <option value="ALL" ${myBookingsFilter === 'ALL' ? 'selected' : ''}>All</option>
+          <option value="CONFIRMED" ${myBookingsFilter === 'CONFIRMED' ? 'selected' : ''}>Confirmed</option>
+          <option value="REQUESTED" ${myBookingsFilter === 'REQUESTED' ? 'selected' : ''}>Pending</option>
+          <option value="CANCELLED" ${myBookingsFilter === 'CANCELLED' ? 'selected' : ''}>Cancelled</option>
+          <option value="DECLINED" ${myBookingsFilter === 'DECLINED' ? 'selected' : ''}>Declined</option>
+        </select>
+      </div>
       <p style="font-size:11.5px;color:var(--slate);margin:0 0 8px;">Events that have already happened move to <a href="#" onclick="setState({screen:'visitHistory'});return false;" style="color:var(--teal);font-weight:600;">Visit History</a>.</p>
       <div id="bookingsBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
@@ -4233,9 +4244,29 @@ async function loadMyBookings() {
   try {
     const bookings = await api('/api/bookings/mine');
     myBookingsData = bookings;
-    if (!bookings.length) { box.innerHTML = '<div class="empty">No bookings yet.</div>'; return; }
-    const officeRatings = await fetchRatingAverages(bookings.map(b => b.slot.location.id), 'office');
-    box.innerHTML = bookings.map(b => `
+    myBookingsRatings = bookings.length ? await fetchRatingAverages(bookings.map(b => b.slot.location.id), 'office') : {};
+    renderMyBookingsBox();
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
+}
+
+// Re-filters/re-renders from the already-fetched myBookingsData — used both
+// after a fresh load and whenever the status dropdown changes, so switching
+// filters doesn't need a network round-trip.
+window.filterMyBookings = function(value) {
+  myBookingsFilter = value;
+  renderMyBookingsBox();
+};
+
+function renderMyBookingsBox() {
+  const box = document.getElementById('bookingsBox');
+  if (!box) return;
+  if (!myBookingsData.length) { box.innerHTML = '<div class="empty">No bookings yet.</div>'; return; }
+  const bookings = myBookingsFilter === 'ALL' ? myBookingsData : myBookingsData.filter(b => b.status === myBookingsFilter);
+  if (!bookings.length) { box.innerHTML = `<div class="empty">No bookings match this filter.</div>`; return; }
+  const officeRatings = myBookingsRatings;
+  box.innerHTML = bookings.map(b => `
       <div class="row" style="flex-wrap:wrap;">
         <div class="time" style="width:190px;">${fmtTimeRange(b.slot.startTime, b.slot.endTime)}</div>
         <div class="mid">
@@ -4285,9 +4316,6 @@ async function loadMyBookings() {
           </div>` : ''}
         ${rescheduleStatusHtml(b, false, b.slot.location.name)}
       </div>`).join('');
-  } catch (err) {
-    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
-  }
 }
 
 async function loadRepHistory() {
