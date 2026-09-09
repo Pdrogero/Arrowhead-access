@@ -178,6 +178,11 @@ model OfficePolicy {
   location                    Location @relation(fields: [locationId], references: [id])
   maxVisitsPerRepPerMonth     Int      @default(4)
   maxVisitsPerCompanyPerMonth Int      @default(8)
+  // Separate from the general visit cap above — how many lunches (and,
+  // separately, how many breakfasts) one rep can claim at this location in
+  // a trailing 30 days. Exists so one rep can't claim every meal slot in a
+  // month and shut other reps out, but an office can raise or lower it.
+  maxMealsPerTypePerRepPerMonth Int    @default(2)
   // Free text (e.g. "48 hours", "2 business days", "by 5pm the day
   // before") — a dropdown of common hour presets fills this in, but the
   // office can type something more specific too, so it's not strictly

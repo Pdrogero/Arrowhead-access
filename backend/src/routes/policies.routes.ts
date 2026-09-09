@@ -23,6 +23,7 @@ router.get('/', requireAuth, async (req, res) => {
     res.json(policy || {
       maxVisitsPerRepPerMonth: 4,
       maxVisitsPerCompanyPerMonth: 8,
+      maxMealsPerTypePerRepPerMonth: 2,
       confirmationDeadline: '',
       closedDays: [],
       generalAllergyNotes: '',
@@ -39,13 +40,14 @@ router.post('/', requireAuth, async (req, res) => {
     const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
 
-    const { maxVisitsPerRepPerMonth, maxVisitsPerCompanyPerMonth, confirmationDeadline, closedDays, generalAllergyNotes } = req.body;
+    const { maxVisitsPerRepPerMonth, maxVisitsPerCompanyPerMonth, maxMealsPerTypePerRepPerMonth, confirmationDeadline, closedDays, generalAllergyNotes } = req.body;
 
     const policy = await prisma.officePolicy.upsert({
       where: { locationId: staff.locationId },
       update: {
         maxVisitsPerRepPerMonth: maxVisitsPerRepPerMonth || 4,
         maxVisitsPerCompanyPerMonth: maxVisitsPerCompanyPerMonth || 8,
+        maxMealsPerTypePerRepPerMonth: maxMealsPerTypePerRepPerMonth || 2,
         // The confirmation-deadline box on the frontend always starts blank
         // (filled only by typing or picking a preset, never pre-populated
         // from what's already saved) — so a blank value here just means
@@ -61,6 +63,7 @@ router.post('/', requireAuth, async (req, res) => {
         locationId: staff.locationId,
         maxVisitsPerRepPerMonth: maxVisitsPerRepPerMonth || 4,
         maxVisitsPerCompanyPerMonth: maxVisitsPerCompanyPerMonth || 8,
+        maxMealsPerTypePerRepPerMonth: maxMealsPerTypePerRepPerMonth || 2,
         confirmationDeadline: confirmationDeadline || null,
         closedDays: closedDays || [],
         generalAllergyNotes: generalAllergyNotes || null,

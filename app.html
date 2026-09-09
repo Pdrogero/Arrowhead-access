@@ -829,6 +829,10 @@ function screenPostSlot() {
           <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Max visits per company per month</label>
           <input id="maxVisitsPerCompany" type="number" value="2" min="1">
 
+          <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Max lunches (and, separately, breakfasts) per rep per month</label>
+          <input id="maxMealsPerType" type="number" value="2" min="1">
+          <p style="font-size:12px;color:var(--slate);margin:-8px 0 12px;">Keeps one rep from claiming every lunch or breakfast slot in a month. Separate from the general visit cap above.</p>
+
           <label style="display:block;font-size:12px;font-weight:600;margin:12px 0 4px;">Confirmation deadline</label>
           <select id="confirmationDeadlinePreset" onchange="applyConfirmationDeadlinePreset()" style="margin-bottom:8px;">
             <option value="">Select common option…</option>
@@ -4045,6 +4049,7 @@ window.applyConfirmationDeadlinePreset = function() {
 window.saveOfficePolicy = async function(silent) {
   const maxRep = document.getElementById('maxVisitsPerRep').value;
   const maxCompany = document.getElementById('maxVisitsPerCompany').value;
+  const maxMealsPerType = document.getElementById('maxMealsPerType').value;
   const confirmationDeadline = document.getElementById('confirmationDeadline').value.trim();
   const generalAllergyNotes = document.getElementById('generalAllergyNotes').value.trim();
 
@@ -4054,6 +4059,7 @@ window.saveOfficePolicy = async function(silent) {
       body: JSON.stringify({
         maxVisitsPerRepPerMonth: parseInt(maxRep),
         maxVisitsPerCompanyPerMonth: parseInt(maxCompany),
+        maxMealsPerTypePerRepPerMonth: parseInt(maxMealsPerType),
         confirmationDeadline,
         closedDays: [],
         generalAllergyNotes,
@@ -4073,6 +4079,7 @@ async function loadOfficePolicy() {
     const policy = await api('/api/policies');
     document.getElementById('maxVisitsPerRep').value = policy.maxVisitsPerRepPerMonth ?? 4;
     document.getElementById('maxVisitsPerCompany').value = policy.maxVisitsPerCompanyPerMonth ?? 8;
+    document.getElementById('maxMealsPerType').value = policy.maxMealsPerTypePerRepPerMonth ?? 2;
     // Deliberately left blank rather than pre-filled with whatever's
     // already saved — the office either types their own wording or picks
     // a preset from the dropdown each time. Leaving this blank on save

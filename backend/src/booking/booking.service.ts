@@ -13,10 +13,9 @@ export class BookingError extends Error {
 
 // A rep can claim at most this many lunches, and separately this many
 // breakfasts, at the same office in a trailing 30-day window (so up to 4
-// meal bookings total), regardless of the office's own configurable visit
-// cap — keeps one rep from claiming every meal slot in a month and
-// shutting other reps out of that office's lunches/breakfasts entirely.
-const MEALS_PER_TYPE_PER_REP_PER_LOCATION_CAP = 2;
+// meal bookings total) — keeps one rep from claiming every meal slot in a
+// month and shutting other reps out entirely. An office can raise, lower,
+// or effectively disable this via its own Visit Policy.
 const MEAL_EVENT_TYPES = ['LUNCH', 'BREAKFAST'];
 
 // Fallback values when an office hasn't saved its own Visit Policy yet —
@@ -24,6 +23,7 @@ const MEAL_EVENT_TYPES = ['LUNCH', 'BREAKFAST'];
 // location with no OfficePolicy row.
 const DEFAULT_MAX_VISITS_PER_REP_PER_MONTH = 4;
 const DEFAULT_MAX_VISITS_PER_COMPANY_PER_MONTH = 8;
+const DEFAULT_MAX_MEALS_PER_TYPE_PER_REP_PER_MONTH = 2;
 
 // --- Frequency cap check -----------------------------------------------
 // Counts CONFIRMED bookings for this rep (and separately, this rep's company)
@@ -36,6 +36,7 @@ async function checkFrequencyCap(tx: any, locationId: string, repId: string, eve
   const policy = await tx.officePolicy.findUnique({ where: { locationId } });
   const maxVisitsPerRepPerMonth = policy?.maxVisitsPerRepPerMonth ?? DEFAULT_MAX_VISITS_PER_REP_PER_MONTH;
   const maxVisitsPerCompanyPerMonth = policy?.maxVisitsPerCompanyPerMonth ?? DEFAULT_MAX_VISITS_PER_COMPANY_PER_MONTH;
+  const maxMealsPerTypePerRepPerMonth = policy?.maxMealsPerTypePerRepPerMonth ?? DEFAULT_MAX_MEALS_PER_TYPE_PER_REP_PER_MONTH;
   const rep = await tx.rep.findUniqueOrThrow({ where: { id: repId } });
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -81,10 +82,10 @@ async function checkFrequencyCap(tx: any, locationId: string, repId: string, eve
         requestedAt: { gte: thirtyDaysAgo },
       },
     });
-    if (mealVisits >= MEALS_PER_TYPE_PER_REP_PER_LOCATION_CAP) {
+    if (mealVisits >= maxMealsPerTypePerRepPerMonth) {
       const label = eventType === 'LUNCH' ? 'lunches' : 'breakfasts';
       throw new BookingError(
-        `This rep has already claimed ${MEALS_PER_TYPE_PER_REP_PER_LOCATION_CAP} ${label} at this office this month.`,
+        `This rep has already claimed ${maxMealsPerTypePerRepPerMonth} ${label} at this office this month.`,
         'MEAL_CAP_REACHED'
       );
     }
