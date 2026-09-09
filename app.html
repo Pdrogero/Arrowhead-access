@@ -2277,7 +2277,17 @@ async function loadRepsDirectory() {
     repsDirectoryData = await api('/api/profile/reps');
     if (!box) return;
     if (!repsDirectoryData.length) { box.innerHTML = '<div class="empty">No reps have booked at your location yet.</div>'; return; }
-    box.innerHTML = repsDirectoryData.map(r => `<div class="row" style="cursor:pointer;" onclick="viewRepProfile('${r.id}', '${r.name.replace(/'/g, "\\'")}')"><div class="mid"><div class="who">${r.name}${r.verificationStatus === 'VERIFIED' ? ' ✅' : ''}</div><div class="what">${[r.companyName, r.title].filter(Boolean).join(' · ')}</div></div></div>`).join('');
+    box.innerHTML = repsDirectoryData.map(r => `
+      <div class="row" style="cursor:pointer;" onclick="viewRepProfile('${r.id}', '${r.name.replace(/'/g, "\\'")}')">
+        ${r.profileImageUrl
+          ? `<img src="${r.profileImageUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+          : `<div style="width:40px;height:40px;border-radius:50%;background:var(--paper-raised,#E4EAE3);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--teal);flex-shrink:0;">${(r.name || '?').charAt(0)}</div>`}
+        <div class="mid">
+          <div class="who">${r.name}</div>
+          <div class="what">${[r.companyName, r.title].filter(Boolean).join(' · ')}</div>
+          ${r.verificationStatus === 'VERIFIED' ? `<div style="font-size:11.5px;font-weight:600;color:#2D6F5E;margin-top:2px;">✅ Verified Professional</div>` : ''}
+        </div>
+      </div>`).join('');
   } catch (err) {
     repsDirectoryData = false;
     if (box) box.innerHTML = '<div class="msg err">Could not load the reps directory.</div>';

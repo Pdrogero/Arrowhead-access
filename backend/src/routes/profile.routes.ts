@@ -177,7 +177,7 @@ router.get('/reps', requireAuth, requireRole('office_admin', 'office_staff'), as
 
     const reps = await prisma.rep.findMany({
       where: { bookings: { some: { slot: { locationId: staff.locationId } } } },
-      select: { id: true, name: true, companyName: true, title: true, verificationStatus: true },
+      select: { id: true, name: true, companyName: true, title: true, verificationStatus: true, profileImageUrl: true },
       orderBy: { name: 'asc' },
     });
     res.json(reps);
