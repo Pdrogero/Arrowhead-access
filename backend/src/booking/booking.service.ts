@@ -25,6 +25,45 @@ const DEFAULT_MAX_VISITS_PER_REP_PER_MONTH = 4;
 const DEFAULT_MAX_VISITS_PER_COMPANY_PER_MONTH = 8;
 const DEFAULT_MAX_MEALS_PER_TYPE_PER_REP_PER_MONTH = 2;
 
+const EVENT_TYPE_LABEL: Record<string, string> = {
+  REP_VISIT: 'visit',
+  LUNCH: 'lunch',
+  BREAKFAST: 'breakfast',
+  COFFEE_SNACK: 'coffee/snack',
+  STAFF_TRAINING: 'training',
+};
+
+// --- Time-conflict check -------------------------------------------------
+// Blocks a rep from ending up with two REQUESTED/CONFIRMED bookings whose
+// times overlap, whether that's two offices unknowingly booking the same
+// rep for the same hour, or a rep double-claiming by accident. Called
+// before every place a booking is created or approved — REQUESTED and
+// CONFIRMED both count, since a pending request is just as much a
+// scheduling conflict as a confirmed one until someone resolves it.
+export async function assertNoTimeConflict(tx: any, repId: string, startTime: Date, endTime: Date, excludeBookingId?: string) {
+  const conflict = await tx.booking.findFirst({
+    where: {
+      repId,
+      status: { in: ['REQUESTED', 'CONFIRMED'] },
+      ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
+      slot: { startTime: { lt: endTime }, endTime: { gt: startTime } },
+    },
+    include: { slot: { include: { location: true } } },
+  });
+  if (conflict) {
+    const label = EVENT_TYPE_LABEL[conflict.slot.eventType] || 'visit';
+    const statusPhrase = conflict.status === 'REQUESTED' ? 'a pending request for a' : 'a confirmed';
+    const when = conflict.slot.startTime.toLocaleString('en-US', {
+      timeZone: conflict.slot.location.timezone,
+      weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+    throw new BookingError(
+      `This rep already has ${statusPhrase} ${label} at ${conflict.slot.location.name} on ${when} that overlaps this time.`,
+      'TIME_CONFLICT'
+    );
+  }
+}
+
 // --- Frequency cap check -----------------------------------------------
 // Counts CONFIRMED bookings for this rep (and separately, this rep's company)
 // at this location in the trailing 30 days, and compares against the
@@ -116,6 +155,7 @@ export async function claimOpenSlot(params: {
       throw new BookingError('Only verified reps can book visits.', 'REP_NOT_VERIFIED');
     }
 
+    await assertNoTimeConflict(tx, repId, slot.startTime, slot.endTime);
     await checkFrequencyCap(tx, slot.locationId, repId, slot.eventType);
 
     const newSlotStatus = requiresApproval ? SlotStatus.REQUESTED : SlotStatus.CONFIRMED;
@@ -154,6 +194,7 @@ export async function requestNewSlot(params: {
       throw new BookingError('Only verified reps can request visits.', 'REP_NOT_VERIFIED');
     }
 
+    await assertNoTimeConflict(tx, repId, startTime, endTime);
     await checkFrequencyCap(tx, locationId, repId);
 
     const slot = await tx.slot.create({
@@ -190,6 +231,12 @@ export async function officeScheduleRep(params: {
     if (rep.verificationStatus !== 'VERIFIED') {
       throw new BookingError('Only verified reps can be scheduled.', 'REP_NOT_VERIFIED');
     }
+
+    // Unlike checkFrequencyCap below, this is never skipped — an office
+    // choosing to go around its own visit caps is one thing, but two
+    // offices unknowingly double-booking the same rep is exactly the
+    // accidental conflict this whole check exists to catch.
+    await assertNoTimeConflict(tx, repId, startTime, endTime);
 
     const slot = await tx.slot.create({
       data: { locationId, startTime, endTime, eventType: eventType as any, status: SlotStatus.CONFIRMED, createdByStaffId: staffId },

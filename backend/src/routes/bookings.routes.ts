@@ -5,7 +5,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { requireAuth, requireRole, requireVerifiedRep, requireActiveSubscription } from '../auth/auth.guard';
 import { assertOwnsLocation, assertOwnsRep } from '../auth/scoping';
-import { claimOpenSlot, requestNewSlot, decideBooking, officeScheduleRep, BookingError } from '../booking/booking.service';
+import { claimOpenSlot, requestNewSlot, decideBooking, officeScheduleRep, assertNoTimeConflict, BookingError } from '../booking/booking.service';
 import { PrismaClient } from '@prisma/client';
 import { sendEmail, emailLogoHeader, emailLoginButton } from '../email';
 
@@ -755,23 +755,28 @@ router.post('/:bookingId/reschedule/respond', requireAuth, requireRole('rep'), a
 
     if (decision === 'ACCEPTED') {
       const duration = booking.slot.endTime.getTime() - booking.slot.startTime.getTime();
-      const newSlot = await prisma.slot.create({
-        data: {
-          locationId: booking.slot.locationId,
-          startTime: booking.suggestedRescheduleAt,
-          endTime: new Date(booking.suggestedRescheduleAt.getTime() + duration),
-          status: 'CONFIRMED',
-          eventType: booking.slot.eventType,
-        },
-      });
-      newBooking = await prisma.booking.create({
-        data: {
-          slotId: newSlot.id,
-          repId: booking.repId,
-          topic: booking.topic,
-          status: 'CONFIRMED',
-          decidedAt: new Date(),
-        },
+      const newStart = booking.suggestedRescheduleAt;
+      const newEnd = new Date(booking.suggestedRescheduleAt.getTime() + duration);
+      newBooking = await prisma.$transaction(async (tx) => {
+        await assertNoTimeConflict(tx, booking.repId, newStart, newEnd);
+        const newSlot = await tx.slot.create({
+          data: {
+            locationId: booking.slot.locationId,
+            startTime: newStart,
+            endTime: newEnd,
+            status: 'CONFIRMED',
+            eventType: booking.slot.eventType,
+          },
+        });
+        return tx.booking.create({
+          data: {
+            slotId: newSlot.id,
+            repId: booking.repId,
+            topic: booking.topic,
+            status: 'CONFIRMED',
+            decidedAt: new Date(),
+          },
+        });
       });
     }
 
@@ -799,8 +804,7 @@ router.post('/:bookingId/reschedule/respond', requireAuth, requireRole('rep'), a
 
     res.json(updatedBooking);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Could not save your response' });
+    handleBookingError(err, res);
   }
 });
 
@@ -838,23 +842,28 @@ router.post('/:bookingId/reschedule/office-respond', requireAuth, requireRole('o
 
     if (decision === 'ACCEPTED') {
       const duration = booking.slot.endTime.getTime() - booking.slot.startTime.getTime();
-      const newSlot = await prisma.slot.create({
-        data: {
-          locationId: booking.slot.locationId,
-          startTime: booking.suggestedRescheduleAt,
-          endTime: new Date(booking.suggestedRescheduleAt.getTime() + duration),
-          status: 'CONFIRMED',
-          eventType: booking.slot.eventType,
-        },
-      });
-      newBooking = await prisma.booking.create({
-        data: {
-          slotId: newSlot.id,
-          repId: booking.repId,
-          topic: booking.topic,
-          status: 'CONFIRMED',
-          decidedAt: new Date(),
-        },
+      const newStart = booking.suggestedRescheduleAt;
+      const newEnd = new Date(booking.suggestedRescheduleAt.getTime() + duration);
+      newBooking = await prisma.$transaction(async (tx) => {
+        await assertNoTimeConflict(tx, booking.repId, newStart, newEnd);
+        const newSlot = await tx.slot.create({
+          data: {
+            locationId: booking.slot.locationId,
+            startTime: newStart,
+            endTime: newEnd,
+            status: 'CONFIRMED',
+            eventType: booking.slot.eventType,
+          },
+        });
+        return tx.booking.create({
+          data: {
+            slotId: newSlot.id,
+            repId: booking.repId,
+            topic: booking.topic,
+            status: 'CONFIRMED',
+            decidedAt: new Date(),
+          },
+        });
       });
     }
 
@@ -879,8 +888,7 @@ router.post('/:bookingId/reschedule/office-respond', requireAuth, requireRole('o
 
     res.json(updatedBooking);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Could not save your response' });
+    handleBookingError(err, res);
   }
 });
 
