@@ -263,6 +263,9 @@ function goHome() {
   }
 }
 function fmtTime(isoStr) { return new Date(isoStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+// Just the time portion (e.g. "12:00 PM") — used for the compact event
+// chips inside a calendar day cell, where the date is already implied.
+function fmtTimeOnly(isoStr) { return new Date(isoStr).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' }); }
 // Same as fmtTime, but with the end time's hour/minute appended after the
 // date and start time (e.g. "Sep 15, 1:00 PM – 2:00 PM").
 function fmtTimeRange(startIso, endIso) {
@@ -1547,18 +1550,22 @@ function screenCalendar() {
     }
   });
 
+  const eventChipColors = { CONFIRMED: ['#E3F1EC', '#215947'], REQUESTED: ['#FCF0DA', '#7A4B0A'] };
+  const maxChipsPerDay = 3;
+
   let cells = '';
   for (let i = 0; i < firstDay; i++) cells += `<div></div>`;
   for (let day = 1; day <= daysInMonth; day++) {
     const has = bookingsByDay[day];
-    const dotColor = has ? (
-      has.some(b => b.status === 'CONFIRMED') ? '#2D6F5E'
-      : has.some(b => b.status === 'REQUESTED') ? '#92400E'
-      : '#991B1B'
-    ) : '';
-    cells += `<button onclick="selectCalendarDay(${day})" style="aspect-ratio:1;border:1px solid var(--line);border-radius:8px;background:${has ? 'rgba(46,111,94,.12)' : '#fff'};font-size:13px;position:relative;cursor:pointer;">
-      ${day}${has ? `<div style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:${dotColor};"></div>` : ''}
-    </button>`;
+    const chips = (has || []).slice(0, maxChipsPerDay).map(b => {
+      const [bg, fg] = eventChipColors[b.status] || ['#FBE7E7', '#8A2626'];
+      const title = `${b.slot.location.name} — ${fmtTimeOnly(b.slot.startTime)}`.replace(/"/g, '&quot;');
+      return `<div onclick="event.stopPropagation();viewOfficeDetail('${b.slot.location.id}')" title="${title}" style="background:${bg};color:${fg};border-radius:4px;padding:2px 4px;margin-top:2px;font-size:10.5px;font-weight:600;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;">${fmtTimeOnly(b.slot.startTime)} ${b.slot.location.name}</div>`;
+    }).join('');
+    const overflow = (has || []).length > maxChipsPerDay ? `<div style="font-size:10px;color:var(--slate);margin-top:2px;">+${has.length - maxChipsPerDay} more</div>` : '';
+    cells += `<div onclick="selectCalendarDay(${day})" style="min-height:84px;border:1px solid var(--line);border-radius:8px;background:${has ? 'rgba(46,111,94,.06)' : '#fff'};font-size:13px;padding:5px;cursor:pointer;display:flex;flex-direction:column;">
+      <span>${day}</span>${chips}${overflow}
+    </div>`;
   }
 
   const dayBookings = calendarSelectedDay ? (bookingsByDay[calendarSelectedDay] || []) : [];
@@ -1573,7 +1580,7 @@ function screenCalendar() {
     : [];
 
   return `
-    <div class="wrap wide">
+    <div class="wrap wide" style="max-width:820px;">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeCalendarMonth(-1)">‹</button>
@@ -1593,7 +1600,7 @@ function screenCalendar() {
         </div>` : ''}
       <button class="link" style="text-align:left;margin-bottom:14px;" onclick="toggleCalendarSync()">🔗 Sync with Apple/Google Calendar</button>
       <div id="calendarSyncBox"></div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:20px;">
         ${['S','M','T','W','T','F','S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
         ${cells}
       </div>
@@ -4546,7 +4553,7 @@ window.openCalendar = function() {
 // and refetch again...) in an infinite loop every time this screen redrew.
 async function loadCalendarBookings() {
   try {
-    calendarBookings = await api('/api/bookings/mine');
+    calendarBookings = await api('/api/bookings/calendar');
     render();
   } catch (err) {}
 }

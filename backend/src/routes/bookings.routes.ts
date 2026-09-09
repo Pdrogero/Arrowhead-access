@@ -131,6 +131,20 @@ router.get('/mine', requireAuth, requireRole('rep'), async (req, res) => {
   res.json(bookings);
 });
 
+// --- Rep: every booking, any status or date — powers the calendar view ----
+// Unlike /mine (the active "Your bookings" list, which drops a booking once
+// it's no longer relevant), the calendar is a full record and should keep
+// showing past visits too. Still respects hiddenFromRepBookings so a
+// manually-dismissed cancelled/declined booking stays gone everywhere.
+router.get('/calendar', requireAuth, requireRole('rep'), async (req, res) => {
+  const bookings = await prisma.booking.findMany({
+    where: { repId: req.user!.sub, hiddenFromRepBookings: false },
+    include: { slot: { include: { location: true } } },
+    orderBy: { slot: { startTime: 'desc' } },
+  });
+  res.json(bookings);
+});
+
 // --- Rep: dismiss a cancelled/declined booking from "Your bookings" -------
 router.post('/:bookingId/hide-from-bookings', requireAuth, requireRole('rep'), async (req, res) => {
   try {
