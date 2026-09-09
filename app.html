@@ -184,6 +184,7 @@ let browseSearchQuery = '';
 // narrows it down.
 let browseTypeFilter = new Set(['REP_VISIT', 'LUNCH', 'BREAKFAST', 'COFFEE_SNACK', 'STAFF_TRAINING']);
 let browseViewMode = 'list'; // 'list' | 'calendar'
+let newOfficesAgeTab = 'new'; // 'new' | 'older' — which list the New Offices panel is showing
 let browseCalendarMonth = new Date();
 let browseCalendarSelectedDay = null;
 let attendanceBookingId = null;
@@ -927,33 +928,64 @@ window.toggleBrowseFilterPanel = function() {
   if (panel) panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
 };
 
-window.toggleNewOfficesPanel = async function() {
+window.toggleNewOfficesPanel = function() {
   const panel = document.getElementById('newOfficesPanel');
   if (!panel) return;
   if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  panel.innerHTML = '<div class="listcard"><div class="empty">Loading…</div></div>';
+  newOfficesAgeTab = 'new';
+  panel.innerHTML = `
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+      <button type="button" onclick="switchNewOfficesTab('new')" id="newOfficesTabNew" style="flex:1;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">New (30 days)</button>
+      <button type="button" onclick="switchNewOfficesTab('older')" id="newOfficesTabOlder" style="flex:1;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;">Older than 30 days</button>
+    </div>
+    <div id="newOfficesListBox"><div class="listcard"><div class="empty">Loading…</div></div></div>`;
+  syncNewOfficesTabUi();
+  loadNewOfficesList();
+};
+
+window.switchNewOfficesTab = function(tab) {
+  newOfficesAgeTab = tab;
+  syncNewOfficesTabUi();
+  loadNewOfficesList();
+};
+
+function syncNewOfficesTabUi() {
+  const newBtn = document.getElementById('newOfficesTabNew');
+  const olderBtn = document.getElementById('newOfficesTabOlder');
+  if (!newBtn || !olderBtn) return;
+  const activeStyle = 'background:var(--teal);color:#fff;';
+  const inactiveStyle = 'background:#F0F0EE;color:var(--ink);';
+  newBtn.setAttribute('style', newBtn.getAttribute('style').replace(/background:[^;]+;color:[^;]+;/, '') + (newOfficesAgeTab === 'new' ? activeStyle : inactiveStyle));
+  olderBtn.setAttribute('style', olderBtn.getAttribute('style').replace(/background:[^;]+;color:[^;]+;/, '') + (newOfficesAgeTab === 'older' ? activeStyle : inactiveStyle));
+}
+
+async function loadNewOfficesList() {
+  const box = document.getElementById('newOfficesListBox');
+  if (!box) return;
+  box.innerHTML = '<div class="listcard"><div class="empty">Loading…</div></div>';
+  const older = newOfficesAgeTab === 'older';
   try {
-    const offices = await api('/api/locations/new');
+    const offices = await api(`/api/locations/new${older ? '?age=older' : ''}`);
     if (!offices.length) {
-      panel.innerHTML = '<div class="listcard"><div class="empty">No new offices in the past 30 days.</div></div>';
+      box.innerHTML = `<div class="listcard"><div class="empty">${older ? 'No offices older than 30 days yet.' : 'No new offices in the past 30 days.'}</div></div>`;
       return;
     }
-    panel.innerHTML = `<div class="listcard">${offices.map(o => {
+    box.innerHTML = `<div class="listcard">${offices.map(o => {
       const daysAgo = Math.max(0, Math.floor((Date.now() - new Date(o.createdAt).getTime()) / (24 * 60 * 60 * 1000)));
       const joinedLabel = daysAgo === 0 ? 'Joined today' : daysAgo === 1 ? 'Joined 1 day ago' : `Joined ${daysAgo} days ago`;
       return `
         <div class="row" style="cursor:pointer;" onclick="viewOfficeDetail('${o.id}')">
           <div class="mid">
-            <div class="who">🆕 ${o.name}</div>
+            <div class="who">${older ? '' : '🆕 '}${o.name}</div>
             <div class="what">${o.address} · ${joinedLabel}${o.openSlotCount ? ` · ${o.openSlotCount} open slot${o.openSlotCount === 1 ? '' : 's'}` : ''}</div>
           </div>
         </div>`;
     }).join('')}</div>`;
   } catch (err) {
-    panel.innerHTML = `<div class="msg err">${err.message}</div>`;
+    box.innerHTML = `<div class="msg err">${err.message}</div>`;
   }
-};
+}
 
 // Keeps the filter toggle button's label and the "Select all" checkbox's
 // own checked state in sync after any change to browseTypeFilter, whether

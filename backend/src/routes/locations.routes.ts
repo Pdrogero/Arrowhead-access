@@ -229,12 +229,15 @@ router.get('/search', requireAuth, requireRole('rep'), async (req, res) => {
   }
 });
 
-// --- Rep: offices that joined Arrowhead Access in the past 30 days --------
+// --- Rep: offices that joined Arrowhead Access in the past 30 days, or ----
+// (?age=older) offices that graduated out of that window — so an office a
+// rep noticed under "New" doesn't just vanish once it turns 31 days old.
 router.get('/new', requireAuth, requireRole('rep'), async (req, res) => {
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const older = req.query.age === 'older';
     const locations = await prisma.location.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
+      where: { createdAt: older ? { lt: thirtyDaysAgo } : { gte: thirtyDaysAgo } },
       select: {
         id: true,
         name: true,
@@ -243,11 +246,15 @@ router.get('/new', requireAuth, requireRole('rep'), async (req, res) => {
         _count: { select: { slots: { where: { status: 'OPEN', startTime: { gte: new Date() } } } } },
       },
       orderBy: { createdAt: 'desc' },
+      // "New" is naturally bounded to 30 days of signups; the older list
+      // isn't, so it's capped to the most recent graduates rather than
+      // dumping the entire office directory here.
+      ...(older ? { take: 50 } : {}),
     });
     res.json(locations.map(l => ({ id: l.id, name: l.name, address: l.address, createdAt: l.createdAt, openSlotCount: l._count.slots })));
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Could not fetch new offices' });
+    res.status(500).json({ error: 'Could not fetch offices' });
   }
 });
 
