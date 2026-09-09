@@ -4418,7 +4418,9 @@ async function loadBillingStatus() {
     box.innerHTML = `
       <h2 style="font-size:16px;margin-bottom:12px;">Choose your plan</h2>
       <p style="font-size:13px;color:var(--slate);margin-bottom:12px;">14-day free trial, cancel anytime during the trial.</p>
-      ${isFoundingRep ? `<div class="msg ok">You're eligible for the founding rate — $379.99/year, locked in for as long as you stay subscribed. (${foundingSpotsRemaining} spots left)</div>` : ''}
+      ${foundingSpotsRemaining > 0
+        ? `<div class="msg ok">🎉 Founding rep rate — $379.99/year, locked in for as long as you stay subscribed. Only ${foundingSpotsRemaining} of 30 spots left!</div>`
+        : `<div class="note" style="margin-top:0;margin-bottom:12px;">Founding rep pricing has ended — all 30 spots have been claimed.</div>`}
       <button class="primary" style="background:var(--ink);" onclick="goToCheckout('monthly')">Monthly — $49.95/mo</button>
       <button class="primary" style="background:var(--coral);" onclick="goToCheckout('annual')">Annual — ${isFoundingRep ? '$379.99/yr Founding Rate' : '$479.40/yr'}</button>`;
   } catch (err) {
