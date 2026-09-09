@@ -2438,7 +2438,10 @@ function screenRepProfileView() {
           </div>
         </div>
         ${state.role === 'office' ? `
-        <button type="button" onclick="toggleScheduleRepForm()" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px;">📅 Schedule a visit</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+          <button type="button" onclick="toggleScheduleRepForm()" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;">📅 Schedule a visit</button>
+          <button type="button" onclick="startConversation('${viewedRepProfileId}', '${viewedRepProfileName.replace(/'/g, "\\'")}')" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;">💬 Message</button>
+        </div>
         <div id="scheduleRepBox" style="display:none;margin-bottom:16px;"></div>` : ''}
         <div class="card">
           ${rep.credentials ? `<p style="font-size:13px;margin-bottom:8px;"><strong>Credentials:</strong> ${rep.credentials}</p>` : ''}
