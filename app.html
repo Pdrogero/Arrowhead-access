@@ -3401,15 +3401,41 @@ function screenDashboardOffice() {
     </div>`;
 }
 
+function repHeaderHtml() {
+  const me = state.me;
+  const status = me?.verificationStatus;
+  const verified = status === 'VERIFIED';
+  const pending = status === 'PENDING_REVIEW';
+  const firstName = (me?.name || '').trim().split(' ')[0] || me?.email || 'there';
+  return `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;">
+      ${me?.profileImageUrl
+        ? `<img src="${me.profileImageUrl}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+        : `<div style="width:64px;height:64px;border-radius:50%;background:var(--paper-raised,#E4EAE3);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--teal);flex-shrink:0;">${(firstName || '?').charAt(0)}</div>`}
+      <div>
+        <h1 style="margin-bottom:2px;">Hello, ${firstName}</h1>
+        <p class="sub" style="margin:0;">${[me?.companyName, me?.title].filter(Boolean).join(' · ')}</p>
+        <p style="font-size:13px;font-weight:600;margin:4px 0 0;color:${verified ? '#2D6F5E' : 'var(--slate)'};">${verified ? '✅ Verified Professional' : pending ? '⏳ verification pending' : '⏳ not verified'}</p>
+      </div>
+    </div>`;
+}
+
+async function loadRepHeader() {
+  try {
+    const profile = await api('/api/profile/rep');
+    state.me = { ...state.me, ...profile };
+    const box = document.getElementById('repHeaderBox');
+    if (box) box.innerHTML = repHeaderHtml();
+  } catch (err) {}
+}
+
 function screenDashboardRep() {
   const status = state.me?.verificationStatus;
   const verified = status === 'VERIFIED';
   const pending = status === 'PENDING_REVIEW';
-  const firstName = (state.me?.name || '').trim().split(' ')[0] || state.me?.email || 'there';
   return `
     <div class="wrap wide">
-      <h1>Hello, ${firstName}</h1>
-      <p class="sub">${verified ? '✅ Verified Professional' : pending ? '⏳ verification pending' : '⏳ not verified'}</p>
+      <div id="repHeaderBox">${repHeaderHtml()}</div>
 
       ${!verified ? `
         <div style="background:#FFF7E8;border:1px solid #EBCB8B;border-radius:10px;padding:14px 16px;margin-bottom:20px;">
@@ -5287,7 +5313,7 @@ function render() {
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
   else if (state.screen === 'officeCalendar') { app.innerHTML = screenOfficeCalendar(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); loadLocationSwitcher(); loadUnreadMessageCount(); }
-  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadMyBookings(); loadBillingStatus(); loadUnreadMessageCount(); }
+  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadRepHeader(); loadMyBookings(); loadBillingStatus(); loadUnreadMessageCount(); }
   else if (state.screen === 'visitHistory' && state.role === 'office') { app.innerHTML = screenVisitHistory(); loadOfficeHistory(); }
   else if (state.screen === 'visitHistory' && state.role === 'rep') { app.innerHTML = screenVisitHistory(); loadRepHistory(); }
 
