@@ -2355,6 +2355,7 @@ function screenRepProfileView() {
           <div>
             <h1 style="margin-bottom:2px;">${rep.name}</h1>
             <p class="sub" style="margin:0;">${[rep.companyName, rep.title].filter(Boolean).join(' · ')}</p>
+            ${rep.verificationStatus === 'VERIFIED' ? `<p style="font-size:13px;color:#2D6F5E;font-weight:600;margin:4px 0 0;">✅ Verified Professional</p>` : ''}
           </div>
         </div>
         <div class="card">
@@ -3408,7 +3409,7 @@ function screenDashboardRep() {
   return `
     <div class="wrap wide">
       <h1>Hello, ${firstName}</h1>
-      <p class="sub">${verified ? '✅ verified' : pending ? '⏳ verification pending' : '⏳ not verified'}</p>
+      <p class="sub">${verified ? '✅ Verified Professional' : pending ? '⏳ verification pending' : '⏳ not verified'}</p>
 
       ${!verified ? `
         <div style="background:#FFF7E8;border:1px solid #EBCB8B;border-radius:10px;padding:14px 16px;margin-bottom:20px;">
