@@ -58,9 +58,10 @@ export async function requireActiveSubscription(req: Request, res: Response, nex
 
   const rep = await prisma.rep.findUnique({
     where: { id: req.user.sub },
-    select: { stripeSubscriptionId: true, subscriptionStatus: true },
+    select: { stripeSubscriptionId: true, subscriptionStatus: true, complimentaryAccess: true },
   });
-  const hasAccess = !!rep?.stripeSubscriptionId && (rep.subscriptionStatus === 'TRIALING' || rep.subscriptionStatus === 'ACTIVE');
+  const hasAccess = !!rep?.complimentaryAccess
+    || (!!rep?.stripeSubscriptionId && (rep.subscriptionStatus === 'TRIALING' || rep.subscriptionStatus === 'ACTIVE'));
   if (!hasAccess) {
     return res.status(402).json({ error: 'Please complete your subscription checkout under Billing to continue.' });
   }

@@ -4576,7 +4576,15 @@ async function loadBillingStatus() {
   const box = document.getElementById('billingBox');
   try {
     const res = await api('/api/billing/founding-status');
-    const { isFoundingRep, foundingSpotsRemaining, hasActiveSubscription, cancelAtPeriodEnd, currentPeriodEnd, billingCycle, subscriptionStatus } = res;
+    const { isFoundingRep, foundingSpotsRemaining, complimentaryAccess, hasActiveSubscription, cancelAtPeriodEnd, currentPeriodEnd, billingCycle, subscriptionStatus } = res;
+
+    if (complimentaryAccess) {
+      box.innerHTML = `
+        <h2 style="font-size:16px;margin-bottom:6px;">Your plan</h2>
+        <p style="font-size:13px;color:var(--slate);margin:0;">🎁 Complimentary access — no billing required.</p>
+      `;
+      return;
+    }
 
     if (hasActiveSubscription) {
       const cycleLabel = billingCycle === 'ANNUAL' ? 'Annual' : 'Monthly';

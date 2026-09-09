@@ -106,6 +106,7 @@ router.get('/founding-status', requireAuth, requireRole('rep'), async (req, res)
   res.json({
     isFoundingRep: rep.isFoundingRep,
     foundingSpotsRemaining: Math.max(0, FOUNDING_REP_LIMIT - foundingCount),
+    complimentaryAccess: rep.complimentaryAccess,
     hasActiveSubscription: !!rep.stripeSubscriptionId && rep.subscriptionStatus !== 'CANCELED',
     subscriptionStatus: rep.subscriptionStatus,
     cancelAtPeriodEnd: rep.cancelAtPeriodEnd,

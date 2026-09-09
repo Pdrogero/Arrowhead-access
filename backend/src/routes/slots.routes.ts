@@ -37,8 +37,10 @@ async function notifyRepsOfNewSlot(locationId: string, startTime: Date, eventTyp
     const reps = await prisma.rep.findMany({
       where: {
         verificationStatus: 'VERIFIED',
-        subscriptionStatus: { in: ['TRIALING', 'ACTIVE'] },
-        stripeSubscriptionId: { not: null },
+        OR: [
+          { complimentaryAccess: true },
+          { subscriptionStatus: { in: ['TRIALING', 'ACTIVE'] }, stripeSubscriptionId: { not: null } },
+        ],
       },
       select: { email: true },
     });

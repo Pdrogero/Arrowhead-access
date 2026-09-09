@@ -323,6 +323,11 @@ model Rep {
   subscriptionStatus   SubscriptionStatus  @default(TRIALING)
   cancelAtPeriodEnd    Boolean             @default(false)
   trialEndsAt          DateTime?
+  // Manually granted full access with no Stripe subscription at all — for
+  // comp accounts (e.g. the founder's own account, or a VIP rep). Set
+  // directly in the database; there's no in-app toggle for it on purpose,
+  // since it bypasses billing entirely. Checked before any Stripe fields.
+  complimentaryAccess  Boolean             @default(false)
   // Set true the first time a trial actually starts (checkout completes
   // with a trialing subscription) — checked at checkout so a rep who
   // cancels during (or after) their trial can't just re-subscribe for
