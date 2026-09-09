@@ -2616,6 +2616,8 @@ function screenConversation() {
           💬 Messaging about: <strong>${activeConversationEventLabel.replace(/</g, '&lt;')}</strong>
           <button type="button" onclick="clearConversationEventLabel()" style="margin-left:auto;background:none;border:none;color:var(--slate);font-size:11px;text-decoration:underline;cursor:pointer;">Send a general message instead</button>
         </div>` : ''}
+      ${state.role === 'office' ? `
+        <input id="officeSenderName" type="text" placeholder="Your name (so the rep knows who's messaging)" style="margin-bottom:8px;" value="${(localStorage.getItem('officeSenderName') || '').replace(/"/g, '&quot;')}">` : ''}
       <div style="display:flex;gap:8px;">
         <input id="newMessageBody" type="text" placeholder="Type a message…" style="flex:1;margin-bottom:0;" onkeydown="if(event.key==='Enter')sendMessage()">
         <button class="primary" style="width:auto;margin-bottom:0;padding:0 20px;" onclick="sendMessage()">Send</button>
@@ -2717,6 +2719,7 @@ function renderMessages() {
     return `
     <div style="padding:10px 14px;border-bottom:1px solid var(--line);${m.senderType === myType ? 'background:#F7FBF9;' : ''}">
       ${showLabel ? `<div style="font-size:11px;font-weight:600;color:var(--teal-dark);margin-bottom:4px;">Re: ${m.eventLabel.replace(/</g, '&lt;')}</div>` : ''}
+      ${m.senderType === 'OFFICE' && m.senderName ? `<div style="font-size:11px;font-weight:600;color:var(--slate);margin-bottom:2px;">${m.senderName.replace(/</g, '&lt;')}</div>` : ''}
       <div style="font-size:13px;">${linkifyMessageBody(m.body)}</div>
       <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}</div>
       ${links.map(link => `
@@ -2747,6 +2750,14 @@ window.sendMessage = async function() {
   if (state.role === 'rep') payload.locationId = activeConversationTargetId;
   else payload.repId = activeConversationTargetId;
   if (activeConversationEventLabel) payload.eventLabel = activeConversationEventLabel;
+
+  if (state.role === 'office') {
+    const senderName = document.getElementById('officeSenderName').value.trim();
+    if (senderName) {
+      payload.senderName = senderName;
+      localStorage.setItem('officeSenderName', senderName);
+    }
+  }
 
   try {
     const message = await api('/api/messages', { method: 'POST', body: JSON.stringify(payload) });

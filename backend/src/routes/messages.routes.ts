@@ -147,8 +147,13 @@ router.post('/', requireAuth, requireActiveSubscription, async (req, res) => {
     const eventLabel = typeof req.body.eventLabel === 'string' ? req.body.eventLabel.trim().slice(0, 200) || undefined : undefined;
 
     const senderType = req.user!.role === 'rep' ? 'REP' : 'OFFICE';
+    // Only office staff supply this — the rep's own name is already known
+    // from their account, so there's nothing to disambiguate on their side.
+    const senderName = senderType === 'OFFICE' && typeof req.body.senderName === 'string'
+      ? req.body.senderName.trim().slice(0, 60) || undefined
+      : undefined;
     const message = await prisma.message.create({
-      data: { conversationId: conversation.id, senderType, senderId: req.user!.sub, body, eventLabel },
+      data: { conversationId: conversation.id, senderType, senderId: req.user!.sub, body, eventLabel, senderName },
     });
 
     const full = await prisma.conversation.findUnique({
@@ -165,10 +170,11 @@ router.post('/', requireAuth, requireActiveSubscription, async (req, res) => {
           }).catch(() => {});
         });
       } else {
+        const from = senderName ? `${full.location.name} (${senderName})` : full.location.name;
         sendEmail({
           to: full.rep.email,
-          subject: `New message from ${full.location.name}`,
-          html: `${emailLogoHeader()}<p><strong>${full.location.name}</strong> sent you a message: "${body}"</p>`,
+          subject: `New message from ${from}`,
+          html: `${emailLogoHeader()}<p><strong>${from}</strong> sent you a message: "${body}"</p>`,
         }).catch(() => {});
       }
     }
