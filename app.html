@@ -2280,10 +2280,11 @@ function screenRepsDirectory() {
       <h1>Reps</h1>
       <p class="sub">Reps who have booked a visit at your location. Tap a rep to view their profile and shared marketing materials.</p>
       <input id="repsDirectorySearch" type="text" placeholder="Search by name or company…" style="margin-bottom:12px;" oninput="renderRepsDirectory()">
-      <div id="repsDirectoryBox" class="listcard" style="margin-bottom:16px;"><div class="empty">Loading…</div></div>
 
-      <button type="button" onclick="toggleInviteRepForm()" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;">✉️ Invite a rep who isn't signed up yet</button>
-      <div id="inviteRepBox" style="display:none;margin-top:10px;"></div>
+      <button type="button" onclick="toggleInviteRepForm()" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:12px;">✉️ Invite a rep who isn't signed up yet</button>
+      <div id="inviteRepBox" style="display:none;margin-bottom:16px;"></div>
+
+      <div id="repsDirectoryBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
 
