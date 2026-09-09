@@ -1659,19 +1659,31 @@ function screenOfficeCalendar() {
     }
   });
 
+  const eventChipColors = { CONFIRMED: ['#E3F1EC', '#215947'], REQUESTED: ['#FCF0DA', '#7A4B0A'] };
+  const maxChipsPerDay = 2;
   let cells = '';
   for (let i = 0; i < firstDay; i++) cells += `<div></div>`;
   for (let day = 1; day <= daysInMonth; day++) {
     const has = slotsByDay[day];
-    cells += `<button onclick="selectOfficeCalendarDay(${day})" style="aspect-ratio:1;border:1px solid var(--line);border-radius:8px;background:${has ? 'rgba(46,111,94,.12)' : '#fff'};font-size:13px;position:relative;cursor:pointer;">
-      ${day}${has ? `<div style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--teal);"></div>` : ''}
-    </button>`;
+    const chips = (has || []).slice(0, maxChipsPerDay).map(s => {
+      const [bg, fg] = eventChipColors[s.booking.status] || ['#EFEFEF', 'var(--slate)'];
+      const repName = (s.booking.rep.name || '').replace(/"/g, '&quot;');
+      const title = `${eventTypeLabel(s.eventType)} — ${fmtTimeOnly(s.startTime)} — ${repName}`;
+      return `<div onclick="event.stopPropagation();viewRepProfile('${s.booking.rep.id}','${(s.booking.rep.name || '').replace(/'/g, "\\'")}')" title="${title}" style="background:${bg};color:${fg};border-radius:4px;padding:2px 4px;margin-top:2px;line-height:1.25;overflow:hidden;cursor:pointer;">
+        <div style="font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${eventTypeLabel(s.eventType)} · ${fmtTimeOnly(s.startTime)}</div>
+        <div style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${repName}</div>
+      </div>`;
+    }).join('');
+    const overflow = (has || []).length > maxChipsPerDay ? `<div style="font-size:9.5px;color:var(--slate);margin-top:2px;">+${has.length - maxChipsPerDay} more</div>` : '';
+    cells += `<div onclick="selectOfficeCalendarDay(${day})" style="height:118px;border:1px solid var(--line);border-radius:8px;background:${has ? 'rgba(46,111,94,.06)' : '#fff'};font-size:13px;padding:5px;cursor:pointer;display:flex;flex-direction:column;overflow:hidden;">
+      <span>${day}</span>${chips}${overflow}
+    </div>`;
   }
 
   const daySlots = officeCalendarSelectedDay ? (slotsByDay[officeCalendarSelectedDay] || []) : [];
 
   return `
-    <div class="wrap wide">
+    <div class="wrap wide" style="max-width:960px;">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeOfficeCalendarMonth(-1)">‹</button>
@@ -1684,7 +1696,7 @@ function screenOfficeCalendar() {
         <div id="officeCalendarSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:10;max-height:260px;overflow-y:auto;"></div>
       </div>
       <p style="font-size:12px;color:var(--slate);margin:0 0 16px;">Looking for a past lunch? Check <a href="#" onclick="event.preventDefault();setState({screen:'visitHistory'})" style="color:var(--teal);">Visit History</a> instead — this calendar only searches what's still upcoming.</p>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px;">
         ${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
         ${cells}
       </div>
