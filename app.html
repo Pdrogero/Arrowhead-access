@@ -106,7 +106,13 @@
 <body>
 <header class="no-print">
   <div class="title" onclick="goHome()" style="cursor:pointer;"><div class="logo-mark"></div> Arrowhead Access</div>
-  <button id="logoutBtn" class="btn-logout" onclick="logout()">Log out</button>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div id="repProfileMenuWrap" style="position:relative;display:none;">
+      <button id="repProfileBtn" onclick="toggleProfileMenu()" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1;padding:4px;" title="Profile">👤</button>
+      <div id="profileMenuBox" style="position:absolute;top:100%;right:0;z-index:100;width:260px;max-width:90vw;"></div>
+    </div>
+    <button id="logoutBtn" class="btn-logout" onclick="logout()">Log out</button>
+  </div>
 </header>
 
 <div id="app"></div>
@@ -3486,9 +3492,7 @@ function screenDashboardRep() {
         <button class="navicon" onclick="setState({screen:'messages'})"><span class="navicon-emoji">💬<span id="messagesBadge" class="badge-dot" style="display:none;"></span></span><span class="navicon-label">Messages</span></button>
         <button class="navicon" onclick="setState({screen:'literature'})"><span class="navicon-emoji">📄</span><span class="navicon-label">Literature</span></button>
         <button class="navicon" onclick="setState({screen:'transfers'})"><span class="navicon-emoji">🔄</span><span class="navicon-label">Transfers</span></button>
-        <button class="navicon" onclick="toggleProfileMenu()"><span class="navicon-emoji">👤</span><span class="navicon-label">Profile <span style="font-weight:900;font-size:14px;">▾</span></span></button>
       </div>
-      <div id="profileMenuBox"></div>
 
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 4px;flex-wrap:wrap;">
         <p style="font-size:13px;font-weight:600;margin:0;">Your bookings</p>
@@ -4663,18 +4667,16 @@ window.toggleProfileMenu = function() {
     return;
   }
   box.innerHTML = `
-    <div class="card" style="margin-bottom:16px;padding:14px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(5,auto);grid-auto-flow:column;gap:2px 20px;">
-        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'profile'})">✏️ Edit Profile</button>
-        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'favoriteOffices'})">⭐ Favorite Offices</button>
-        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'materials'})">📚 Marketing Materials</button>
-        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'visitHistory'})">📜 Visit History</button>
-        <button class="link" style="text-align:left;margin:0;" onclick="scrollToBilling()">💳 Billing</button>
-        <button class="link" style="text-align:right;margin:0;" onclick="openCalendar()">Calendar Sync 📅</button>
-        <button class="link" style="text-align:right;margin:0;" onclick="setState({screen:'accountSettings'})">Account Settings 🔑</button>
-        <a href="mailto:legal@arrowheadaccess.com?subject=Arrowhead%20Access%20Support%20Request" style="display:block;width:100%;background:none;border:none;color:var(--teal);font-size:12px;text-align:right;text-decoration:none;cursor:pointer;">Help ❓</a>
-        <button class="link" style="text-align:right;margin:0;color:#C23C3C;" onclick="logout()">Logout ⏻</button>
-      </div>
+    <div class="card" style="margin:6px 0 0;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,0.14);">
+      <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="setState({screen:'profile'})">✏️ Edit Profile</button>
+      <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="setState({screen:'favoriteOffices'})">⭐ Favorite Offices</button>
+      <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="setState({screen:'materials'})">📚 Marketing Materials</button>
+      <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="setState({screen:'visitHistory'})">📜 Visit History</button>
+      <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="scrollToBilling()">💳 Billing</button>
+      <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="openCalendar()">📅 Calendar Sync</button>
+      <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
+      <a href="mailto:legal@arrowheadaccess.com?subject=Arrowhead%20Access%20Support%20Request" style="display:block;width:100%;background:none;border:none;color:var(--teal);font-size:12px;text-align:left;text-decoration:none;cursor:pointer;padding:8px 8px;">❓ Help</a>
+      <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;color:#C23C3C;" onclick="logout()">⏻ Logout</button>
     </div>`;
 };
 
@@ -5298,6 +5300,10 @@ function render() {
   const app = document.getElementById('app');
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.style.display = state.screen === 'role' ? 'none' : 'block';
+  const repProfileMenuWrap = document.getElementById('repProfileMenuWrap');
+  if (repProfileMenuWrap) repProfileMenuWrap.style.display = (state.role === 'rep' && state.me) ? 'block' : 'none';
+  const profileMenuBox = document.getElementById('profileMenuBox');
+  if (profileMenuBox) profileMenuBox.innerHTML = '';
   document.body.classList.toggle('medical-bg', ['role', 'login', 'forgotPassword', 'resetPassword', 'terms', 'privacy'].includes(state.screen));
   if (!['dashboard', 'officeCalendar'].includes(state.screen)) officeCancelDraft = null;
   if (state.screen !== 'dashboard') repCancelDraft = null;
