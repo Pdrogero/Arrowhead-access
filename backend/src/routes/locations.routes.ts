@@ -229,6 +229,28 @@ router.get('/search', requireAuth, requireRole('rep'), async (req, res) => {
   }
 });
 
+// --- Rep: offices that joined Arrowhead Access in the past 30 days --------
+router.get('/new', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const locations = await prisma.location.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        createdAt: true,
+        _count: { select: { slots: { where: { status: 'OPEN', startTime: { gte: new Date() } } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(locations.map(l => ({ id: l.id, name: l.name, address: l.address, createdAt: l.createdAt, openSlotCount: l._count.slots })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch new offices' });
+  }
+});
+
 // --- Rep: ask to be emailed once an office not yet on the platform joins --
 router.post('/notify-me', requireAuth, requireRole('rep'), async (req, res) => {
   try {

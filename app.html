@@ -888,21 +888,23 @@ function screenBrowseSlots() {
         </div>
         <button type="button" id="browseViewToggleBtn" onclick="toggleBrowseView()" style="white-space:nowrap;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">${browseViewMode === 'list' ? '📅 Calendar view' : '📋 List view'}</button>
       </div>
-      <div style="margin-bottom:16px;">
-        <button type="button" id="browseFilterToggleBtn" onclick="toggleBrowseFilterPanel()" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🎚️ Appointment type${browseFilterSummary()}</button>
-        <div id="browseFilterPanel" style="display:none;margin-top:8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;flex-wrap:wrap;gap:12px;">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;flex-basis:100%;padding-bottom:8px;border-bottom:1px solid var(--line);">
-            <input type="checkbox" id="browseFilterSelectAll" ${browseTypeFilter.size === browseFilterableTypes().length ? 'checked' : ''} onchange="toggleBrowseFilterSelectAll(this.checked)">
-            Select all
-          </label>
-          ${browseFilterableTypes().map(t => `
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
-              <input type="checkbox" class="browseFilterTypeCb" ${browseTypeFilter.has(t) ? 'checked' : ''} onchange="toggleBrowseTypeFilter('${t}', this.checked)">
-              ${eventTypeLabel(t)}
-            </label>
-          `).join('')}
-        </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <button type="button" id="browseFilterToggleBtn" onclick="toggleBrowseFilterPanel()" style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🎚️ Appointment type${browseFilterSummary()}</button>
+        <button type="button" id="newOfficesToggleBtn" onclick="toggleNewOfficesPanel()" style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🆕 New Offices</button>
       </div>
+      <div id="browseFilterPanel" style="display:none;margin-bottom:16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;flex-wrap:wrap;gap:12px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;flex-basis:100%;padding-bottom:8px;border-bottom:1px solid var(--line);">
+          <input type="checkbox" id="browseFilterSelectAll" ${browseTypeFilter.size === browseFilterableTypes().length ? 'checked' : ''} onchange="toggleBrowseFilterSelectAll(this.checked)">
+          Select all
+        </label>
+        ${browseFilterableTypes().map(t => `
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" class="browseFilterTypeCb" ${browseTypeFilter.has(t) ? 'checked' : ''} onchange="toggleBrowseTypeFilter('${t}', this.checked)">
+            ${eventTypeLabel(t)}
+          </label>
+        `).join('')}
+      </div>
+      <div id="newOfficesPanel" style="display:none;margin-bottom:16px;"></div>
       <div id="browseContent"><div class="listcard"><div class="empty">Loading…</div></div></div>
     </div>`;
 }
@@ -923,6 +925,34 @@ function browseFilterSummary() {
 window.toggleBrowseFilterPanel = function() {
   const panel = document.getElementById('browseFilterPanel');
   if (panel) panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+};
+
+window.toggleNewOfficesPanel = async function() {
+  const panel = document.getElementById('newOfficesPanel');
+  if (!panel) return;
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="listcard"><div class="empty">Loading…</div></div>';
+  try {
+    const offices = await api('/api/locations/new');
+    if (!offices.length) {
+      panel.innerHTML = '<div class="listcard"><div class="empty">No new offices in the past 30 days.</div></div>';
+      return;
+    }
+    panel.innerHTML = `<div class="listcard">${offices.map(o => {
+      const daysAgo = Math.max(0, Math.floor((Date.now() - new Date(o.createdAt).getTime()) / (24 * 60 * 60 * 1000)));
+      const joinedLabel = daysAgo === 0 ? 'Joined today' : daysAgo === 1 ? 'Joined 1 day ago' : `Joined ${daysAgo} days ago`;
+      return `
+        <div class="row" style="cursor:pointer;" onclick="viewOfficeDetail('${o.id}')">
+          <div class="mid">
+            <div class="who">🆕 ${o.name}</div>
+            <div class="what">${o.address} · ${joinedLabel}${o.openSlotCount ? ` · ${o.openSlotCount} open slot${o.openSlotCount === 1 ? '' : 's'}` : ''}</div>
+          </div>
+        </div>`;
+    }).join('')}</div>`;
+  } catch (err) {
+    panel.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
 };
 
 // Keeps the filter toggle button's label and the "Select all" checkbox's
