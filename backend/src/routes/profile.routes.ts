@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
+import { sendEmail, emailLogoHeader } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -184,6 +185,43 @@ router.get('/reps', requireAuth, requireRole('office_admin', 'office_staff'), as
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not fetch reps' });
+  }
+});
+
+// --- Office staff: invite a rep who isn't on Arrowhead Access yet ---------
+// A rep only ever shows up under My Reps once they've actually booked here,
+// so there's no in-app way to reach someone who hasn't signed up at all —
+// this sends them a plain email with a signup link instead. Stateless: no
+// invite record is kept, since there's nothing to accept/decline, just a
+// nudge to go create an account.
+router.post('/invite-rep', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub }, include: { location: true } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const email = String(req.body.email || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Enter a valid email address' });
+    }
+    const repName = String(req.body.name || '').trim().slice(0, 100);
+
+    const existingRep = await prisma.rep.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
+    if (existingRep) {
+      return res.status(409).json({ error: 'A rep with this email already has an Arrowhead Access account.' });
+    }
+
+    const appUrl = process.env.APP_URL || 'https://arrowheadaccess.com';
+    const signupUrl = `${appUrl}/app.html?officeInvite=1&email=${encodeURIComponent(email)}&officeName=${encodeURIComponent(staff.location.name)}`;
+    await sendEmail({
+      to: email,
+      subject: `${staff.location.name} invited you to Arrowhead Access`,
+      html: `${emailLogoHeader()}<p>${repName ? `Hi ${repName.split(' ')[0]},</p><p>` : ''}<strong>${staff.location.name}</strong> uses Arrowhead Access to schedule rep visits — lunches, breakfasts, and other in-office time — and wants to connect with you there.</p><p><a href="${signupUrl}">Sign up with this email address</a> to create your account — there's a 14-day free trial to get started.</p>`,
+    });
+
+    res.json({ message: 'Invite sent' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not send invite' });
   }
 });
 
