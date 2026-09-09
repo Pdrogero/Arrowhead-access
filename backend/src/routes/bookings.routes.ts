@@ -5,7 +5,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { requireAuth, requireRole, requireVerifiedRep, requireActiveSubscription } from '../auth/auth.guard';
 import { assertOwnsLocation, assertOwnsRep } from '../auth/scoping';
-import { claimOpenSlot, requestNewSlot, decideBooking, BookingError } from '../booking/booking.service';
+import { claimOpenSlot, requestNewSlot, decideBooking, officeScheduleRep, BookingError } from '../booking/booking.service';
 import { PrismaClient } from '@prisma/client';
 import { sendEmail, emailLogoHeader, emailLoginButton } from '../email';
 
@@ -327,6 +327,56 @@ router.post('/locations/:locationId/slots', requireAuth, requireRole('office_adm
   }
 
   res.status(201).json(slot);
+});
+
+// --- Office staff: manually schedule a specific rep for a specific day ----
+// Confirms immediately — no claim/approval step, since the office chose
+// this rep and time on purpose. Only offered for reps this office already
+// knows (i.e. reps listed in their own "My Reps" directory).
+router.post('/office-schedule', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff account not found' });
+
+    const { repId, startTime, endTime, eventType, topic } = req.body;
+    if (!repId || !startTime || !endTime || !eventType) {
+      return res.status(400).json({ error: 'repId, startTime, endTime, and eventType are required' });
+    }
+    if (new Date(endTime) <= new Date(startTime)) {
+      return res.status(400).json({ error: 'End time must be after start time' });
+    }
+
+    const booking = await officeScheduleRep({
+      locationId: staff.locationId,
+      staffId: staff.id,
+      repId: String(repId),
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      eventType: String(eventType),
+      topic: typeof topic === 'string' && topic.trim() ? topic.trim().slice(0, 500) : undefined,
+    });
+
+    const full = await prisma.booking.findUnique({
+      where: { id: booking.id },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+    if (full) {
+      const dateStr = full.slot.startTime.toLocaleString('en-US', {
+        timeZone: full.slot.location.timezone,
+        weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      });
+      const eventLabel = EVENT_TYPE_LABEL[full.slot.eventType] || 'Visit';
+      sendEmail({
+        to: full.rep.email,
+        subject: `${full.slot.location.name} scheduled a ${eventLabel.toLowerCase()} with you`,
+        html: `${emailLogoHeader()}<p><strong>${full.slot.location.name}</strong> scheduled a ${eventLabel.toLowerCase()} with you on <strong>${dateStr}</strong>. It's already confirmed — no action needed, but you'll find it under Your Bookings.</p>${full.topic ? `<p><strong>Note from the office:</strong> ${full.topic}</p>` : ''}`,
+      }).catch(() => {});
+    }
+
+    res.status(201).json(booking);
+  } catch (err) {
+    handleBookingError(err, res);
+  }
 });
 
 // --- Office staff: remove an open slot that hasn't been booked ------------

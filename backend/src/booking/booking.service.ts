@@ -166,6 +166,41 @@ export async function requestNewSlot(params: {
   });
 }
 
+// --- Office staff manually schedules a specific rep -----------------------
+// For when an office already knows which rep they want on a given day (e.g.
+// lining up next month's lunch in advance) rather than posting an open slot
+// and waiting for someone to claim it. Creates the slot and books it as
+// CONFIRMED in one step — no claim/approval step, since the office is
+// initiating it directly. Deliberately skips checkFrequencyCap: the same
+// office that owns the Visit Policy caps is the one choosing to go around
+// them here, for this one rep, on purpose.
+export async function officeScheduleRep(params: {
+  locationId: string;
+  staffId: string;
+  repId: string;
+  startTime: Date;
+  endTime: Date;
+  eventType: string;
+  topic?: string;
+}) {
+  const { locationId, staffId, repId, startTime, endTime, eventType, topic } = params;
+
+  return prisma.$transaction(async (tx) => {
+    const rep = await tx.rep.findUniqueOrThrow({ where: { id: repId } });
+    if (rep.verificationStatus !== 'VERIFIED') {
+      throw new BookingError('Only verified reps can be scheduled.', 'REP_NOT_VERIFIED');
+    }
+
+    const slot = await tx.slot.create({
+      data: { locationId, startTime, endTime, eventType: eventType as any, status: SlotStatus.CONFIRMED, createdByStaffId: staffId },
+    });
+
+    return tx.booking.create({
+      data: { slotId: slot.id, repId, topic, status: BookingStatus.CONFIRMED, decidedAt: new Date() },
+    });
+  });
+}
+
 // --- Office staff approves or declines a request ------------------------
 
 export async function decideBooking(params: {

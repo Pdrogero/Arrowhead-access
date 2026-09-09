@@ -202,6 +202,7 @@ let viewedOfficeDetail = null; // null = loading, false = load failed
 let viewedOfficeDetailReturnScreen = 'dashboard';
 let viewedRepProfile = null;
 let viewedRepProfileName = '';
+let viewedRepProfileId = null;
 let repsDirectoryData = null; // null = loading, false = load failed
 let reviewBookingId = null;
 let reviewCounterpartName = '';
@@ -2387,6 +2388,9 @@ function screenRepProfileView() {
             ${rep.verificationStatus === 'VERIFIED' ? `<p style="font-size:13px;color:#2D6F5E;font-weight:600;margin:4px 0 0;">✅ Verified Professional</p>` : ''}
           </div>
         </div>
+        ${state.role === 'office' ? `
+        <button type="button" onclick="toggleScheduleRepForm()" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px;">📅 Schedule a visit</button>
+        <div id="scheduleRepBox" style="display:none;margin-bottom:16px;"></div>` : ''}
         <div class="card">
           ${rep.credentials ? `<p style="font-size:13px;margin-bottom:8px;"><strong>Credentials:</strong> ${rep.credentials}</p>` : ''}
           ${rep.roleFunction ? `<p style="font-size:13px;margin-bottom:8px;"><strong>Role:</strong> ${rep.roleFunction}</p>` : ''}
@@ -2412,6 +2416,7 @@ function screenRepProfileView() {
 
 window.viewRepProfile = async function(repId, repName) {
   viewedRepProfileName = repName;
+  viewedRepProfileId = repId;
   viewedRepProfile = null;
   setState({ screen: 'repProfileView' });
   try {
@@ -2420,6 +2425,73 @@ window.viewRepProfile = async function(repId, repName) {
   } catch (err) {
     viewedRepProfile = false;
     render();
+  }
+};
+
+window.toggleScheduleRepForm = function() {
+  const box = document.getElementById('scheduleRepBox');
+  if (!box) return;
+  if (box.innerHTML.trim()) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div class="card">
+      <p style="font-size:13px;font-weight:700;margin-bottom:10px;">Schedule ${viewedRepProfileName}</p>
+      <div id="scheduleRepErr"></div>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Event type</label>
+      <select id="scheduleRepEventType" style="margin-bottom:12px;">
+        <option value="LUNCH">Lunch</option>
+        <option value="BREAKFAST">Breakfast</option>
+        <option value="COFFEE_SNACK">Coffee/Snack</option>
+        <option value="STAFF_TRAINING">Staff training</option>
+        <option value="REP_VISIT">Rep visit</option>
+      </select>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Start time</label>
+      <input id="scheduleRepStart" type="datetime-local" style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">End time</label>
+      <input id="scheduleRepEnd" type="datetime-local" style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Note to the rep (optional)</label>
+      <textarea id="scheduleRepNote" rows="2" placeholder="Anything they should know" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
+      <p style="font-size:12px;color:var(--slate);margin:-6px 0 12px;">This books ${viewedRepProfileName} immediately — no claim or approval step, since you're choosing the time yourself.</p>
+      <button class="primary" id="scheduleRepBtn" onclick="submitScheduleRep()">Schedule visit</button>
+    </div>`;
+};
+
+window.submitScheduleRep = async function() {
+  const startVal = document.getElementById('scheduleRepStart').value;
+  const endVal = document.getElementById('scheduleRepEnd').value;
+  const errBox = document.getElementById('scheduleRepErr');
+  errBox.innerHTML = '';
+
+  if (!startVal || !endVal) {
+    errBox.innerHTML = '<div class="msg err">Both start and end times are required</div>';
+    return;
+  }
+  const startTime = new Date(startVal).toISOString();
+  const endTime = new Date(endVal).toISOString();
+  if (new Date(endTime) <= new Date(startTime)) {
+    errBox.innerHTML = '<div class="msg err">End time must be after start time</div>';
+    return;
+  }
+
+  const payload = {
+    repId: viewedRepProfileId,
+    eventType: document.getElementById('scheduleRepEventType').value,
+    startTime,
+    endTime,
+    topic: document.getElementById('scheduleRepNote').value.trim(),
+  };
+
+  const btn = document.getElementById('scheduleRepBtn');
+  btn.disabled = true;
+  btn.textContent = 'Scheduling…';
+  try {
+    await api('/api/bookings/office-schedule', { method: 'POST', body: JSON.stringify(payload) });
+    alert('Visit scheduled! It\'s confirmed and the rep has been emailed.');
+    window.toggleScheduleRepForm();
+  } catch (err) {
+    errBox.innerHTML = `<div class="msg err">${err.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'Schedule visit';
   }
 };
 
