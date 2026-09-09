@@ -115,7 +115,11 @@ router.get('/mine', requireAuth, requireRole('rep'), async (req, res) => {
   const bookings = await prisma.booking.findMany({
     where: {
       repId: req.user!.sub,
-      hiddenFromRepBookings: false,
+      // NOT true (rather than "equals false") since this column predates a
+      // clean migration and older rows have it as NULL — a plain `equals
+      // false` filter would silently exclude those in SQL (NULL = false is
+      // never true), hiding perfectly normal bookings from this list.
+      NOT: { hiddenFromRepBookings: true },
       OR: [
         // A pending request stops showing here once its date has passed —
         // the office can't confirm a visit for a day that's already gone.
@@ -142,7 +146,7 @@ router.get('/mine', requireAuth, requireRole('rep'), async (req, res) => {
 // manually-dismissed cancelled/declined booking stays gone everywhere.
 router.get('/calendar', requireAuth, requireRole('rep'), async (req, res) => {
   const bookings = await prisma.booking.findMany({
-    where: { repId: req.user!.sub, hiddenFromRepBookings: false },
+    where: { repId: req.user!.sub, NOT: { hiddenFromRepBookings: true } },
     include: { slot: { include: { location: true } } },
     orderBy: { slot: { startTime: 'desc' } },
   });
