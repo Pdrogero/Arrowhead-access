@@ -526,12 +526,6 @@ function screenProfile() {
       <h1>Complete your profile</h1>
       <p class="sub">Help offices know who they're meeting with. You can skip this and fill it in later.</p>
 
-      <div class="card" style="margin-bottom:16px;">
-        <h2 style="font-size:16px;margin-bottom:4px;">⭐ Favorite offices</h2>
-        <p style="font-size:12.5px;color:var(--slate);margin-bottom:12px;">Offices you've starred while browsing — kept here for quick access.</p>
-        <div id="favoriteOfficesBox"><div class="empty">Loading…</div></div>
-      </div>
-
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Profile photo</label>
@@ -3669,7 +3663,18 @@ async function initProfileScreen() {
   selectedProfileImage = undefined;
   await loadCatalog();
   await loadProfile();
-  loadFavoriteOffices();
+}
+
+function screenFavoriteOffices() {
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <h1>⭐ Favorite Offices</h1>
+      <p class="sub">Offices you've starred while browsing — kept here for quick access.</p>
+      <div class="card">
+        <div id="favoriteOfficesBox"><div class="empty">Loading…</div></div>
+      </div>
+    </div>`;
 }
 
 async function loadFavoriteOffices() {
@@ -4481,14 +4486,17 @@ window.toggleProfileMenu = function() {
   }
   box.innerHTML = `
     <div class="card" style="margin-bottom:16px;padding:14px;">
-      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'profile'})">✏️ Edit Profile</button>
-      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'materials'})">📚 Marketing Materials</button>
-      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'visitHistory'})">📜 Visit History</button>
-      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="scrollToBilling()">💳 Billing</button>
-      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="openCalendar()">📅 Calendar Sync</button>
-      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
-      <a href="mailto:legal@arrowheadaccess.com?subject=Arrowhead%20Access%20Support%20Request" style="display:block;width:100%;background:none;border:none;color:var(--teal);font-size:12px;text-align:left;margin-bottom:8px;text-decoration:none;cursor:pointer;">❓ Help</a>
-      <button class="link" style="text-align:left;margin-bottom:0;color:#C23C3C;" onclick="logout()">⏻ Logout</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(5,auto);grid-auto-flow:column;gap:2px 20px;">
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'profile'})">✏️ Edit Profile</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'favoriteOffices'})">⭐ Favorite Offices</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'materials'})">📚 Marketing Materials</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'visitHistory'})">📜 Visit History</button>
+        <button class="link" style="text-align:left;margin:0;" onclick="scrollToBilling()">💳 Billing</button>
+        <button class="link" style="text-align:right;margin:0;" onclick="openCalendar()">Calendar Sync 📅</button>
+        <button class="link" style="text-align:right;margin:0;" onclick="setState({screen:'accountSettings'})">Account Settings 🔑</button>
+        <a href="mailto:legal@arrowheadaccess.com?subject=Arrowhead%20Access%20Support%20Request" style="display:block;width:100%;background:none;border:none;color:var(--teal);font-size:12px;text-align:right;text-decoration:none;cursor:pointer;">Help ❓</a>
+        <button class="link" style="text-align:right;margin:0;color:#C23C3C;" onclick="logout()">Logout ⏻</button>
+      </div>
     </div>`;
 };
 
@@ -5126,6 +5134,7 @@ function render() {
   else if (state.screen === 'verifyIdentityNudge') { app.innerHTML = screenVerifyIdentityNudge(); }
   else if (state.screen === 'twoFactorNudge') { app.innerHTML = screenTwoFactorNudge(); }
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
+  else if (state.screen === 'favoriteOffices') { app.innerHTML = screenFavoriteOffices(); loadFavoriteOffices(); }
   else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); }
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
   else if (state.screen === 'repsDirectory') { app.innerHTML = screenRepsDirectory(); loadRepsDirectory(); }
