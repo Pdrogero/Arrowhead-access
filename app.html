@@ -2490,7 +2490,7 @@ window.toggleScheduleRepForm = function() {
       <p style="font-size:13px;font-weight:700;margin-bottom:10px;">Schedule ${viewedRepProfileName}</p>
       <div id="scheduleRepErr"></div>
       <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Event type</label>
-      <select id="scheduleRepEventType" style="margin-bottom:12px;">
+      <select id="scheduleRepEventType" style="margin-bottom:12px;" onchange="applyScheduleRepDefaultTimes()">
         <option value="LUNCH">Lunch</option>
         <option value="BREAKFAST">Breakfast</option>
         <option value="COFFEE_SNACK">Coffee/Snack</option>
@@ -2506,6 +2506,26 @@ window.toggleScheduleRepForm = function() {
       <p style="font-size:12px;color:var(--slate);margin:-6px 0 12px;">This books ${viewedRepProfileName} immediately — no claim or approval step, since you're choosing the time yourself.</p>
       <button class="primary" id="scheduleRepBtn" onclick="submitScheduleRep()">Schedule visit</button>
     </div>`;
+  applyScheduleRepDefaultTimes();
+};
+
+// Lunch and breakfast are by far the most common visits to schedule, so
+// default their start/end times to the office's usual window — saves
+// scrolling the time picker for the common case. Keeps whatever date is
+// already picked (or today's, if none yet) and only fills in the time.
+// Other event types vary too much to guess at, so they're left blank.
+window.applyScheduleRepDefaultTimes = function() {
+  const defaults = { LUNCH: [12, 0, 13, 0], BREAKFAST: [8, 0, 9, 0] }[document.getElementById('scheduleRepEventType').value];
+  if (!defaults) return;
+  const [startH, startM, endH, endM] = defaults;
+  const startInput = document.getElementById('scheduleRepStart');
+  const endInput = document.getElementById('scheduleRepEnd');
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const dateStr = (startInput.value || endInput.value || '').slice(0, 10) || todayStr;
+  startInput.value = `${dateStr}T${pad(startH)}:${pad(startM)}`;
+  endInput.value = `${dateStr}T${pad(endH)}:${pad(endM)}`;
 };
 
 window.submitScheduleRep = async function() {
