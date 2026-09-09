@@ -117,7 +117,11 @@ router.get('/mine', requireAuth, requireRole('rep'), async (req, res) => {
       repId: req.user!.sub,
       hiddenFromRepBookings: false,
       OR: [
-        { status: 'REQUESTED' },
+        // A pending request stops showing here once its date has passed —
+        // the office can't confirm a visit for a day that's already gone.
+        // The daily expiry check (below) formally declines it soon after,
+        // at which point it shows up in Visit History as a record.
+        { status: 'REQUESTED', slot: { startTime: { gte: new Date() } } },
         // Confirmed (or otherwise resolved) visits stay here only while the
         // event itself hasn't happened yet — once it's over they belong in
         // Visit History instead, not still cluttering the active list.
@@ -163,12 +167,13 @@ router.post('/:bookingId/hide-from-bookings', requireAuth, requireRole('rep'), a
   }
 });
 
-// --- Rep: visit history (past visits that were actually confirmed) ------
+// --- Rep: visit history (past visits, plus a record of requests that were --
+// --- declined or never answered before their date passed) -----------------
 router.get('/history', requireAuth, requireRole('rep'), async (req, res) => {
   const bookings = await prisma.booking.findMany({
     where: {
       repId: req.user!.sub,
-      status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] },
+      status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'DECLINED'] },
       slot: { endTime: { lt: new Date() } },
     },
     include: { slot: { include: { location: true } } },
@@ -1006,12 +1011,21 @@ router.post('/check-expired-requests', async (req, res) => {
       await prisma.booking.update({ where: { id: booking.id }, data: { officeReminderSent: true } });
     }
 
+    // A request also expires the moment its own event date passes, even if
+    // the 3-day no-response window hasn't elapsed yet — an office can't
+    // confirm a visit for a day that's already gone. Declining it (rather
+    // than leaving it REQUESTED forever) is what gives the rep a record of
+    // it in Visit History instead of it just quietly disappearing.
     const expired = await prisma.booking.findMany({
-      where: { status: 'REQUESTED', requestedAt: { lte: threeDaysAgo } },
+      where: {
+        status: 'REQUESTED',
+        OR: [{ requestedAt: { lte: threeDaysAgo } }, { slot: { endTime: { lt: new Date() } } }],
+      },
       include: { rep: true, slot: { include: { location: true } } },
     });
 
     for (const booking of expired) {
+      const datePassed = booking.slot.endTime < new Date();
       await prisma.$transaction([
         prisma.slot.update({ where: { id: booking.slotId }, data: { status: 'OPEN' } }),
         prisma.booking.update({ where: { id: booking.id }, data: { status: 'DECLINED', decidedAt: new Date() } }),
@@ -1020,7 +1034,9 @@ router.post('/check-expired-requests', async (req, res) => {
       sendEmail({
         to: booking.rep.email,
         subject: `Request expired — ${booking.slot.location.name}`,
-        html: `${emailLogoHeader()}<p>The office at <strong>${booking.slot.location.name}</strong> didn't respond to your request for ${dateStr} within 3 days, so it's been released back to the open slots list. Feel free to request it again or find another time.</p>`,
+        html: datePassed
+          ? `${emailLogoHeader()}<p>The office at <strong>${booking.slot.location.name}</strong> never responded to your request for ${dateStr}, and that date has now passed. It's been moved to your Visit History as a record.</p>${emailLoginButton()}`
+          : `${emailLogoHeader()}<p>The office at <strong>${booking.slot.location.name}</strong> didn't respond to your request for ${dateStr} within 3 days, so it's been released back to the open slots list. Feel free to request it again or find another time.</p>`,
       }).catch(() => {});
     }
 
