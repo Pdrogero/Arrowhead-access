@@ -2404,13 +2404,18 @@ function renderRepsDirectory() {
   const extraBox = document.getElementById('repsDirectoryExtraBox');
   if (extraBox) extraBox.innerHTML = '';
 
+  // A search should be able to find any rep on Arrowhead Access, not just
+  // ones who've booked here — search the whole platform alongside the
+  // local list on every query, after a short pause so this doesn't fire a
+  // request on every keystroke. Reps already shown above (booked with you)
+  // are excluded from those results so nobody appears twice.
+  if (query.length >= 2) repSearchTimer = setTimeout(() => searchOtherReps(query, reps.map(r => r.id)), 350);
+
   if (!repsDirectoryData.length && !query) { box.innerHTML = '<div class="empty">No reps have booked at your location yet.</div>'; return; }
   if (!reps.length) {
-    box.innerHTML = '<div class="empty">No reps who\'ve booked with you match that search.</div>';
-    // They may be on Arrowhead Access but just haven't visited this office
-    // yet — search the whole platform too, after a short pause so this
-    // doesn't fire a request on every keystroke.
-    if (query.length >= 2) repSearchTimer = setTimeout(() => searchOtherReps(query), 350);
+    box.innerHTML = query
+      ? '<div class="empty">No reps who\'ve booked with you match that search.</div>'
+      : '<div class="empty">No reps have booked at your location yet.</div>';
     return;
   }
   box.innerHTML = reps.map(r => `
@@ -2427,12 +2432,14 @@ function renderRepsDirectory() {
 }
 window.renderRepsDirectory = renderRepsDirectory;
 
-// Broadens the search to every rep on Arrowhead Access (not just ones
-// who've booked at this location) once the local list comes up empty —
-// covers a rep the office knows is on the platform but hasn't visited
-// them yet. Only offers Message here, since the full profile view (and
-// Schedule a visit) requires an actual booking relationship.
-async function searchOtherReps(query) {
+// Lets an office search every rep on Arrowhead Access, not just ones
+// who've booked at this location — covers a rep the office knows is on
+// the platform but hasn't visited them yet. Runs alongside the local
+// (booked-with-you) list on every search; excludeIds keeps a rep from
+// appearing in both sections. Only offers Message here, since the full
+// profile view (and Schedule a visit) requires an actual booking
+// relationship.
+async function searchOtherReps(query, excludeIds) {
   const extraBox = document.getElementById('repsDirectoryExtraBox');
   if (!extraBox) return;
   // The search box may have changed again since this debounced call was
@@ -2442,7 +2449,8 @@ async function searchOtherReps(query) {
 
   extraBox.innerHTML = '<p style="font-size:12px;color:var(--slate);margin:12px 0 6px;">Searching all of Arrowhead Access…</p>';
   try {
-    const results = await api(`/api/profile/reps/search?q=${encodeURIComponent(query)}`);
+    const excludeSet = new Set(excludeIds || []);
+    const results = (await api(`/api/profile/reps/search?q=${encodeURIComponent(query)}`)).filter(r => !excludeSet.has(r.id));
     if (!results.length) { extraBox.innerHTML = ''; return; }
     extraBox.innerHTML = `
       <p style="font-size:12px;font-weight:600;color:var(--slate);margin:12px 0 6px;">On Arrowhead Access, haven't booked with you yet</p>
