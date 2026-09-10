@@ -3684,7 +3684,7 @@ function screenDashboardOffice() {
       <div id="ledgerBulkBar" style="display:none;align-items:center;gap:12px;margin-bottom:12px;">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
           <input type="checkbox" id="ledgerSelectAllCb" onchange="toggleLedgerSelectAll(this.checked)">
-          Select all open slots
+          Select all
         </label>
         <button type="button" id="removeSelectedLedgerBtn" onclick="removeSelectedLedgerSlots()" disabled style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🗑 Remove selected</button>
       </div>
@@ -4594,14 +4594,14 @@ async function loadOfficeLedger() {
     renderPendingRequestsBox(slots);
     selectedLedgerSlotIds = new Set();
     const bulkBar = document.getElementById('ledgerBulkBar');
-    if (bulkBar) bulkBar.style.display = slots.some(s => s.status === 'OPEN') ? 'flex' : 'none';
+    if (bulkBar) bulkBar.style.display = slots.some(s => isLedgerSlotSelectable(s)) ? 'flex' : 'none';
     updateLedgerBulkBar();
     if (!slots.length) { box.innerHTML = '<div class="empty">No slots yet.</div>'; return; }
     const repIds = slots.filter(s => s.booking?.rep).map(s => s.booking.rep.id);
     const repRatings = await fetchRatingAverages(repIds, 'rep');
     box.innerHTML = slots.map(s => `
       <div class="row" style="flex-wrap:wrap;">
-        ${s.status === 'OPEN' ? `<input type="checkbox" class="ledgerSelectCb" style="margin-right:8px;align-self:center;" onchange="toggleLedgerSelect('${s.id}', this.checked)">` : ''}
+        ${isLedgerSlotSelectable(s) ? `<input type="checkbox" class="ledgerSelectCb" style="margin-right:8px;align-self:center;" onchange="toggleLedgerSelect('${s.id}', this.checked)">` : ''}
         <div class="time" style="width:190px;">${fmtTimeRange(s.startTime, s.endTime)}</div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">${s.eventType === 'OFFICE_CLOSED' ? 'Not available for booking' : 'Open slot'}</div>`}
@@ -5130,14 +5130,23 @@ window.removeOpenSlot = async function(slotId, timeLabel) {
   }
 };
 
+// Selectable for bulk removal: an unbooked open slot (deleted outright) or
+// a confirmed booking (cancelled, with a reason emailed to the rep). A
+// pending request already has its own one-click Approve/Decline, so it's
+// left out of bulk selection to avoid a "delete" action quietly declining
+// something that still needs a real decision.
+function isLedgerSlotSelectable(s) {
+  return s.status === 'OPEN' || s.status === 'CONFIRMED';
+}
+
 window.toggleLedgerSelect = function(id, checked) {
   if (checked) selectedLedgerSlotIds.add(id); else selectedLedgerSlotIds.delete(id);
   updateLedgerBulkBar();
 };
 
 window.toggleLedgerSelectAll = function(checked) {
-  const openIds = ledgerSlotsData.filter(s => s.status === 'OPEN').map(s => s.id);
-  selectedLedgerSlotIds = new Set(checked ? openIds : []);
+  const selectableIds = ledgerSlotsData.filter(isLedgerSlotSelectable).map(s => s.id);
+  selectedLedgerSlotIds = new Set(checked ? selectableIds : []);
   document.querySelectorAll('.ledgerSelectCb').forEach(cb => { cb.checked = checked; });
   updateLedgerBulkBar();
 };
@@ -5150,17 +5159,41 @@ function updateLedgerBulkBar() {
     btn.disabled = selectedLedgerSlotIds.size === 0;
     btn.textContent = selectedLedgerSlotIds.size ? `🗑 Remove selected (${selectedLedgerSlotIds.size})` : '🗑 Remove selected';
   }
-  const openCount = ledgerSlotsData.filter(s => s.status === 'OPEN').length;
+  const selectableCount = ledgerSlotsData.filter(isLedgerSlotSelectable).length;
   const selectAll = document.getElementById('ledgerSelectAllCb');
-  if (selectAll) selectAll.checked = openCount > 0 && selectedLedgerSlotIds.size === openCount;
+  if (selectAll) selectAll.checked = selectableCount > 0 && selectedLedgerSlotIds.size === selectableCount;
 }
 
 window.removeSelectedLedgerSlots = async function() {
   if (!selectedLedgerSlotIds.size) return;
-  const count = selectedLedgerSlotIds.size;
-  if (!confirm(`Remove ${count} selected open slot${count === 1 ? '' : 's'}? Reps will no longer be able to book ${count === 1 ? 'it' : 'them'}.`)) return;
+  const selectedIds = new Set(selectedLedgerSlotIds);
+  const selectedItems = ledgerSlotsData.filter(s => selectedIds.has(s.id));
+  const openSlotIds = selectedItems.filter(s => s.status === 'OPEN').map(s => s.id);
+  const confirmedBookingIds = selectedItems.filter(s => s.status === 'CONFIRMED' && s.booking).map(s => s.booking.id);
+
+  const parts = [];
+  if (openSlotIds.length) parts.push(`${openSlotIds.length} open slot${openSlotIds.length === 1 ? '' : 's'}`);
+  if (confirmedBookingIds.length) parts.push(`${confirmedBookingIds.length} confirmed booking${confirmedBookingIds.length === 1 ? '' : 's'}`);
+  const confirmMsg = confirmedBookingIds.length
+    ? `Remove ${parts.join(' and ')}? Reps with a confirmed booking will be notified by email why it was cancelled.`
+    : `Remove ${parts.join(' and ')}? Reps will no longer be able to book ${openSlotIds.length === 1 ? 'it' : 'them'}.`;
+  if (!confirm(confirmMsg)) return;
+
+  let reason = '';
+  if (confirmedBookingIds.length) {
+    const entered = prompt(`Please provide a brief reason for cancelling ${confirmedBookingIds.length === 1 ? 'this booking' : 'these bookings'} — this will be included in the email to each rep:`);
+    if (entered === null) return;
+    reason = entered.trim();
+    if (!reason) { alert('A reason is required so reps understand why.'); return; }
+  }
+
   try {
-    await api('/api/bookings/slots/bulk-delete', { method: 'POST', body: JSON.stringify({ slotIds: [...selectedLedgerSlotIds] }) });
+    if (openSlotIds.length) {
+      await api('/api/bookings/slots/bulk-delete', { method: 'POST', body: JSON.stringify({ slotIds: openSlotIds }) });
+    }
+    if (confirmedBookingIds.length) {
+      await api('/api/bookings/bulk-cancel', { method: 'POST', body: JSON.stringify({ bookingIds: confirmedBookingIds, reason }) });
+    }
     loadOfficeLedger();
   } catch (err) {
     alert(err.message);

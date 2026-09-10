@@ -407,6 +407,56 @@ router.post('/slots/bulk-delete', requireAuth, requireRole('office_admin', 'offi
   }
 });
 
+// --- Office staff: cancel several confirmed bookings at once, with one ----
+// shared reason emailed to each affected rep. Mirrors the single-booking
+// /:bookingId/cancel above, minus the suggested-reschedule option — that's
+// a per-visit negotiation that doesn't make sense applied to a whole batch.
+router.post('/bulk-cancel', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const bookingIds = Array.isArray(req.body.bookingIds)
+      ? req.body.bookingIds.filter((id: unknown): id is string => typeof id === 'string')
+      : [];
+    if (!bookingIds.length) return res.status(400).json({ error: 'Select at least one booking to cancel' });
+
+    const reason = String(req.body.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'A cancellation reason is required so reps understand why' });
+
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    // Only ever touches this staff member's own location's CONFIRMED
+    // bookings — same restriction as the single-booking cancel above,
+    // applied as a where clause instead of a per-booking ownership check.
+    const bookings = await prisma.booking.findMany({
+      where: { id: { in: bookingIds }, status: 'CONFIRMED', slot: { locationId: staff.locationId } },
+      include: { rep: true, slot: { include: { location: true } } },
+    });
+    if (!bookings.length) return res.status(404).json({ error: 'None of the selected bookings could be cancelled' });
+
+    await prisma.$transaction([
+      ...bookings.map(b => prisma.booking.update({
+        where: { id: b.id },
+        data: { status: 'CANCELLED', cancelReason: reason, cancelledBy: 'OFFICE', decidedAt: new Date() },
+      })),
+      ...bookings.map(b => prisma.slot.update({ where: { id: b.slotId }, data: { status: 'CANCELLED' } })),
+    ]);
+
+    bookings.forEach(b => {
+      const dateStr = b.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      sendEmail({
+        to: b.rep.email,
+        subject: `Your visit at ${b.slot.location.name} on ${dateStr} was cancelled`,
+        html: `${emailLogoHeader()}<p>Your visit at <strong>${b.slot.location.name}</strong> on ${dateStr} has been cancelled by the office.</p><p><strong>Reason:</strong> ${reason}</p>`,
+      }).catch(() => {});
+    });
+
+    res.json({ cancelled: bookings.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not cancel the selected bookings' });
+  }
+});
+
 router.delete('/slots/:slotId', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {
     const slot = await prisma.slot.findUnique({ where: { id: req.params.slotId } });
