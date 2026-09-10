@@ -209,6 +209,7 @@ let viewedRepProfile = null;
 let viewedRepProfileName = '';
 let viewedRepProfileId = null;
 let repsDirectoryData = null; // null = loading, false = load failed
+let repSearchTimer = null; // debounces the platform-wide fallback search on My Reps
 let reviewBookingId = null;
 let reviewCounterpartName = '';
 let reviewRating = 0;
@@ -2347,6 +2348,7 @@ function screenRepsDirectory() {
       <div id="inviteRepBox" style="display:none;margin-bottom:16px;"></div>
 
       <div id="repsDirectoryBox" class="listcard"><div class="empty">Loading…</div></div>
+      <div id="repsDirectoryExtraBox"></div>
     </div>`;
 }
 
@@ -2398,8 +2400,19 @@ function renderRepsDirectory() {
     ? repsDirectoryData.filter(r => [r.name, r.companyName, r.title].filter(Boolean).some(f => f.toLowerCase().includes(query)))
     : repsDirectoryData;
 
-  if (!repsDirectoryData.length) { box.innerHTML = '<div class="empty">No reps have booked at your location yet.</div>'; return; }
-  if (!reps.length) { box.innerHTML = '<div class="empty">No reps match your search.</div>'; return; }
+  clearTimeout(repSearchTimer);
+  const extraBox = document.getElementById('repsDirectoryExtraBox');
+  if (extraBox) extraBox.innerHTML = '';
+
+  if (!repsDirectoryData.length && !query) { box.innerHTML = '<div class="empty">No reps have booked at your location yet.</div>'; return; }
+  if (!reps.length) {
+    box.innerHTML = '<div class="empty">No reps who\'ve booked with you match that search.</div>';
+    // They may be on Arrowhead Access but just haven't visited this office
+    // yet — search the whole platform too, after a short pause so this
+    // doesn't fire a request on every keystroke.
+    if (query.length >= 2) repSearchTimer = setTimeout(() => searchOtherReps(query), 350);
+    return;
+  }
   box.innerHTML = reps.map(r => `
     <div class="row" style="cursor:pointer;" onclick="viewRepProfile('${r.id}', '${r.name.replace(/'/g, "\\'")}')">
       ${r.profileImageUrl
@@ -2413,6 +2426,41 @@ function renderRepsDirectory() {
     </div>`).join('');
 }
 window.renderRepsDirectory = renderRepsDirectory;
+
+// Broadens the search to every rep on Arrowhead Access (not just ones
+// who've booked at this location) once the local list comes up empty —
+// covers a rep the office knows is on the platform but hasn't visited
+// them yet. Only offers Message here, since the full profile view (and
+// Schedule a visit) requires an actual booking relationship.
+async function searchOtherReps(query) {
+  const extraBox = document.getElementById('repsDirectoryExtraBox');
+  if (!extraBox) return;
+  // The search box may have changed again since this debounced call was
+  // scheduled — bail rather than show stale results for an old query.
+  const currentQuery = (document.getElementById('repsDirectorySearch')?.value || '').trim().toLowerCase();
+  if (currentQuery !== query) return;
+
+  extraBox.innerHTML = '<p style="font-size:12px;color:var(--slate);margin:12px 0 6px;">Searching all of Arrowhead Access…</p>';
+  try {
+    const results = await api(`/api/profile/reps/search?q=${encodeURIComponent(query)}`);
+    if (!results.length) { extraBox.innerHTML = ''; return; }
+    extraBox.innerHTML = `
+      <p style="font-size:12px;font-weight:600;color:var(--slate);margin:12px 0 6px;">On Arrowhead Access, haven't booked with you yet</p>
+      <div class="listcard">${results.map(r => `
+        <div class="row">
+          ${r.profileImageUrl
+            ? `<img src="${r.profileImageUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+            : `<div style="width:40px;height:40px;border-radius:50%;background:var(--paper-raised,#E4EAE3);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--teal);flex-shrink:0;">${(r.name || '?').charAt(0)}</div>`}
+          <div class="mid">
+            <div class="who">${r.name}</div>
+            <div class="what">${[r.companyName, r.title].filter(Boolean).join(' · ')}</div>
+          </div>
+          <button type="button" onclick="startConversation('${r.id}', '${r.name.replace(/'/g, "\\'")}')" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">💬 Message</button>
+        </div>`).join('')}</div>`;
+  } catch (err) {
+    extraBox.innerHTML = '';
+  }
+}
 
 async function loadRepsDirectory() {
   const box = document.getElementById('repsDirectoryBox');

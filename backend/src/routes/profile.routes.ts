@@ -188,6 +188,35 @@ router.get('/reps', requireAuth, requireRole('office_admin', 'office_staff'), as
   }
 });
 
+// --- Office staff: search ALL reps on Arrowhead Access by name/company ----
+// (not just ones who've booked at this location) — lets an office find and
+// reach out to a rep they know is on the platform but hasn't visited them
+// yet. Deliberately returns only enough to message/schedule them, not the
+// full profile (credentials, phone, etc. stay gated behind an actual
+// booking relationship via GET /rep/:repId).
+router.get('/reps/search', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json([]);
+
+    const reps = await prisma.rep.findMany({
+      where: {
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { companyName: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, name: true, companyName: true, title: true, verificationStatus: true, profileImageUrl: true },
+      orderBy: { name: 'asc' },
+      take: 20,
+    });
+    res.json(reps);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not search reps' });
+  }
+});
+
 // --- Office staff: invite a rep who isn't on Arrowhead Access yet ---------
 // A rep only ever shows up under My Reps once they've actually booked here,
 // so there's no in-app way to reach someone who hasn't signed up at all —
