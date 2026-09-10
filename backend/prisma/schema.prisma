@@ -141,6 +141,7 @@ model Location {
   conversations Conversation[]
   literatureItems LiteratureItem[]
   favoritedBy FavoriteLocation[]
+  savedReps   SavedRep[]
 }
 
 // A rep's saved shortlist of offices they like, shown on their profile —
@@ -156,6 +157,21 @@ model FavoriteLocation {
 
   @@unique([repId, locationId])
   @@index([repId])
+}
+
+// The office-side mirror of FavoriteLocation — lets an office manually keep
+// a rep under My Reps even before any booking exists between them (found
+// via the platform-wide rep search).
+model SavedRep {
+  id         String   @id @default(cuid())
+  repId      String
+  rep        Rep      @relation(fields: [repId], references: [id], onDelete: Cascade)
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([repId, locationId])
+  @@index([locationId])
 }
 
 // A simple staff directory the office maintains, visible to reps who've
@@ -357,6 +373,7 @@ model Rep {
   marketingMaterials   RepMarketingMaterial[]
   officeInterestRequests OfficeInterestRequest[]
   favoriteLocations    FavoriteLocation[]
+  savedByLocations     SavedRep[]
   loginOtps            RepLoginOtp[]
   trustedDevices       TrustedDevice[]
   teammateInvitesSent     TeammateInvite[] @relation("TeammateInvitesSent")

@@ -177,7 +177,12 @@ router.get('/reps', requireAuth, requireRole('office_admin', 'office_staff'), as
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
 
     const reps = await prisma.rep.findMany({
-      where: { bookings: { some: { slot: { locationId: staff.locationId } } } },
+      where: {
+        OR: [
+          { bookings: { some: { slot: { locationId: staff.locationId } } } },
+          { savedByLocations: { some: { locationId: staff.locationId } } },
+        ],
+      },
       select: { id: true, name: true, companyName: true, title: true, verificationStatus: true, profileImageUrl: true },
       orderBy: { name: 'asc' },
     });
@@ -185,6 +190,43 @@ router.get('/reps', requireAuth, requireRole('office_admin', 'office_staff'), as
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not fetch reps' });
+  }
+});
+
+// --- Office staff: manually save a rep under My Reps ----------------------
+// Lets an office keep a rep found via the platform-wide search (below)
+// listed under My Reps even before any booking exists between them —
+// mirrors FavoriteLocation, just from the office's side.
+router.post('/reps/:repId/save', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const rep = await prisma.rep.findUnique({ where: { id: req.params.repId } });
+    if (!rep) return res.status(404).json({ error: 'Rep not found' });
+
+    await prisma.savedRep.upsert({
+      where: { repId_locationId: { repId: rep.id, locationId: staff.locationId } },
+      create: { repId: rep.id, locationId: staff.locationId },
+      update: {},
+    });
+    res.status(201).json({ saved: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not save this rep' });
+  }
+});
+
+router.delete('/reps/:repId/save', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    await prisma.savedRep.deleteMany({ where: { repId: req.params.repId, locationId: staff.locationId } });
+    res.json({ saved: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not unsave this rep' });
   }
 });
 
@@ -261,11 +303,12 @@ router.get('/rep/:repId', requireAuth, requireRole('office_admin', 'office_staff
     const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
 
-    const hasBookedHere = await prisma.booking.findFirst({
-      where: { repId: req.params.repId, slot: { locationId: staff.locationId } },
-    });
-    if (!hasBookedHere) {
-      return res.status(403).json({ error: 'You can only view profiles for reps who have booked at your location' });
+    const [hasBookedHere, isSaved] = await Promise.all([
+      prisma.booking.findFirst({ where: { repId: req.params.repId, slot: { locationId: staff.locationId } } }),
+      prisma.savedRep.findUnique({ where: { repId_locationId: { repId: req.params.repId, locationId: staff.locationId } } }),
+    ]);
+    if (!hasBookedHere && !isSaved) {
+      return res.status(403).json({ error: 'You can only view profiles for reps who have booked at your location or been saved to My Reps' });
     }
 
     const rep = await prisma.rep.findUnique({

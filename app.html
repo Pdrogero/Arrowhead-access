@@ -2463,12 +2463,32 @@ async function searchOtherReps(query, excludeIds) {
             <div class="who">${r.name}</div>
             <div class="what">${[r.companyName, r.title].filter(Boolean).join(' · ')}</div>
           </div>
-          <button type="button" onclick="startConversation('${r.id}', '${r.name.replace(/'/g, "\\'")}')" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">💬 Message</button>
+          <div style="display:flex;gap:6px;">
+            <button type="button" onclick="startConversation('${r.id}', '${r.name.replace(/'/g, "\\'")}')" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">💬 Message</button>
+            <button type="button" onclick="saveRepToMyReps('${r.id}', this)" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">➕ Save</button>
+          </div>
         </div>`).join('')}</div>`;
   } catch (err) {
     extraBox.innerHTML = '';
   }
 }
+
+// Saves a rep found via the platform-wide search into My Reps, so they
+// stick around even without a booking. Reloads the directory so the rep
+// moves up into the main (booked-or-saved) list right away, instead of
+// staying in the "haven't booked with you yet" section.
+window.saveRepToMyReps = async function(repId, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    await api(`/api/profile/reps/${repId}/save`, { method: 'POST' });
+    await loadRepsDirectory();
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.textContent = '➕ Save';
+  }
+};
 
 async function loadRepsDirectory() {
   const box = document.getElementById('repsDirectoryBox');
