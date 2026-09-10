@@ -484,7 +484,9 @@ router.delete('/slots/:slotId', requireAuth, requireRole('office_admin', 'office
 router.post('/:bookingId/decide', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {
     const { decision } = req.body; // 'approve' | 'decline'
-    const booking = await decideBooking({ bookingId: req.params.bookingId, decision, staffId: req.user!.sub });
+    // Optional — the office isn't required to explain a decline, but can.
+    const declineReason = typeof req.body.reason === 'string' ? req.body.reason.trim().slice(0, 500) || undefined : undefined;
+    const booking = await decideBooking({ bookingId: req.params.bookingId, decision, staffId: req.user!.sub, declineReason });
 
     const full = await prisma.booking.findUnique({
       where: { id: booking.id },
@@ -496,7 +498,7 @@ router.post('/:bookingId/decide', requireAuth, requireRole('office_admin', 'offi
       sendEmail({
         to: full.rep.email,
         subject: approved ? 'Your visit request was approved' : 'Your visit request was declined',
-        html: `${emailLogoHeader()}<p>Your visit request at <strong>${full.slot.location.name}</strong> on ${dateStr} was ${approved ? 'approved' : 'declined'}.</p>${approved ? emailLoginButton() : ''}`,
+        html: `${emailLogoHeader()}<p>Your visit request at <strong>${full.slot.location.name}</strong> on ${dateStr} was ${approved ? 'approved' : 'declined'}.</p>${!approved && declineReason ? `<p><strong>Note from the office:</strong> ${declineReason}</p>` : ''}${approved ? emailLoginButton() : ''}`,
       }).catch(() => {});
     }
 

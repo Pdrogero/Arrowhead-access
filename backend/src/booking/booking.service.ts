@@ -254,8 +254,12 @@ export async function decideBooking(params: {
   bookingId: string;
   decision: 'approve' | 'decline';
   staffId: string;
+  // Optional note shown to the rep on a decline — reuses the same
+  // cancelReason field a CONFIRMED cancellation uses, since it serves the
+  // same purpose (explain why) just from an earlier stage in the flow.
+  declineReason?: string;
 }) {
-  const { bookingId, decision } = params;
+  const { bookingId, decision, declineReason } = params;
 
   return prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findUniqueOrThrow({
@@ -278,7 +282,7 @@ export async function decideBooking(params: {
       await tx.slot.update({ where: { id: booking.slotId }, data: { status: SlotStatus.OPEN } });
       return tx.booking.update({
         where: { id: bookingId },
-        data: { status: BookingStatus.DECLINED, decidedAt: new Date() },
+        data: { status: BookingStatus.DECLINED, decidedAt: new Date(), cancelReason: declineReason || null },
       });
     }
   });

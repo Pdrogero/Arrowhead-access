@@ -4698,6 +4698,7 @@ function renderMyBookingsBox() {
           <div style="margin-top:4px;">${eventTypeChipHtml(b.slot.eventType)}</div>
           ${ratingBadge(officeRatings[b.slot.location.id].average, officeRatings[b.slot.location.id].count, 'office', b.slot.location.id, b.slot.location.name)}
           ${lunchDetailsSummaryHtml(b.slot)}
+          ${(b.status === 'CANCELLED' || b.status === 'DECLINED') && b.cancelReason ? `<div style="font-size:11.5px;color:#991B1B;margin-top:4px;">Reason: ${b.cancelReason.replace(/</g, '&lt;')}</div>` : ''}
         </div>
         <span class="chip ${b.status}">${b.status}</span>
         <div style="width:100%;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px;">
@@ -5600,8 +5601,13 @@ window.offerTransfer = async function(bookingId) {
 };
 
 window.decide = async function(id, decision) {
+  let reason;
+  if (decision === 'decline') {
+    reason = prompt('Optional: let the rep know why (they\'ll see this in their email and on the request) — leave blank to skip.');
+    if (reason === null) return;
+  }
   try {
-    await api('/api/bookings/' + id + '/decide', { method: 'POST', body: JSON.stringify({ decision }) });
+    await api('/api/bookings/' + id + '/decide', { method: 'POST', body: JSON.stringify({ decision, reason }) });
     loadOfficeLedger();
   } catch (err) {
     alert(err.message);
