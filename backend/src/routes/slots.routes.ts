@@ -285,9 +285,16 @@ router.patch('/:id/lunch-details', requireAuth, async (req, res) => {
 // screen, especially once the office approves it.
 router.get('/open', requireAuth, requireRole('rep'), requireActiveSubscription, async (req, res) => {
   const now = new Date();
+  const rep = await prisma.rep.findUnique({ where: { id: req.user!.sub }, select: { complimentaryAccess: true } });
+  // The internal "Arrowhead Access" test office stays hidden from every
+  // rep except the comp (founder) account — everyone else browsing Open
+  // Slots shouldn't see it at all.
+  const hideInternalOffice = !rep?.complimentaryAccess
+    ? { location: { NOT: { name: { contains: 'Arrowhead Access', mode: 'insensitive' as const } } } }
+    : {};
   const [openSlots, myClaimedSlots] = await Promise.all([
     prisma.slot.findMany({
-      where: { status: 'OPEN', startTime: { gte: now } },
+      where: { status: 'OPEN', startTime: { gte: now }, ...hideInternalOffice },
       include: { location: true },
       orderBy: { startTime: 'asc' },
       take: 50,

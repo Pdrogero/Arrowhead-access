@@ -210,8 +210,12 @@ router.get('/search', requireAuth, requireRole('rep'), async (req, res) => {
     const q = String(req.query.q || '').trim();
     if (!q) return res.json([]);
 
+    const rep = await prisma.rep.findUnique({ where: { id: req.user!.sub }, select: { complimentaryAccess: true } });
     const locations = await prisma.location.findMany({
-      where: { name: { contains: q, mode: 'insensitive' } },
+      where: {
+        name: { contains: q, mode: 'insensitive' },
+        ...(rep?.complimentaryAccess ? {} : { NOT: { name: { contains: 'Arrowhead Access', mode: 'insensitive' } } }),
+      },
       select: {
         id: true,
         name: true,
@@ -236,8 +240,12 @@ router.get('/new', requireAuth, requireRole('rep'), async (req, res) => {
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const older = req.query.age === 'older';
+    const rep = await prisma.rep.findUnique({ where: { id: req.user!.sub }, select: { complimentaryAccess: true } });
     const locations = await prisma.location.findMany({
-      where: { createdAt: older ? { lt: thirtyDaysAgo } : { gte: thirtyDaysAgo } },
+      where: {
+        createdAt: older ? { lt: thirtyDaysAgo } : { gte: thirtyDaysAgo },
+        ...(rep?.complimentaryAccess ? {} : { NOT: { name: { contains: 'Arrowhead Access', mode: 'insensitive' } } }),
+      },
       select: {
         id: true,
         name: true,
