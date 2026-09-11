@@ -3686,6 +3686,7 @@ let teamSubTab = 'mine'; // 'mine' | 'suggested' | 'invites'
 let teammatesData = [];
 let suggestedTeammatesData = [];
 let teamInvitesData = [];
+let teammateSearchTimer = null; // debounces the platform-wide fallback search on Suggested Teammates
 
 function transfersTabButtonHtml(tab, label) {
   const active = transfersTab === tab;
@@ -3722,7 +3723,9 @@ function screenTransfers() {
           ${teamSubTabButtonHtml('suggested', 'Suggested Teammates')}
           ${teamSubTabButtonHtml('invites', `Invites${teamInvitesData.length ? ` (${teamInvitesData.length})` : ''}`)}
         </div>
+        ${teamSubTab === 'suggested' ? `<input id="teammateSearchInput" type="text" placeholder="Search by name or company…" style="margin-bottom:12px;" oninput="renderTeamBox()">` : ''}
         <div id="teamBox" class="listcard"><div class="empty">Loading…</div></div>
+        ${teamSubTab === 'suggested' ? `<div id="teamSearchExtraBox"></div>` : ''}
       `}
     </div>`;
 }
@@ -5491,14 +5494,29 @@ function renderTeamBox() {
         </div>
       </div>`).join('') : '<div class="empty">You have no teammates. Try Suggested Teammates or wait for an invite.</div>';
   } else if (teamSubTab === 'suggested') {
-    box.innerHTML = suggestedTeammatesData.length ? suggestedTeammatesData.map(r => `
+    const query = (document.getElementById('teammateSearchInput')?.value || '').trim().toLowerCase();
+    const filtered = query
+      ? suggestedTeammatesData.filter(r => [r.name, r.companyName, r.title].filter(Boolean).some(f => f.toLowerCase().includes(query)))
+      : suggestedTeammatesData;
+
+    clearTimeout(teammateSearchTimer);
+    const extraBox = document.getElementById('teamSearchExtraBox');
+    if (extraBox) extraBox.innerHTML = '';
+    // A search should be able to find any rep on Arrowhead Access to
+    // invite, not just ones from the same company — search the whole
+    // platform alongside the same-company suggestions on every query.
+    if (query.length >= 2) teammateSearchTimer = setTimeout(() => searchOtherTeammates(query, filtered.map(r => r.id)), 350);
+
+    box.innerHTML = filtered.length ? filtered.map(r => `
       <div class="row">
         <div class="mid">
           <div class="who">${r.name}</div>
           <div class="what">${r.companyName}${r.title ? ` · ${r.title}` : ''}</div>
         </div>
         <button id="inviteBtn-${r.id}" style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="inviteTeammate('${r.id}')">+ Add</button>
-      </div>`).join('') : '<div class="empty">No suggested teammates right now — we\'ll show reps from your company as they join Arrowhead Access.</div>';
+      </div>`).join('') : (query
+        ? '<div class="empty">No same-company matches.</div>'
+        : '<div class="empty">No suggested teammates right now — we\'ll show reps from your company as they join Arrowhead Access.</div>');
   } else {
     const sendInviteFormHtml = `
       <div class="row" style="flex-wrap:wrap;background:var(--paper);">
@@ -5520,6 +5538,38 @@ function renderTeamBox() {
         <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="respondToTeammateInvite('${inv.id}','decline')">✕ Decline</button>
       </div>`).join('') : '<div class="empty">No pending invites.</div>';
     box.innerHTML = sendInviteFormHtml + invitesListHtml;
+  }
+}
+
+// Lets a rep search every rep on Arrowhead Access, not just same-company
+// suggestions — covers inviting someone at a different company. Runs
+// alongside the same-company list on every search; excludeIds keeps a rep
+// from appearing in both sections.
+async function searchOtherTeammates(query, excludeIds) {
+  const extraBox = document.getElementById('teamSearchExtraBox');
+  if (!extraBox) return;
+  // The search box may have changed again since this debounced call was
+  // scheduled — bail rather than show stale results for an old query.
+  const currentQuery = (document.getElementById('teammateSearchInput')?.value || '').trim().toLowerCase();
+  if (currentQuery !== query) return;
+
+  extraBox.innerHTML = '<p style="font-size:12px;color:var(--slate);margin:12px 0 6px;">Searching all of Arrowhead Access…</p>';
+  try {
+    const excludeSet = new Set(excludeIds || []);
+    const results = (await api(`/api/teammates/search?q=${encodeURIComponent(query)}`)).filter(r => !excludeSet.has(r.id));
+    if (!results.length) { extraBox.innerHTML = ''; return; }
+    extraBox.innerHTML = `
+      <p style="font-size:12px;font-weight:600;color:var(--slate);margin:12px 0 6px;">Other reps on Arrowhead Access</p>
+      <div class="listcard">${results.map(r => `
+        <div class="row">
+          <div class="mid">
+            <div class="who">${r.name}</div>
+            <div class="what">${r.companyName}${r.title ? ` · ${r.title}` : ''}</div>
+          </div>
+          <button id="inviteBtn-${r.id}" style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="inviteTeammate('${r.id}')">+ Add</button>
+        </div>`).join('')}</div>`;
+  } catch (err) {
+    extraBox.innerHTML = '';
   }
 }
 

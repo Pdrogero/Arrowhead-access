@@ -27,16 +27,23 @@ router.get('/', requireAuth, requireRole('rep'), async (req, res) => {
   res.json(teammates);
 });
 
+// Reps already teammates with (or with a pending invite to/from) `repId` —
+// shared by /suggested and /search so neither offers a duplicate "+ Add"
+// for someone already in that state.
+async function excludedTeammateIds(repId: string): Promise<Set<string>> {
+  const existing = await prisma.teammateInvite.findMany({
+    where: { OR: [{ fromRepId: repId }, { toRepId: repId }] },
+    select: { fromRepId: true, toRepId: true },
+  });
+  const excludeIds = new Set<string>([repId]);
+  existing.forEach(inv => { excludeIds.add(inv.fromRepId); if (inv.toRepId) excludeIds.add(inv.toRepId); });
+  return excludeIds;
+}
+
 // --- Suggested teammates: same company, not already connected/pending -----
 router.get('/suggested', requireAuth, requireRole('rep'), async (req, res) => {
   const me = await prisma.rep.findUniqueOrThrow({ where: { id: req.user!.sub } });
-
-  const existing = await prisma.teammateInvite.findMany({
-    where: { OR: [{ fromRepId: me.id }, { toRepId: me.id }] },
-    select: { fromRepId: true, toRepId: true },
-  });
-  const excludeIds = new Set<string>([me.id]);
-  existing.forEach(inv => { excludeIds.add(inv.fromRepId); if (inv.toRepId) excludeIds.add(inv.toRepId); });
+  const excludeIds = await excludedTeammateIds(me.id);
 
   const suggested = await prisma.rep.findMany({
     where: {
@@ -48,6 +55,34 @@ router.get('/suggested', requireAuth, requireRole('rep'), async (req, res) => {
     orderBy: { name: 'asc' },
   });
   res.json(suggested);
+});
+
+// --- Search all reps on Arrowhead Access by name/company, to invite one --
+// as a teammate even outside your own company — Suggested Teammates only
+// ever covers same-company automatically.
+router.get('/search', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json([]);
+
+    const excludeIds = await excludedTeammateIds(req.user!.sub);
+    const results = await prisma.rep.findMany({
+      where: {
+        id: { notIn: [...excludeIds] },
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { companyName: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      select: REP_SUMMARY_SELECT,
+      orderBy: { name: 'asc' },
+      take: 20,
+    });
+    res.json(results);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not search reps' });
+  }
 });
 
 // --- Pending invites addressed to me ----------------------------------------
