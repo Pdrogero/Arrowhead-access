@@ -220,6 +220,7 @@ let activeConversationCounterpart = '';
 let activeConversationTargetId = null;
 let activeConversationEventLabel = null;
 let conversationMessages = [];
+let editingMessageId = null; // id of the message currently showing its inline edit form, if any
 let literatureRows = [];
 let materialsData = [];
 let idVerificationRequest; // undefined = loading, null = none yet, else the latest request object
@@ -2888,6 +2889,7 @@ window.openConversation = function(id, counterpart, targetId) {
   activeConversationCounterpart = counterpart;
   activeConversationTargetId = targetId;
   activeConversationEventLabel = null;
+  editingMessageId = null;
   setState({ screen: 'conversation' });
 };
 
@@ -2901,6 +2903,7 @@ window.startConversation = async function(targetId, counterpart, eventLabel) {
   activeConversationTargetId = targetId;
   activeConversationEventLabel = eventLabel || null;
   conversationMessages = [];
+  editingMessageId = null;
   setState({ screen: 'conversation' });
 
   // A conversation with this counterpart may already exist (e.g. reached via
@@ -3027,12 +3030,27 @@ function renderMessages() {
     const showLabel = m.eventLabel && m.eventLabel !== lastLabel;
     lastLabel = m.eventLabel || null;
     const links = (state.role === 'office' && m.senderType === 'REP') ? extractMessageLinks(m.body) : [];
+    const isMine = m.senderType === myType;
+
+    if (editingMessageId === m.id) {
+      return `
+      <div style="padding:10px 14px;border-bottom:1px solid var(--line);background:#F7FBF9;">
+        ${showLabel ? `<div style="font-size:11px;font-weight:600;color:var(--teal-dark);margin-bottom:4px;">Re: ${m.eventLabel.replace(/</g, '&lt;')}</div>` : ''}
+        <textarea id="editMessageBody-${m.id}" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:6px;">${m.body.replace(/</g, '&lt;')}</textarea>
+        <div id="editMessageErr-${m.id}"></div>
+        <div style="display:flex;gap:6px;">
+          <button type="button" onclick="saveEditedMessage('${m.id}')" style="background:var(--teal);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;">Save</button>
+          <button type="button" onclick="cancelEditMessage()" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;">Cancel</button>
+        </div>
+      </div>`;
+    }
+
     return `
-    <div style="padding:10px 14px;border-bottom:1px solid var(--line);${m.senderType === myType ? 'background:#F7FBF9;' : ''}">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--line);${isMine ? 'background:#F7FBF9;' : ''}">
       ${showLabel ? `<div style="font-size:11px;font-weight:600;color:var(--teal-dark);margin-bottom:4px;">Re: ${m.eventLabel.replace(/</g, '&lt;')}</div>` : ''}
       ${m.senderType === 'OFFICE' && m.senderName ? `<div style="font-size:11px;font-weight:600;color:var(--slate);margin-bottom:2px;">${m.senderName.replace(/</g, '&lt;')}</div>` : ''}
       <div style="font-size:13px;">${linkifyMessageBody(m.body)}</div>
-      <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}</div>
+      <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}${m.editedAt ? ' · edited' : ''}${isMine ? ` · <a href="#" onclick="toggleEditMessage('${m.id}');return false;" style="color:var(--teal);">Edit</a>` : ''}</div>
       ${links.map(link => `
         <button type="button" onclick="emailMessageAttachment('${m.id}', '${link.url.replace(/'/g, "\\'")}', '${link.title.replace(/'/g, "\\'")}')" style="display:inline-block;margin-top:6px;margin-right:6px;background:#F0F0EE;color:var(--ink);border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;">✉️ Email this</button>
       `).join('')}
@@ -3040,6 +3058,35 @@ function renderMessages() {
   }).join('');
   box.scrollTop = box.scrollHeight;
 }
+
+window.toggleEditMessage = function(id) {
+  editingMessageId = id;
+  renderMessages();
+  const textarea = document.getElementById(`editMessageBody-${id}`);
+  if (textarea) { textarea.focus(); textarea.setSelectionRange(textarea.value.length, textarea.value.length); }
+};
+
+window.cancelEditMessage = function() {
+  editingMessageId = null;
+  renderMessages();
+};
+
+window.saveEditedMessage = async function(id) {
+  const textarea = document.getElementById(`editMessageBody-${id}`);
+  const errBox = document.getElementById(`editMessageErr-${id}`);
+  const body = textarea.value.trim();
+  if (!body) { errBox.innerHTML = '<div class="msg err" style="margin:4px 0;">Message can\'t be empty</div>'; return; }
+
+  try {
+    const updated = await api(`/api/messages/${id}`, { method: 'PATCH', body: JSON.stringify({ body }) });
+    const msg = conversationMessages.find(m => m.id === id);
+    if (msg) { msg.body = updated.body; msg.editedAt = updated.editedAt; }
+    editingMessageId = null;
+    renderMessages();
+  } catch (err) {
+    errBox.innerHTML = `<div class="msg err" style="margin:4px 0;">${err.message}</div>`;
+  }
+};
 
 window.emailMessageAttachment = async function(messageId, url, title) {
   const to = prompt(`Email "${title}" to which address?`);

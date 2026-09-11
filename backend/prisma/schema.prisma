@@ -683,6 +683,10 @@ model Message {
   // sent, so it stays meaningful even if that slot is later edited/removed.
   eventLabel     String?
   createdAt      DateTime          @default(now())
+  // Set when the sender edits this message after sending (e.g. to fix a
+  // typo) — shown to the other side as "(edited)" so it's clear the text
+  // isn't exactly what was originally sent.
+  editedAt       DateTime?
 
   // Set when the other side of the conversation opens it after this
   // message was sent. Used to send a single idle-unread reminder email

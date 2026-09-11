@@ -186,6 +186,40 @@ router.post('/', requireAuth, requireActiveSubscription, async (req, res) => {
   }
 });
 
+// --- Edit a message you sent, e.g. to fix a typo ---------------------------
+// No time limit on this by design — the other side can always see it was
+// edited (editedAt), so there's nothing to hide by allowing it later too.
+router.patch('/:id', requireAuth, async (req, res) => {
+  try {
+    const message = await prisma.message.findUnique({ where: { id: req.params.id } });
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+
+    const senderType = req.user!.role === 'rep' ? 'REP' : 'OFFICE';
+    if (message.senderType !== senderType || message.senderId !== req.user!.sub) {
+      return res.status(403).json({ error: 'You can only edit your own messages' });
+    }
+
+    const body = String(req.body.body || '').trim();
+    if (!body) return res.status(400).json({ error: 'Message body is required' });
+
+    const phiSignal = findPhiSignal(body);
+    if (phiSignal) {
+      return res.status(400).json({
+        error: `This message looks like it may contain ${phiSignal} — please remove any patient-identifying information before sending. Messages on Arrowhead Access must not include PHI (see our Terms of Service).`,
+      });
+    }
+
+    const updated = await prisma.message.update({
+      where: { id: message.id },
+      data: { body, editedAt: new Date() },
+    });
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not edit this message' });
+  }
+});
+
 // --- Office: email a link a rep dropped into a message to any address -----
 // Reps can attach saved marketing material to a message as a plain link —
 // this lets office staff forward that specific link on without having to
