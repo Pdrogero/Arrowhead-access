@@ -95,6 +95,28 @@ router.get('/invites', requireAuth, requireRole('rep'), async (req, res) => {
   res.json(invites);
 });
 
+// --- Invites I've sent that are still pending --------------------------------
+// So a rep who invited someone can tell whether it's still awaiting a
+// response, rather than wondering why that person never showed up as a
+// teammate. toRep is null when the invite went to an email that hasn't
+// signed up yet — toRepEmail always has the address either way.
+router.get('/invites/sent', requireAuth, requireRole('rep'), async (req, res) => {
+  const invites = await prisma.teammateInvite.findMany({
+    where: { fromRepId: req.user!.sub, status: 'PENDING' },
+    include: { toRep: { select: REP_SUMMARY_SELECT } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(invites);
+});
+
+// --- Count of pending invites addressed to me --------------------------------
+// Powers a badge on the Transfers nav icon so a rep notices they have a
+// teammate invite waiting on them, without having to go looking for it.
+router.get('/invites/count', requireAuth, requireRole('rep'), async (req, res) => {
+  const count = await prisma.teammateInvite.count({ where: { toRepId: req.user!.sub, status: 'PENDING' } });
+  res.json({ count });
+});
+
 // --- Send an invite ----------------------------------------------------------
 router.post('/invite', requireAuth, requireRole('rep'), async (req, res) => {
   try {

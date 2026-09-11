@@ -2857,6 +2857,18 @@ async function loadUnreadMessageCount() {
   if (dotOffice) dotOffice.style.display = unreadMessageCount > 0 ? 'block' : 'none';
 }
 
+// A rep with a pending teammate invite waiting on them could otherwise only
+// find out by opening Transfers → My Team → Invites — this puts a badge on
+// the nav icon so it doesn't go unnoticed.
+async function loadPendingTeammateInviteCount() {
+  let count = 0;
+  try {
+    count = (await api('/api/teammates/invites/count')).count;
+  } catch (err) {}
+  const dot = document.getElementById('teammateInviteBadge');
+  if (dot) dot.style.display = count > 0 ? 'block' : 'none';
+}
+
 async function loadConversations() {
   const box = document.getElementById('conversationsBox');
   try {
@@ -3686,6 +3698,7 @@ let teamSubTab = 'mine'; // 'mine' | 'suggested' | 'invites'
 let teammatesData = [];
 let suggestedTeammatesData = [];
 let teamInvitesData = [];
+let sentTeamInvitesData = [];
 let teammateSearchTimer = null; // debounces the platform-wide fallback search on Suggested Teammates
 
 function transfersTabButtonHtml(tab, label) {
@@ -3823,7 +3836,7 @@ function screenDashboardRep() {
         <button class="navicon" onclick="setState({screen:'browseSlots'})"><span class="navicon-emoji">🔍</span><span class="navicon-label">Open Slots</span></button>
         <button class="navicon" onclick="setState({screen:'messages'})"><span class="navicon-emoji">💬<span id="messagesBadge" class="badge-dot" style="display:none;"></span></span><span class="navicon-label">Messages</span></button>
         <button class="navicon" onclick="setState({screen:'literature'})"><span class="navicon-emoji">📄</span><span class="navicon-label">Literature</span></button>
-        <button class="navicon" onclick="setState({screen:'transfers'})"><span class="navicon-emoji">🔄</span><span class="navicon-label">Transfers</span></button>
+        <button class="navicon" onclick="setState({screen:'transfers'})"><span class="navicon-emoji">🔄<span id="teammateInviteBadge" class="badge-dot" style="display:none;"></span></span><span class="navicon-label">Transfers</span></button>
       </div>
 
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 4px;flex-wrap:wrap;">
@@ -5469,14 +5482,16 @@ window.setTeamSubTab = function(tab) {
 // soon as the My Team tab opens, regardless of which sub-tab is active.
 async function loadTeamData() {
   try {
-    const [teammates, suggested, invites] = await Promise.all([
+    const [teammates, suggested, invites, sentInvites] = await Promise.all([
       api('/api/teammates'),
       api('/api/teammates/suggested'),
       api('/api/teammates/invites'),
+      api('/api/teammates/invites/sent'),
     ]);
     teammatesData = teammates;
     suggestedTeammatesData = suggested;
     teamInvitesData = invites;
+    sentTeamInvitesData = sentInvites;
   } catch (err) {}
   renderTransfersScreen();
   renderTeamBox();
@@ -5537,7 +5552,20 @@ function renderTeamBox() {
         <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="respondToTeammateInvite('${inv.id}','accept')">✓ Accept</button>
         <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="respondToTeammateInvite('${inv.id}','decline')">✕ Decline</button>
       </div>`).join('') : '<div class="empty">No pending invites.</div>';
-    box.innerHTML = sendInviteFormHtml + invitesListHtml;
+    // Invites this rep sent that nobody's responded to yet — so it's clear
+    // something is still waiting on the other person, not just forgotten.
+    const sentInvitesHtml = sentTeamInvitesData.length ? `
+      <p style="font-size:12px;font-weight:600;color:var(--slate);margin:16px 0 6px;padding:0 4px;">Sent — awaiting response</p>
+      ${sentTeamInvitesData.map(inv => `
+        <div class="row">
+          <div class="mid">
+            <div class="who">${inv.toRep ? inv.toRep.name : inv.toRepEmail}</div>
+            <div class="what">${inv.toRep ? [inv.toRep.companyName, inv.toRep.title].filter(Boolean).join(' · ') : 'Not signed up yet'}</div>
+          </div>
+          <span class="chip PENDING">PENDING</span>
+        </div>`).join('')}
+    ` : '';
+    box.innerHTML = sendInviteFormHtml + invitesListHtml + sentInvitesHtml;
   }
 }
 
@@ -5779,7 +5807,7 @@ function render() {
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
   else if (state.screen === 'officeCalendar') { app.innerHTML = screenOfficeCalendar(); }
   else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); loadLocationSwitcher(); loadUnreadMessageCount(); }
-  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadRepHeader(); loadMyBookings(); loadBillingStatus(); loadUnreadMessageCount(); }
+  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadRepHeader(); loadMyBookings(); loadBillingStatus(); loadUnreadMessageCount(); loadPendingTeammateInviteCount(); }
   else if (state.screen === 'visitHistory' && state.role === 'office') { app.innerHTML = screenVisitHistory(); loadOfficeHistory(); }
   else if (state.screen === 'visitHistory' && state.role === 'rep') { app.innerHTML = screenVisitHistory(); loadRepHistory(); }
 
