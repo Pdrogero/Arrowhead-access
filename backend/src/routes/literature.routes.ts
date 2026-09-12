@@ -1,6 +1,6 @@
 // src/routes/literature.routes.ts
-// Lets a rep send literature/sample info to any office on Arrowhead
-// Access, for the office to accept or decline.
+// Lets a rep send literature/sample info to an office they've visited
+// before, for the office to accept or decline.
 // Mount with: app.use('/api/literature', literatureRouter)
 //
 // Requires this env var on Render:
@@ -63,7 +63,7 @@ router.post('/upload', requireAuth, requireRole('rep'), requireActiveSubscriptio
   }
 });
 
-// --- Rep: send literature/samples to any office on Arrowhead Access -------
+// --- Rep: send literature/samples to an office they've visited before -----
 router.post('/', requireAuth, requireRole('rep'), requireActiveSubscription, async (req, res) => {
   try {
     const locationId = String(req.body.locationId || '');
@@ -80,6 +80,17 @@ router.post('/', requireAuth, requireRole('rep'), requireActiveSubscription, asy
 
     const location = await prisma.location.findUnique({ where: { id: locationId } });
     if (!location) return res.status(404).json({ error: 'Office not found' });
+
+    // The dropdown lists every office on the platform (so a rep can see
+    // who's out there), but actually sending is still limited to offices
+    // this rep has an established relationship with, to keep it from
+    // becoming a spam vector for offices with no connection to the rep.
+    const hasVisited = await prisma.booking.findFirst({
+      where: { repId: req.user!.sub, status: { in: ['CONFIRMED', 'COMPLETED'] }, slot: { locationId } },
+    });
+    if (!hasVisited) {
+      return res.status(403).json({ error: 'You can only send literature to offices you have visited before' });
+    }
 
     // Flag (but don't block) a likely duplicate — same title already sent to
     // this same office and not yet declined. The rep can confirm and resend
