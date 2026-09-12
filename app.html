@@ -3236,7 +3236,7 @@ function screenLiterature() {
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
       <h1>Literature & Samples</h1>
       ${!isOffice ? `
-        <p class="sub">Send literature or sample info to an office you've visited before.</p>
+        <p class="sub">Send literature or sample info to any office on Arrowhead Access.</p>
         <div class="card" style="margin-bottom:24px;">
           ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
           <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Office</label>
@@ -3424,21 +3424,9 @@ async function loadLiterature() {
   const box = document.getElementById('literatureBox');
   try {
     if (state.role === 'rep') {
-      // Combine active and past bookings so an office you've already
-      // visited (and thus moved to Visit History) still shows up here —
-      // not just offices with a still-upcoming confirmed booking.
-      const [bookings, history] = await Promise.all([
-        api('/api/bookings/mine'),
-        api('/api/bookings/history'),
-      ]);
-      const offices = [];
-      const seen = new Set();
-      [...bookings, ...history].filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status)).forEach(b => {
-        if (!seen.has(b.slot.location.id)) {
-          seen.add(b.slot.location.id);
-          offices.push(b.slot.location);
-        }
-      });
+      // Every office on Arrowhead Access, not just ones you've booked with —
+      // literature can be sent to any office, whether you've visited or not.
+      const offices = await api('/api/locations/all');
       const sel = document.getElementById('literatureLocationSelect');
       if (sel) sel.innerHTML = `<option value="">Select an office…</option>${offices.map(o => `<option value="${o.id}">${o.name}</option>`).join('')}`;
       loadSavedMaterialsPicker();

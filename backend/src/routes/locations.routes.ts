@@ -203,6 +203,25 @@ router.get('/:locationId/detail', requireAuth, requireRole('rep'), async (req, r
   }
 });
 
+// --- Rep: every office on Arrowhead Access, for pickers that need the -----
+// full directory rather than a type-to-search list (e.g. the Literature &
+// Samples "Select an office" dropdown).
+router.get('/all', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const rep = await prisma.rep.findUnique({ where: { id: req.user!.sub }, select: { complimentaryAccess: true } });
+    const locations = await prisma.location.findMany({
+      where: rep?.complimentaryAccess ? {} : { NOT: { name: { contains: 'Arrowhead Access', mode: 'insensitive' } } },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+      take: 500,
+    });
+    res.json(locations);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch offices' });
+  }
+});
+
 // --- Rep: search all offices on the platform by name, regardless of ------
 // whether they currently have any open slots posted.
 router.get('/search', requireAuth, requireRole('rep'), async (req, res) => {
