@@ -3424,10 +3424,16 @@ async function loadLiterature() {
   const box = document.getElementById('literatureBox');
   try {
     if (state.role === 'rep') {
-      const bookings = await api('/api/bookings/mine');
+      // Combine active and past bookings so an office you've already
+      // visited (and thus moved to Visit History) still shows up here —
+      // not just offices with a still-upcoming confirmed booking.
+      const [bookings, history] = await Promise.all([
+        api('/api/bookings/mine'),
+        api('/api/bookings/history'),
+      ]);
       const offices = [];
       const seen = new Set();
-      bookings.filter(b => b.status === 'CONFIRMED').forEach(b => {
+      [...bookings, ...history].filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status)).forEach(b => {
         if (!seen.has(b.slot.location.id)) {
           seen.add(b.slot.location.id);
           offices.push(b.slot.location);
