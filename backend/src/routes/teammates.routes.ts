@@ -185,6 +185,66 @@ router.post('/invite', requireAuth, requireRole('rep'), async (req, res) => {
   }
 });
 
+// --- Cancel an invite I sent that's still pending ----------------------------
+router.delete('/invites/:id', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const invite = await prisma.teammateInvite.findUnique({ where: { id: req.params.id } });
+    if (!invite || invite.fromRepId !== req.user!.sub) {
+      return res.status(404).json({ error: 'Invite not found' });
+    }
+    if (invite.status !== 'PENDING') {
+      return res.status(409).json({ error: 'This invite has already been decided' });
+    }
+    await prisma.teammateInvite.delete({ where: { id: invite.id } });
+    res.json({ message: 'Invite cancelled' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not cancel this invite' });
+  }
+});
+
+// --- Friendly reminder about an invite I sent that's still pending ----------
+// Rate-limited to once every 24 hours per invite, same as the booking nudge.
+router.post('/invites/:id/nudge', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const invite = await prisma.teammateInvite.findUnique({
+      where: { id: req.params.id },
+      include: { fromRep: true, toRep: true },
+    });
+    if (!invite || invite.fromRepId !== req.user!.sub) {
+      return res.status(404).json({ error: 'Invite not found' });
+    }
+    if (invite.status !== 'PENDING') {
+      return res.status(409).json({ error: 'This invite has already been decided' });
+    }
+    if (invite.lastNudgedAt && Date.now() - invite.lastNudgedAt.getTime() < 24 * 60 * 60 * 1000) {
+      return res.status(429).json({ error: 'You can nudge this invite once every 24 hours.' });
+    }
+
+    if (invite.toRep) {
+      sendEmail({
+        to: invite.toRep.email,
+        subject: `Friendly reminder: ${invite.fromRep.name} wants to connect on Arrowhead Access`,
+        html: `${emailLogoHeader()}<p><strong>${invite.fromRep.name}</strong> (${invite.fromRep.companyName}) sent a friendly reminder about their teammate invite. Log in and check Transfers → My Team → Invites to accept.</p>${emailLoginButton()}`,
+      }).catch(() => {});
+    } else {
+      const appUrl = process.env.APP_URL || 'https://arrowheadaccess.com';
+      const signupUrl = `${appUrl}/app.html?teammate=1&email=${encodeURIComponent(invite.toRepEmail)}`;
+      sendEmail({
+        to: invite.toRepEmail,
+        subject: `Friendly reminder: ${invite.fromRep.name} wants to connect on Arrowhead Access`,
+        html: `${emailLogoHeader()}<p><strong>${invite.fromRep.name}</strong> (${invite.fromRep.companyName}) sent a friendly reminder to join Arrowhead Access and connect as teammates.</p><p><a href="${signupUrl}">Sign up with this email address</a> to join — it only takes a minute.</p>`,
+      }).catch(() => {});
+    }
+
+    await prisma.teammateInvite.update({ where: { id: invite.id }, data: { lastNudgedAt: new Date() } });
+    res.json({ message: 'Nudge sent' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not send nudge' });
+  }
+});
+
 // --- Accept or decline an invite addressed to me ----------------------------
 router.post('/invites/:id/respond', requireAuth, requireRole('rep'), async (req, res) => {
   try {

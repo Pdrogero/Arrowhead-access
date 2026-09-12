@@ -405,6 +405,10 @@ model TeammateInvite {
   createdAt   DateTime             @default(now())
   respondedAt DateTime?
 
+  // Last time the sender nudged the recipient about this pending invite —
+  // rate-limited so they can't spam a reminder (mirrors Booking.lastNudgedAt).
+  lastNudgedAt DateTime?
+
   @@unique([fromRepId, toRepId])
   @@index([toRepId, status])
   @@index([fromRepId, status])

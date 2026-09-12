@@ -5669,14 +5669,22 @@ function renderTeamBox() {
     // something is still waiting on the other person, not just forgotten.
     const sentInvitesHtml = sentTeamInvitesData.length ? `
       <p style="font-size:12px;font-weight:600;color:var(--slate);margin:16px 0 6px;padding:0 4px;">Sent — awaiting response</p>
-      ${sentTeamInvitesData.map(inv => `
-        <div class="row">
+      ${sentTeamInvitesData.map(inv => {
+        const recentlyNudged = inv.lastNudgedAt && Date.now() - new Date(inv.lastNudgedAt).getTime() < 24 * 60 * 60 * 1000;
+        const who = inv.toRep ? inv.toRep.name : inv.toRepEmail;
+        return `
+        <div class="row" style="flex-wrap:wrap;">
           <div class="mid">
-            <div class="who">${inv.toRep ? inv.toRep.name : inv.toRepEmail}</div>
+            <div class="who">${who}</div>
             <div class="what">${inv.toRep ? [inv.toRep.companyName, inv.toRep.title].filter(Boolean).join(' · ') : 'Not signed up yet'}</div>
           </div>
           <span class="chip PENDING">PENDING</span>
-        </div>`).join('')}
+          ${recentlyNudged
+            ? `<button disabled style="background:#F0F0EE;color:var(--slate);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:default;white-space:nowrap;">🔔 Nudged</button>`
+            : `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="nudgeTeammateInvite('${inv.id}', '${who.replace(/'/g, "\\'")}')">🔔 Nudge</button>`}
+          <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelTeammateInvite('${inv.id}', '${who.replace(/'/g, "\\'")}')">Cancel</button>
+        </div>`;
+      }).join('')}
     ` : '';
     box.innerHTML = sendInviteFormHtml + invitesListHtml + sentInvitesHtml;
   }
@@ -5742,6 +5750,27 @@ window.inviteTeammate = async function(repId) {
 window.respondToTeammateInvite = async function(inviteId, decision) {
   try {
     await api(`/api/teammates/invites/${inviteId}/respond`, { method: 'POST', body: JSON.stringify({ decision }) });
+    loadTeamData();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.cancelTeammateInvite = async function(inviteId, name) {
+  if (!confirm(`Cancel your pending invite to ${name}?`)) return;
+  try {
+    await api(`/api/teammates/invites/${inviteId}`, { method: 'DELETE' });
+    loadTeamData();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.nudgeTeammateInvite = async function(inviteId, name) {
+  if (!confirm(`Send ${name} a friendly reminder about your pending invite?`)) return;
+  try {
+    await api(`/api/teammates/invites/${inviteId}/nudge`, { method: 'POST' });
+    alert('Reminder sent!');
     loadTeamData();
   } catch (err) {
     alert(err.message);
