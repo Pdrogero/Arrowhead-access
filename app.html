@@ -111,6 +111,7 @@
       <button id="repProfileBtn" onclick="toggleProfileMenu()" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1;padding:4px;display:flex;align-items:center;gap:4px;" title="Profile">👤<span style="font-size:12px;font-weight:600;color:var(--ink);">Profile</span><span style="font-size:11px;font-weight:900;color:var(--slate);">▾</span></button>
       <div id="profileMenuBox" style="position:absolute;top:100%;right:0;z-index:100;width:260px;max-width:90vw;"></div>
     </div>
+    <button id="officeSettingsBtn" onclick="setState({screen:'officeSettings'})" style="display:none;background:none;border:none;cursor:pointer;font-size:20px;line-height:1;padding:4px;align-items:center;gap:4px;" title="Office Settings">⚙️<span style="font-size:12px;font-weight:600;color:var(--ink);">Settings</span></button>
     <button id="logoutBtn" class="btn-logout" onclick="logout()">Log out</button>
   </div>
 </header>
@@ -3857,8 +3858,7 @@ function screenDashboardOffice() {
         </label>
         <button type="button" id="removeSelectedLedgerBtn" onclick="removeSelectedLedgerSlots()" disabled style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🗑 Remove selected</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(5,auto);grid-auto-flow:column;gap:2px 20px;margin-bottom:16px;">
-        <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'officeSettings'})">⚙️ Office Settings</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,auto);grid-auto-flow:column;gap:2px 20px;margin-bottom:16px;">
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'postSlot'})">➕ Post an open slot</button>
         <button class="link" style="text-align:left;margin:0;" onclick="openOfficeCalendar()">📅 Calendar</button>
         <button class="link" style="text-align:left;margin:0;" onclick="setState({screen:'repsDirectory'})">📇 My Reps</button>
@@ -5900,6 +5900,8 @@ function render() {
   if (repProfileMenuWrap) repProfileMenuWrap.style.display = (state.role === 'rep' && state.me) ? 'block' : 'none';
   const profileMenuBox = document.getElementById('profileMenuBox');
   if (profileMenuBox) profileMenuBox.innerHTML = '';
+  const officeSettingsBtn = document.getElementById('officeSettingsBtn');
+  if (officeSettingsBtn) officeSettingsBtn.style.display = (state.role === 'office' && state.screen !== 'role' && state.screen !== 'officeSettings') ? 'flex' : 'none';
   document.body.classList.toggle('medical-bg', ['role', 'login', 'forgotPassword', 'resetPassword', 'terms', 'privacy'].includes(state.screen));
   if (!['dashboard', 'officeCalendar'].includes(state.screen)) officeCancelDraft = null;
   if (state.screen !== 'dashboard') repCancelDraft = null;
