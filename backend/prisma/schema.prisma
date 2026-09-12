@@ -498,7 +498,10 @@ model Slot {
   status           SlotStatus     @default(OPEN)
   eventType        SlotEventType  @default(REP_VISIT)
   createdByStaffId String?
-  createdByStaff   StaffUser?     @relation(fields: [createdByStaffId], references: [id])
+  // SetNull rather than the default so removing a staff login (e.g. someone
+  // who left the office) never blocks on slots they posted — the slot just
+  // loses its "posted by" attribution instead.
+  createdByStaff   StaffUser?     @relation(fields: [createdByStaffId], references: [id], onDelete: SetNull)
   createdAt        DateTime       @default(now())
 
   // Lunch order details — only meaningful when eventType is LUNCH. The

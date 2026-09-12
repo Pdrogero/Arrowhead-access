@@ -532,6 +532,129 @@ router.post('/office/signup', async (req, res) => {
   }
 });
 
+// --- Office admin: staff logins for their own location --------------------
+// Lets an office share real access with a colleague — their own login, own
+// password — instead of everyone using one shared account (which is also
+// why office-sent messages have a free-text sender name: this is the actual
+// fix for that).
+router.get('/staff', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const me = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!me) return res.status(404).json({ error: 'Staff not found' });
+
+    const staff = await prisma.staffUser.findMany({
+      where: { locationId: me.locationId },
+      select: { id: true, email: true, role: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(staff);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch staff' });
+  }
+});
+
+// Only an admin can invite — a regular staff login shouldn't be able to
+// grant more logins on its own. The invitee always joins as STAFF; making
+// someone an admin is a bigger decision than a one-line invite form.
+router.post('/staff/invite', requireAuth, requireRole('office_admin'), async (req, res) => {
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Enter a valid email address' });
+    }
+
+    const inviter = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!inviter) return res.status(404).json({ error: 'Staff not found' });
+
+    const existing = await prisma.staffUser.findUnique({ where: { email } });
+    if (existing) return res.status(409).json({ error: 'Someone with this email already has a login' });
+
+    const location = await prisma.location.findUnique({ where: { id: inviter.locationId } });
+    if (!location) return res.status(404).json({ error: 'Location not found' });
+    const organizationId = await resolveStaffOrgId(inviter);
+
+    // A random, never-shared placeholder — the passwordHash column can't be
+    // null, and this is unusable to log in with until accept-invite below
+    // overwrites it with whatever the invitee actually chooses.
+    const placeholderHash = await bcrypt.hash(crypto.randomUUID(), 10);
+    const staff = await prisma.staffUser.create({
+      data: {
+        email,
+        passwordHash: placeholderHash,
+        role: 'STAFF',
+        organizationId,
+        locationId: inviter.locationId,
+      },
+    });
+
+    const inviteToken = jwt.sign({ sub: staff.id, type: 'staff_invite' }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+    const inviteUrl = `${process.env.APP_URL}/app.html?staffInvite=1&token=${inviteToken}`;
+    sendEmail({
+      to: email,
+      subject: `You've been added to ${location.name} on Arrowhead Access`,
+      html: `${emailLogoHeader()}<p>Hi,</p><p><strong>${location.name}</strong> added you as a staff login on Arrowhead Access, so you can post open slots, review visit requests, and message reps with your own account — no more sharing one login.</p><p><a href="${inviteUrl}">Set your password</a> to finish setting up — this link expires in 7 days.</p>`,
+    }).catch(() => {});
+
+    res.status(201).json({ id: staff.id, email: staff.email });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not invite this staff member' });
+  }
+});
+
+// Public — the invitee isn't logged in yet. Verifies the token, sets their
+// password, and logs them straight in (same token shape as a normal login).
+router.post('/staff/accept-invite', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'token and password are required' });
+    if (String(password).length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    let payload: { sub: string; type: string };
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET!) as typeof payload;
+    } catch {
+      return res.status(400).json({ error: 'This invite link is invalid or has expired' });
+    }
+    if (payload.type !== 'staff_invite') return res.status(400).json({ error: 'Invalid invite link' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const staff = await prisma.staffUser.update({ where: { id: payload.sub }, data: { passwordHash } });
+    const organizationId = await resolveStaffOrgId(staff);
+
+    const loginToken = signToken({
+      sub: staff.id,
+      role: staff.role === 'ADMIN' ? 'office_admin' : 'office_staff',
+      organizationId: organizationId ?? '',
+      locationId: staff.locationId,
+    });
+    res.json({ token: loginToken });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not complete setup' });
+  }
+});
+
+// Admin-only, and never yourself — removing your own only login this way
+// would lock the office out with no path back in.
+router.delete('/staff/:id', requireAuth, requireRole('office_admin'), async (req, res) => {
+  try {
+    const me = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!me) return res.status(404).json({ error: 'Staff not found' });
+    if (req.params.id === me.id) return res.status(400).json({ error: "You can't remove your own access this way" });
+
+    const target = await prisma.staffUser.findUnique({ where: { id: req.params.id } });
+    if (!target || target.locationId !== me.locationId) return res.status(404).json({ error: 'Staff member not found' });
+
+    await prisma.staffUser.delete({ where: { id: target.id } });
+    res.json({ message: 'Removed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not remove this staff member' });
+  }
+});
+
 // --- Forgot / reset password (both rep and office accounts) --------------
 // Uses a short-lived signed JWT as the reset token instead of a DB-backed
 // table — reuses the same JWT_SECRET already configured for login.

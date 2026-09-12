@@ -200,6 +200,7 @@ let myBookingsRatings = {}; // cached per-office rating averages, fetched once p
 let employeeRows = [];
 let officeLocationsData = [];
 let editingLocationId = null;
+let officeStaffLoginsData = [];
 let recurringTemplates = [];
 let viewedOfficeStaff = null;
 let viewedOfficeStaffName = '';
@@ -486,6 +487,20 @@ function screenResetPassword() {
         ${passwordFieldHtml('newPassword', 'New password', 'new-password')}
         ${passwordFieldHtml('confirmPassword', 'Confirm new password', 'new-password')}
         <button class="primary" onclick="doResetPassword()">Set new password</button>
+      </div>
+    </div>`;
+}
+
+function screenStaffInviteAccept() {
+  return `
+    <div class="wrap">
+      <h1>Set up your login</h1>
+      <p class="sub">Choose a password to finish setting up your own Arrowhead Access account.</p>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        ${passwordFieldHtml('newPassword', 'Password', 'new-password')}
+        ${passwordFieldHtml('confirmPassword', 'Confirm password', 'new-password')}
+        <button class="primary" onclick="doAcceptStaffInvite()">Set password &amp; log in</button>
       </div>
     </div>`;
 }
@@ -777,6 +792,12 @@ function screenOfficeSettings() {
           <div id="addLocationErr"></div>
           <button type="button" class="primary" style="margin-bottom:0;" onclick="createLocation()">Add this location</button>
         </div>
+      </div>
+
+      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Staff Logins</p>
+      <div class="card">
+        <p style="font-size:12px;color:var(--slate);margin-bottom:12px;">Give a coworker their own login to this location instead of everyone sharing one account.</p>
+        <div id="staffLoginsListBox"><div class="empty">Loading…</div></div>
       </div>
 
       <button class="primary" style="margin-top:8px;" onclick="saveEmployees()">Save All</button>
@@ -2296,6 +2317,71 @@ window.createLocation = async function() {
     loadLocationsSettings();
   } catch (err) {
     errBox.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+};
+
+async function loadStaffLogins() {
+  const box = document.getElementById('staffLoginsListBox');
+  if (!box) return;
+  try {
+    officeStaffLoginsData = await api('/api/auth/staff');
+    renderStaffLoginsList();
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+}
+
+function renderStaffLoginsList() {
+  const box = document.getElementById('staffLoginsListBox');
+  if (!box) return;
+  const isAdmin = state.me?.role === 'ADMIN';
+  const rows = officeStaffLoginsData.map(s => `
+    <div class="row">
+      <div class="mid">
+        <div class="who">${s.email}${s.id === state.me.id ? ' (you)' : ''}</div>
+        <div class="what">${s.role === 'ADMIN' ? 'Admin' : 'Staff'}</div>
+      </div>
+      ${isAdmin && s.id !== state.me.id ? `<button type="button" style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="removeStaffLogin('${s.id}', '${s.email.replace(/'/g, "\\'")}')">Remove</button>` : ''}
+    </div>`).join('');
+
+  const inviteFormHtml = isAdmin ? `
+    <div class="row" style="flex-wrap:wrap;background:var(--paper);">
+      <div class="mid" style="width:100%;">
+        <label style="font-size:12.5px;font-weight:600;margin-bottom:6px;display:block;">Invite a staff member</label>
+        <div style="display:flex;gap:8px;">
+          <input id="inviteStaffEmail" type="email" placeholder="Their email address" style="flex:1;margin-bottom:0;" onkeydown="if(event.key==='Enter')sendStaffInvite()">
+          <button class="primary" style="width:auto;margin:0;padding:0 16px;" onclick="sendStaffInvite()">Send Invite</button>
+        </div>
+        <div id="inviteStaffErr"></div>
+      </div>
+    </div>` : '';
+
+  box.innerHTML = `<div class="listcard" style="margin-bottom:${isAdmin ? '12px' : '0'};">${rows}</div>${inviteFormHtml}`;
+}
+
+window.sendStaffInvite = async function() {
+  const input = document.getElementById('inviteStaffEmail');
+  const errBox = document.getElementById('inviteStaffErr');
+  const email = input.value.trim();
+  if (!email) return;
+  errBox.innerHTML = '';
+  try {
+    await api('/api/auth/staff/invite', { method: 'POST', body: JSON.stringify({ email }) });
+    input.value = '';
+    alert(`Invite sent to ${email}!`);
+    loadStaffLogins();
+  } catch (err) {
+    errBox.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
+};
+
+window.removeStaffLogin = async function(staffId, email) {
+  if (!confirm(`Remove ${email}'s access to this location? They won't be able to log in anymore.`)) return;
+  try {
+    await api(`/api/auth/staff/${staffId}`, { method: 'DELETE' });
+    loadStaffLogins();
+  } catch (err) {
+    alert(err.message);
   }
 };
 
@@ -3972,6 +4058,33 @@ async function doResetPassword() {
     window.history.replaceState({}, '', window.location.pathname);
     setState({ screen: 'role', formErr: null });
     alert('Password updated! You can now log in with your new password.');
+  } catch (err) {
+    setState({ formErr: err.message });
+  }
+}
+
+async function doAcceptStaffInvite() {
+  const newPassword = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+
+  if (newPassword !== confirmPassword) {
+    setState({ formErr: "Passwords don't match" });
+    return;
+  }
+  if (!newPassword || newPassword.length < 6) {
+    setState({ formErr: 'Password must be at least 6 characters' });
+    return;
+  }
+
+  try {
+    const res = await api('/api/auth/staff/accept-invite', { method: 'POST', body: JSON.stringify({ token: state.staffInviteToken, password: newPassword }) });
+    localStorage.setItem('token', res.token);
+    state.staffInviteToken = null;
+    window.history.replaceState({}, '', window.location.pathname);
+    const me = await api('/api/auth/me');
+    state.me = { id: me.sub, role: me.role === 'office_admin' ? 'ADMIN' : 'STAFF', locationId: me.locationId };
+    state.role = 'office';
+    setState({ screen: 'dashboard', formErr: null });
   } catch (err) {
     setState({ formErr: err.message });
   }
@@ -5768,12 +5881,13 @@ function render() {
   else if (state.screen === 'login') app.innerHTML = screenLogin();
   else if (state.screen === 'forgotPassword') app.innerHTML = screenForgotPassword();
   else if (state.screen === 'resetPassword') app.innerHTML = screenResetPassword();
+  else if (state.screen === 'staffInviteAccept') app.innerHTML = screenStaffInviteAccept();
   else if (state.screen === 'signup') { app.innerHTML = screenSignup(); renderTurnstile(); }
   else if (state.screen === 'verifyIdentityNudge') { app.innerHTML = screenVerifyIdentityNudge(); }
   else if (state.screen === 'twoFactorNudge') { app.innerHTML = screenTwoFactorNudge(); }
   else if (state.screen === 'profile') { app.innerHTML = screenProfile(); initProfileScreen(); }
   else if (state.screen === 'favoriteOffices') { app.innerHTML = screenFavoriteOffices(); loadFavoriteOffices(); }
-  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); }
+  else if (state.screen === 'officeSettings') { app.innerHTML = screenOfficeSettings(); loadEmployees(); loadLocationsSettings(); loadStaffLogins(); }
   else if (state.screen === 'officeStaff') { app.innerHTML = screenOfficeStaff(); }
   else if (state.screen === 'repsDirectory') { app.innerHTML = screenRepsDirectory(); loadRepsDirectory(); }
   else if (state.screen === 'officeDetail') { app.innerHTML = screenOfficeDetail(); }
@@ -5860,9 +5974,15 @@ const teammateInviteParam = new URLSearchParams(window.location.search).get('tea
 const officeInviteParam = new URLSearchParams(window.location.search).get('officeInvite');
 const officeInviteNameParam = new URLSearchParams(window.location.search).get('officeName');
 const openSlotsParam = new URLSearchParams(window.location.search).get('openSlots');
+const staffInviteParam = new URLSearchParams(window.location.search).get('staffInvite');
+const staffInviteTokenParam = new URLSearchParams(window.location.search).get('token');
 if (resetTokenParam) {
   state.resetToken = resetTokenParam;
   state.screen = 'resetPassword';
+  render();
+} else if (staffInviteParam === '1' && staffInviteTokenParam) {
+  state.staffInviteToken = staffInviteTokenParam;
+  state.screen = 'staffInviteAccept';
   render();
 } else if (localStorage.getItem('token')) {
   api('/api/auth/me').then(async me => {
