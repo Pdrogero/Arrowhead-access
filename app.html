@@ -1489,26 +1489,38 @@ function renderBrowseList(slots) {
 async function loadOfficeSearchFallback(query) {
   const box = document.getElementById('officeSearchFallback');
   try {
-    const matches = await api('/api/locations/search?q=' + encodeURIComponent(query));
+    const [matches, myRequests] = await Promise.all([
+      api('/api/locations/search?q=' + encodeURIComponent(query)),
+      api('/api/locations/notify-me/mine'),
+    ]);
     if (!document.getElementById('officeSearchFallback')) return;
     if (matches.length) {
       box.innerHTML = matches.map(m => `<div style="margin-top:8px;"><strong>${m.name.replace(/</g, '&lt;')}</strong> is on Arrowhead Access (${m.address.replace(/</g, '&lt;')}), but has no open slots posted right now.</div>`).join('');
-    } else {
+      return;
+    }
+    // Already asked to be notified about this exact office name — show that
+    // instead of the blank request form again.
+    const already = myRequests.find(r => r.officeName.trim().toLowerCase() === query.trim().toLowerCase());
+    if (already) {
       box.innerHTML = `
         <div style="margin-top:8px;"><strong>${query.replace(/</g, '&lt;')}</strong> isn't on Arrowhead Access yet.</div>
-        <div style="position:relative;margin-top:8px;">
-          <input type="text" id="notifyMeNameInput" placeholder="Office name" autocomplete="off" value="${query.replace(/"/g, '&quot;')}" oninput="filterNotifyMeGeoSuggestions(this.value)" onblur="setTimeout(hideNotifyMeGeoSuggestions, 150)" style="margin-bottom:0;width:100%;">
-          <div id="notifyMeGeoSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.08);max-height:220px;overflow-y:auto;"></div>
-        </div>
-        <div style="font-size:11px;color:var(--slate);margin-top:4px;">Address suggestions may take a moment to appear as you type.</div>
-        <input type="text" id="notifyMeAddressInput" placeholder="Address (optional — pick a suggestion above to fill this in)" autocomplete="off" style="margin-top:6px;">
-        <label style="display:flex;align-items:center;margin-top:8px;">
-          <input type="checkbox" id="notifyMeCheckbox" style="margin-right:8px;">
-          Notify me when they join
-        </label>
-        <button class="primary" style="margin-top:8px;width:auto;padding:8px 16px;" onclick="submitNotifyMe()">Save</button>
-        <div id="notifyMeStatus" style="margin-top:6px;"></div>`;
+        <div style="margin-top:8px;color:var(--teal-dark);">✓ You already asked to be notified when they join.</div>`;
+      return;
     }
+    box.innerHTML = `
+      <div style="margin-top:8px;"><strong>${query.replace(/</g, '&lt;')}</strong> isn't on Arrowhead Access yet.</div>
+      <div style="position:relative;margin-top:8px;">
+        <input type="text" id="notifyMeNameInput" placeholder="Office name" autocomplete="off" value="${query.replace(/"/g, '&quot;')}" oninput="filterNotifyMeGeoSuggestions(this.value)" onblur="setTimeout(hideNotifyMeGeoSuggestions, 150)" style="margin-bottom:0;width:100%;">
+        <div id="notifyMeGeoSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.08);max-height:220px;overflow-y:auto;"></div>
+      </div>
+      <div style="font-size:11px;color:var(--slate);margin-top:4px;">Address suggestions may take a moment to appear as you type.</div>
+      <input type="text" id="notifyMeAddressInput" placeholder="Address (optional — pick a suggestion above to fill this in)" autocomplete="off" style="margin-top:6px;">
+      <label style="display:flex;align-items:center;margin-top:8px;">
+        <input type="checkbox" id="notifyMeCheckbox" style="margin-right:8px;">
+        Notify me when they join
+      </label>
+      <button class="primary" style="margin-top:8px;width:auto;padding:8px 16px;" onclick="submitNotifyMe()">Save</button>
+      <div id="notifyMeStatus" style="margin-top:6px;"></div>`;
   } catch (err) {
     if (box) box.innerHTML = '';
   }

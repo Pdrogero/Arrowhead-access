@@ -285,6 +285,22 @@ router.get('/new', requireAuth, requireRole('rep'), async (req, res) => {
   }
 });
 
+// --- Rep: office names this rep has already asked to be notified about ----
+// Lets the search fallback show "you'll be notified" instead of the empty
+// request form again for an office they've already flagged.
+router.get('/notify-me/mine', requireAuth, requireRole('rep'), async (req, res) => {
+  try {
+    const requests = await prisma.officeInterestRequest.findMany({
+      where: { repId: req.user!.sub },
+      select: { officeName: true, notified: true },
+    });
+    res.json(requests);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch your notify requests' });
+  }
+});
+
 // --- Rep: ask to be emailed once an office not yet on the platform joins --
 router.post('/notify-me', requireAuth, requireRole('rep'), async (req, res) => {
   try {
