@@ -307,6 +307,30 @@ function passwordFieldHtml(id, placeholder, autocomplete) {
   </div>`;
 }
 
+// Email field with a quick "✕" clear button once there's something typed —
+// saves backspacing the whole thing out, e.g. after a browser autofills the
+// wrong saved account.
+function clearableEmailFieldHtml(id, autocomplete) {
+  return `<div style="position:relative;margin-bottom:12px;">
+    <input id="${id}" type="email" placeholder="Email" autocomplete="${autocomplete}" autocapitalize="none" autocorrect="off" spellcheck="false" oninput="toggleEmailClearButton('${id}')" style="margin-bottom:0;padding-right:36px;">
+    <button type="button" id="${id}ClearBtn" tabindex="-1" onclick="clearEmailField('${id}')" aria-label="Clear email" style="display:none;position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:4px;color:var(--slate);">✕</button>
+  </div>`;
+}
+
+window.toggleEmailClearButton = function(id) {
+  const input = document.getElementById(id);
+  const btn = document.getElementById(id + 'ClearBtn');
+  if (input && btn) btn.style.display = input.value ? 'block' : 'none';
+};
+
+window.clearEmailField = function(id) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  input.value = '';
+  input.focus();
+  window.toggleEmailClearButton(id);
+};
+
 window.togglePasswordVisibility = function(inputId, btn) {
   const input = document.getElementById(inputId);
   if (!input) return;
@@ -456,7 +480,7 @@ function screenLogin() {
       <h1>${isOffice ? 'Office Login' : 'Sales Rep Login'}</h1>
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
-        <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+        ${clearableEmailFieldHtml('email', 'username')}
         ${passwordFieldHtml('password', 'Password', 'current-password')}
         <button class="primary" onclick="doLogin()">Log In</button>
         <button class="link" onclick="setState({screen:'forgotPassword',role:state.role})">Forgot password?</button>
