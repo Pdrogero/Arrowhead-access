@@ -220,6 +220,7 @@ let reviewBookingId = null;
 let reviewCounterpartName = '';
 let reviewRating = 0;
 let conversationsData = [];
+let conversationSearchTimer = null;
 let unreadMessageCount = 0;
 let activeConversationId = null;
 let activeConversationCounterpart = '';
@@ -3011,6 +3012,7 @@ function screenMessages() {
       <h1>Messages</h1>
       <input id="conversationSearchInput" type="text" placeholder="${state.role === 'rep' ? '🔍 Search by office name…' : '🔍 Search by rep name…'}" oninput="filterConversations(this.value)" style="width:100%;margin-bottom:14px;">
       <div id="conversationsBox" class="listcard"><div class="empty">Loading…</div></div>
+      <div id="conversationSearchExtraBox"></div>
     </div>`;
 }
 
@@ -3086,7 +3088,46 @@ window.filterConversations = function(query) {
   const q = query.trim().toLowerCase();
   const filtered = q ? conversationsData.filter(c => conversationCounterpart(c).toLowerCase().includes(q)) : conversationsData;
   renderConversationsList(filtered);
+
+  clearTimeout(conversationSearchTimer);
+  const extraBox = document.getElementById('conversationSearchExtraBox');
+  if (extraBox) extraBox.innerHTML = '';
+  // A search should also be able to find an office/rep on Arrowhead Access
+  // you haven't messaged before yet — not just filter existing threads.
+  if (q.length >= 2) {
+    const excludeIds = filtered.map(c => state.role === 'rep' ? c.location.id : c.rep.id);
+    conversationSearchTimer = setTimeout(() => searchOtherMessageTargets(q, excludeIds), 350);
+  }
 };
+
+async function searchOtherMessageTargets(query, excludeIds) {
+  const extraBox = document.getElementById('conversationSearchExtraBox');
+  if (!extraBox) return;
+  // The search box may have changed again since this debounced call was
+  // scheduled — bail rather than show stale results for an old query.
+  const currentQuery = (document.getElementById('conversationSearchInput')?.value || '').trim().toLowerCase();
+  if (currentQuery !== query) return;
+
+  extraBox.innerHTML = '<p style="font-size:12px;color:var(--slate);margin:12px 0 6px;">Searching all of Arrowhead Access…</p>';
+  try {
+    const excludeSet = new Set(excludeIds || []);
+    const endpoint = state.role === 'rep' ? '/api/locations/search' : '/api/profile/reps/search';
+    const results = (await api(`${endpoint}?q=${encodeURIComponent(query)}`)).filter(r => !excludeSet.has(r.id));
+    if (!results.length) { extraBox.innerHTML = ''; return; }
+    extraBox.innerHTML = `
+      <p style="font-size:12px;font-weight:600;color:var(--slate);margin:12px 0 6px;">On Arrowhead Access, no messages yet</p>
+      <div class="listcard">${results.map(r => `
+        <div class="row">
+          <div class="mid">
+            <div class="who">${r.name}</div>
+            <div class="what">${state.role === 'rep' ? (r.address || '') : [r.companyName, r.title].filter(Boolean).join(' · ')}</div>
+          </div>
+          <button type="button" onclick="startConversation('${r.id}', '${r.name.replace(/'/g, "\\'")}')" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">💬 Message</button>
+        </div>`).join('')}</div>`;
+  } catch (err) {
+    extraBox.innerHTML = '';
+  }
+}
 
 window.openConversation = function(id, counterpart, targetId) {
   activeConversationId = id;
