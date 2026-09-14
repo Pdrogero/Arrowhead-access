@@ -139,13 +139,14 @@ router.get('/rep', requireAuth, requireRole('rep'), async (req, res) => {
 });
 
 // --- Get the logged-in office staff's own account settings ----------------
-// Currently just backs the Account Settings two-factor toggle — office
-// accounts have no other self-editable profile fields yet.
+// Also backs the office dashboard's personal "Hello, {name}" greeting,
+// hence pulling in the current location's name alongside the account
+// settings fields.
 router.get('/staff', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {
     const staff = await prisma.staffUser.findUnique({
       where: { id: req.user!.sub },
-      select: { id: true, email: true, role: true, twoFactorEnabled: true },
+      select: { id: true, email: true, name: true, role: true, twoFactorEnabled: true, location: { select: { name: true } } },
     });
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
     res.json(staff);
@@ -158,10 +159,15 @@ router.get('/staff', requireAuth, requireRole('office_admin', 'office_staff'), a
 router.patch('/staff', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {
     const { twoFactorEnabled } = req.body;
+    const name = typeof req.body.name === 'string' ? req.body.name.trim() : undefined;
+    if (name === '') return res.status(400).json({ error: 'Name cannot be blank' });
     const staff = await prisma.staffUser.update({
       where: { id: req.user!.sub },
-      data: { ...('twoFactorEnabled' in req.body ? { twoFactorEnabled: !!twoFactorEnabled } : {}) },
-      select: { id: true, email: true, role: true, twoFactorEnabled: true },
+      data: {
+        ...('twoFactorEnabled' in req.body ? { twoFactorEnabled: !!twoFactorEnabled } : {}),
+        ...(name !== undefined ? { name } : {}),
+      },
+      select: { id: true, email: true, name: true, role: true, twoFactorEnabled: true },
     });
     res.json({ staff });
   } catch (err) {

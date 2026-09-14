@@ -420,8 +420,9 @@ router.post('/office/signup', async (req, res) => {
   try {
     const { officeName, locationName, address, timezone, password, turnstileToken, twoFactorEnabled } = req.body;
     const email = String(req.body.email || '').trim().toLowerCase();
-    if (!officeName || !locationName || !address || !email || !password) {
-      return res.status(400).json({ error: 'officeName, locationName, address, email, and password are required' });
+    const name = String(req.body.name || '').trim();
+    if (!name || !officeName || !locationName || !address || !email || !password) {
+      return res.status(400).json({ error: 'name, officeName, locationName, address, email, and password are required' });
     }
 
     if (!(await verifyTurnstile(turnstileToken, req.ip))) {
@@ -448,7 +449,7 @@ router.post('/office/signup', async (req, res) => {
         },
       });
       const staff = await tx.staffUser.create({
-        data: { email, passwordHash, role: 'ADMIN', locationId: location.id, organizationId: org.id, twoFactorEnabled: !!twoFactorEnabled },
+        data: { email, name, passwordHash, role: 'ADMIN', locationId: location.id, organizationId: org.id, twoFactorEnabled: !!twoFactorEnabled },
       });
       return { org, location, staff };
     });
@@ -518,6 +519,7 @@ router.post('/office/signup', async (req, res) => {
       staff: {
         id: result.staff.id,
         email: result.staff.email,
+        name: result.staff.name,
         role: result.staff.role,
         locationId: result.location.id,
       },
@@ -544,7 +546,7 @@ router.get('/staff', requireAuth, requireRole('office_admin', 'office_staff'), a
 
     const staff = await prisma.staffUser.findMany({
       where: { locationId: me.locationId },
-      select: { id: true, email: true, role: true, createdAt: true },
+      select: { id: true, email: true, name: true, role: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
     res.json(staff);
@@ -608,7 +610,8 @@ router.post('/staff/invite', requireAuth, requireRole('office_admin'), async (re
 router.post('/staff/accept-invite', async (req, res) => {
   try {
     const { token, password } = req.body;
-    if (!token || !password) return res.status(400).json({ error: 'token and password are required' });
+    const name = String(req.body.name || '').trim();
+    if (!token || !password || !name) return res.status(400).json({ error: 'name, token, and password are required' });
     if (String(password).length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
     let payload: { sub: string; type: string };
@@ -620,7 +623,7 @@ router.post('/staff/accept-invite', async (req, res) => {
     if (payload.type !== 'staff_invite') return res.status(400).json({ error: 'Invalid invite link' });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const staff = await prisma.staffUser.update({ where: { id: payload.sub }, data: { passwordHash } });
+    const staff = await prisma.staffUser.update({ where: { id: payload.sub }, data: { name, passwordHash } });
     const organizationId = await resolveStaffOrgId(staff);
 
     const loginToken = signToken({

@@ -239,6 +239,10 @@ model StaffUser {
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
   email          String        @unique
+  // Null for logins created before this field existed, or an invited staff
+  // member who hasn't accepted yet — the header greeting falls back to the
+  // email's local part until it's set.
+  name           String?
   passwordHash   String
   role           StaffRole     @default(STAFF)
   twoFactorEnabled Boolean     @default(false)

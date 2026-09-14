@@ -499,6 +499,7 @@ function screenStaffInviteAccept() {
       <p class="sub">Choose a password to finish setting up your own Arrowhead Access account.</p>
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        <input id="staffInviteName" type="text" placeholder="Your name">
         ${passwordFieldHtml('newPassword', 'Password', 'new-password')}
         ${passwordFieldHtml('confirmPassword', 'Confirm password', 'new-password')}
         <button class="primary" onclick="doAcceptStaffInvite()">Set password &amp; log in</button>
@@ -514,6 +515,7 @@ function screenSignup() {
         <h1>Create Office Account</h1>
         <div class="card">
           ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+          <input id="staffName" type="text" placeholder="Your name">
           <input id="officeName" type="text" placeholder="Office name">
           <input id="address" type="text" placeholder="Address">
           <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
@@ -700,6 +702,14 @@ function screenAccountSettings() {
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
       <h1>Account Settings</h1>
       <p class="sub">Change the password for your account.</p>
+      ${isOffice ? `
+      <p style="font-size:13px;font-weight:600;margin:0 0 8px;">Your name</p>
+      <div class="card">
+        <input id="staffNameInput" type="text" placeholder="Your name">
+        <div id="staffNameSavedMsg" style="font-size:12px;color:var(--teal-dark);margin-top:-6px;display:none;">Saved.</div>
+        <button class="primary" style="margin-top:4px;" onclick="saveStaffName()">Save name</button>
+      </div>
+      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Password</p>` : ''}
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         ${state.passwordChanged ? `<div class="msg ok">Password updated successfully.</div>` : ''}
@@ -725,8 +735,24 @@ async function loadTwoFactorSetting() {
   try {
     const profile = await api(state.role === 'office' ? '/api/profile/staff' : '/api/profile/rep');
     document.getElementById('twoFactorEnabled').checked = !!profile.twoFactorEnabled;
+    const nameInput = document.getElementById('staffNameInput');
+    if (nameInput) nameInput.value = profile.name || '';
   } catch (err) {}
 }
+
+window.saveStaffName = async function() {
+  const name = document.getElementById('staffNameInput').value.trim();
+  if (!name) { alert('Name cannot be blank'); return; }
+  const msg = document.getElementById('staffNameSavedMsg');
+  try {
+    await api('/api/profile/staff', { method: 'PATCH', body: JSON.stringify({ name }) });
+    state.me = { ...state.me, name };
+    msg.style.display = 'block';
+    setTimeout(() => { msg.style.display = 'none'; }, 2000);
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 window.saveTwoFactorSetting = async function(checked) {
   const msg = document.getElementById('twoFactorSavedMsg');
@@ -2351,8 +2377,8 @@ function renderStaffLoginsList() {
   const rows = officeStaffLoginsData.map(s => `
     <div class="row">
       <div class="mid">
-        <div class="who">${s.email}${s.id === state.me.id ? ' (you)' : ''}</div>
-        <div class="what">${s.role === 'ADMIN' ? 'Admin' : 'Staff'}</div>
+        <div class="who">${s.name || s.email}${s.id === state.me.id ? ' (you)' : ''}</div>
+        <div class="what">${s.name ? s.email + ' · ' : ''}${s.role === 'ADMIN' ? 'Admin' : 'Staff'}</div>
       </div>
       ${isAdmin && s.id !== state.me.id ? `<button type="button" style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="removeStaffLogin('${s.id}', '${s.email.replace(/'/g, "\\'")}')">Remove</button>` : ''}
     </div>`).join('');
@@ -3850,10 +3876,33 @@ function screenVisitHistory() {
     </div>`;
 }
 
+function officeHeaderHtml() {
+  const me = state.me;
+  const firstName = (me?.name || '').trim().split(' ')[0] || me?.email || 'there';
+  return `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;">
+      <div style="width:64px;height:64px;border-radius:50%;background:var(--paper-raised,#E4EAE3);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--teal);flex-shrink:0;">${(firstName || '?').charAt(0)}</div>
+      <div>
+        <h1 style="margin-bottom:2px;">Hello, ${firstName}</h1>
+        <p class="sub" style="margin:0;">${[me?.location?.name, me?.role === 'ADMIN' ? 'Admin' : 'Staff'].filter(Boolean).join(' · ')}</p>
+      </div>
+    </div>`;
+}
+
+async function loadOfficeHeader() {
+  try {
+    const profile = await api('/api/profile/staff');
+    state.me = { ...state.me, ...profile };
+    const box = document.getElementById('officeHeaderBox');
+    if (box) box.innerHTML = officeHeaderHtml();
+  } catch (err) {}
+}
+
 function screenDashboardOffice() {
   return `
     <div class="wrap wide">
-      <h1>This week's ledger</h1>
+      <div id="officeHeaderBox">${officeHeaderHtml()}</div>
+      <p style="font-size:13px;font-weight:600;margin:18px 0 2px;">This week's ledger</p>
       <p class="sub">Your upcoming and pending rep visits and scheduled lunches at this location.</p>
       <div id="pendingRequestsBox"></div>
       <div id="locationSwitcherBox" style="margin-bottom:16px;"></div>
@@ -4070,9 +4119,14 @@ async function doResetPassword() {
 }
 
 async function doAcceptStaffInvite() {
+  const name = document.getElementById('staffInviteName').value.trim();
   const newPassword = document.getElementById('newPassword').value;
   const confirmPassword = document.getElementById('confirmPassword').value;
 
+  if (!name) {
+    setState({ formErr: 'Your name is required' });
+    return;
+  }
   if (newPassword !== confirmPassword) {
     setState({ formErr: "Passwords don't match" });
     return;
@@ -4083,7 +4137,7 @@ async function doAcceptStaffInvite() {
   }
 
   try {
-    const res = await api('/api/auth/staff/accept-invite', { method: 'POST', body: JSON.stringify({ token: state.staffInviteToken, password: newPassword }) });
+    const res = await api('/api/auth/staff/accept-invite', { method: 'POST', body: JSON.stringify({ name, token: state.staffInviteToken, password: newPassword }) });
     localStorage.setItem('token', res.token);
     state.staffInviteToken = null;
     window.history.replaceState({}, '', window.location.pathname);
@@ -4167,6 +4221,7 @@ async function doRepSignup() {
 }
 
 async function doOfficeSignup() {
+  const name = document.getElementById('staffName').value.trim();
   const officeName = document.getElementById('officeName').value;
   const address = document.getElementById('address').value;
   const email = document.getElementById('email').value.trim().toLowerCase();
@@ -4174,6 +4229,10 @@ async function doOfficeSignup() {
   const confirmPassword = document.getElementById('confirmPassword').value;
   const twoFactorEnabled = document.getElementById('signupTwoFactorEnabled').checked;
 
+  if (!name) {
+    setState({ formErr: 'Your name is required' });
+    return;
+  }
   if (password !== confirmPassword) {
     setState({ formErr: "Passwords don't match" });
     return;
@@ -4184,7 +4243,7 @@ async function doOfficeSignup() {
     // separate "location name" field was redundant for a first-time
     // signup. An office with more than one location can give each one
     // its own name afterward under Settings → Locations.
-    const res = await api('/api/auth/office/signup', { method: 'POST', body: JSON.stringify({ officeName, locationName: officeName, address, email, password, twoFactorEnabled, turnstileToken }) });
+    const res = await api('/api/auth/office/signup', { method: 'POST', body: JSON.stringify({ name, officeName, locationName: officeName, address, email, password, twoFactorEnabled, turnstileToken }) });
     localStorage.setItem('token', res.token);
     state.me = res.staff;
     setState({ screen: 'dashboard', role: 'office' });
@@ -5957,7 +6016,7 @@ function render() {
   else if (state.screen === 'reviewList') { app.innerHTML = screenReviewList(); loadReviewList(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
   else if (state.screen === 'officeCalendar') { app.innerHTML = screenOfficeCalendar(); }
-  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeLedger(); loadLocationSwitcher(); loadUnreadMessageCount(); }
+  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeHeader(); loadOfficeLedger(); loadLocationSwitcher(); loadUnreadMessageCount(); }
   else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadRepHeader(); loadMyBookings(); loadBillingStatus(); loadUnreadMessageCount(); loadPendingTeammateInviteCount(); }
   else if (state.screen === 'visitHistory' && state.role === 'office') { app.innerHTML = screenVisitHistory(); loadOfficeHistory(); }
   else if (state.screen === 'visitHistory' && state.role === 'rep') { app.innerHTML = screenVisitHistory(); loadRepHistory(); }
