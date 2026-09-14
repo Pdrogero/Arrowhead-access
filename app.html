@@ -2985,6 +2985,7 @@ function screenMessages() {
     <div class="wrap wide">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
       <h1>Messages</h1>
+      <input id="conversationSearchInput" type="text" placeholder="${state.role === 'rep' ? '🔍 Search by office name…' : '🔍 Search by rep name…'}" oninput="filterConversations(this.value)" style="width:100%;margin-bottom:14px;">
       <div id="conversationsBox" class="listcard"><div class="empty">Loading…</div></div>
     </div>`;
 }
@@ -3021,28 +3022,47 @@ async function loadConversations() {
   const box = document.getElementById('conversationsBox');
   try {
     conversationsData = await api('/api/messages/conversations');
-    if (!conversationsData.length) { box.innerHTML = '<div class="empty">No conversations yet.</div>'; return; }
-    box.innerHTML = conversationsData.map(c => {
-      const counterpart = state.role === 'rep' ? c.location.name : `${c.rep.name} · ${c.rep.companyName}`;
-      const targetId = state.role === 'rep' ? c.location.id : c.rep.id;
-      const lastMessage = c.messages[0];
-      const preview = lastMessage ? lastMessage.body : 'No messages yet';
-      // Bold while the other side's latest message is still unread by me —
-      // a message I sent myself never counts, regardless of its readAt.
-      const otherSenderType = state.role === 'rep' ? 'OFFICE' : 'REP';
-      const isUnread = !!lastMessage && lastMessage.senderType === otherSenderType && !lastMessage.readAt;
-      return `
-      <div class="row" style="cursor:pointer;${isUnread ? 'font-weight:700;' : ''}" onclick="openConversation('${c.id}', '${counterpart.replace(/'/g, "\\'")}', '${targetId}')">
-        <div class="mid">
-          <div class="who">${counterpart}</div>
-          <div class="what" style="${isUnread ? 'color:var(--ink);font-weight:700;' : ''}">${preview.replace(/</g, '&lt;')}</div>
-        </div>
-      </div>`;
-    }).join('');
+    renderConversationsList(conversationsData);
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
 }
+
+function conversationCounterpart(c) {
+  return state.role === 'rep' ? c.location.name : `${c.rep.name} · ${c.rep.companyName}`;
+}
+
+function renderConversationsList(list) {
+  const box = document.getElementById('conversationsBox');
+  if (!box) return;
+  if (!list.length) {
+    box.innerHTML = conversationsData.length ? '<div class="empty">No conversations match that search.</div>' : '<div class="empty">No conversations yet.</div>';
+    return;
+  }
+  box.innerHTML = list.map(c => {
+    const counterpart = conversationCounterpart(c);
+    const targetId = state.role === 'rep' ? c.location.id : c.rep.id;
+    const lastMessage = c.messages[0];
+    const preview = lastMessage ? lastMessage.body : 'No messages yet';
+    // Bold while the other side's latest message is still unread by me —
+    // a message I sent myself never counts, regardless of its readAt.
+    const otherSenderType = state.role === 'rep' ? 'OFFICE' : 'REP';
+    const isUnread = !!lastMessage && lastMessage.senderType === otherSenderType && !lastMessage.readAt;
+    return `
+    <div class="row" style="cursor:pointer;${isUnread ? 'font-weight:700;' : ''}" onclick="openConversation('${c.id}', '${counterpart.replace(/'/g, "\\'")}', '${targetId}')">
+      <div class="mid">
+        <div class="who">${counterpart}</div>
+        <div class="what" style="${isUnread ? 'color:var(--ink);font-weight:700;' : ''}">${preview.replace(/</g, '&lt;')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.filterConversations = function(query) {
+  const q = query.trim().toLowerCase();
+  const filtered = q ? conversationsData.filter(c => conversationCounterpart(c).toLowerCase().includes(q)) : conversationsData;
+  renderConversationsList(filtered);
+};
 
 window.openConversation = function(id, counterpart, targetId) {
   activeConversationId = id;
