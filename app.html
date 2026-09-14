@@ -3886,7 +3886,8 @@ function officeHeaderHtml() {
         <h1 style="margin-bottom:2px;">Hello, ${firstName}</h1>
         <p class="sub" style="margin:0;">${[me?.location?.name, me?.role === 'ADMIN' ? 'Admin' : 'Staff'].filter(Boolean).join(' · ')}</p>
       </div>
-    </div>`;
+    </div>
+    ${me && 'name' in me && !me.name ? `<p style="font-size:12px;color:var(--slate);margin:0 0 12px;">Add your name under <a href="#" onclick="event.preventDefault();setState({screen:'accountSettings'})" style="color:var(--teal);font-weight:600;">Account Settings</a> so we can greet you by name.</p>` : ''}`;
 }
 
 async function loadOfficeHeader() {
