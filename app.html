@@ -199,6 +199,10 @@ let myBookingsData = [];
 let myBookingsFilter = 'ALL'; // status the "Your bookings" dropdown is currently filtered to
 let myBookingsRatings = {}; // cached per-office rating averages, fetched once per loadMyBookings() call
 let employeeRows = [];
+// Collapsed by default once a team list already exists, so re-opening
+// Office Settings doesn't dump a long staff list across the whole page —
+// set once the list loads (see loadEmployees), then only user-toggled.
+let employeeSectionCollapsed = false;
 let officeLocationsData = [];
 let editingLocationId = null;
 let officeStaffLoginsData = [];
@@ -790,8 +794,11 @@ function screenOfficeSettings() {
       <h1>Office Settings</h1>
       <p class="sub">Configure your availability.</p>
 
-      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Our Team</p>
-      <div class="card">
+      <button type="button" onclick="toggleEmployeeSection()" style="display:flex;align-items:center;gap:6px;width:100%;background:none;border:none;padding:0;margin:18px 0 8px;cursor:pointer;text-align:left;">
+        <span id="employeeSectionArrow" style="font-size:10px;color:var(--slate);display:inline-block;transition:transform .15s;">▾</span>
+        <span style="font-size:13px;font-weight:600;">Our Team<span id="employeeSectionCount"></span></span>
+      </button>
+      <div class="card" id="employeeSectionBody">
         <p style="font-size:12px;color:var(--slate);margin-bottom:12px;">List your staff so reps know who they're meeting with when they visit.</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--paper-raised, #F4F6F3);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:14px;">
           <div style="flex:1;min-width:200px;font-size:12px;color:var(--slate);">Have a long staff list already saved? Upload a CSV instead of typing each person in.</div>
@@ -2099,6 +2106,8 @@ const EMPLOYEE_TITLE_OPTIONS = ['MD', 'DO', 'DPM', 'ARNP', 'PA', 'Nurse', 'LPN',
 const NPI_ELIGIBLE_TITLES = ['MD', 'DO', 'DPM', 'ARNP', 'PA', 'Medical Student'];
 
 function renderEmployeeRows() {
+  const count = document.getElementById('employeeSectionCount');
+  if (count) count.textContent = employeeRows.length ? ` (${employeeRows.length})` : '';
   const box = document.getElementById('employeeRowsBox');
   if (!employeeRows.length) {
     box.innerHTML = `<p style="font-size:13px;color:var(--slate);margin-bottom:12px;">No team members added yet.</p>`;
@@ -2261,7 +2270,21 @@ async function loadEmployees() {
   } catch (err) {
     employeeRows = [];
   }
+  employeeSectionCollapsed = employeeRows.length > 0;
   renderEmployeeRows();
+  applyEmployeeSectionCollapsed();
+}
+
+window.toggleEmployeeSection = function() {
+  employeeSectionCollapsed = !employeeSectionCollapsed;
+  applyEmployeeSectionCollapsed();
+};
+
+function applyEmployeeSectionCollapsed() {
+  const body = document.getElementById('employeeSectionBody');
+  const arrow = document.getElementById('employeeSectionArrow');
+  if (body) body.style.display = employeeSectionCollapsed ? 'none' : 'block';
+  if (arrow) arrow.style.transform = employeeSectionCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
 }
 
 async function loadLocationsSettings() {
