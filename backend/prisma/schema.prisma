@@ -247,6 +247,7 @@ model StaffUser {
   // under Account Settings. Distinct from `role` below, which is the
   // Admin/Staff permission level.
   title          String?
+  profileImageUrl String? // data: URL, resized/compressed client-side — same approach as Rep.profileImageUrl
   passwordHash   String
   role           StaffRole     @default(STAFF)
   twoFactorEnabled Boolean     @default(false)

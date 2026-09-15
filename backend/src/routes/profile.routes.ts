@@ -12,6 +12,8 @@ import { sendEmail, emailLogoHeader } from '../email';
 const prisma = new PrismaClient();
 const router = Router();
 
+const MAX_PROFILE_IMAGE_LENGTH = 700_000; // ~500KB of actual image data once base64-decoded
+
 // --- List the manufacturer catalog (companies + their products) ----------
 // Used to populate the company dropdown and its dependent products list.
 router.get('/catalog', requireAuth, requireRole('rep'), async (req, res) => {
@@ -146,7 +148,7 @@ router.get('/staff', requireAuth, requireRole('office_admin', 'office_staff'), a
   try {
     const staff = await prisma.staffUser.findUnique({
       where: { id: req.user!.sub },
-      select: { id: true, email: true, name: true, title: true, role: true, twoFactorEnabled: true, location: { select: { name: true } } },
+      select: { id: true, email: true, name: true, title: true, profileImageUrl: true, role: true, twoFactorEnabled: true, location: { select: { name: true } } },
     });
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
     res.json(staff);
@@ -158,20 +160,24 @@ router.get('/staff', requireAuth, requireRole('office_admin', 'office_staff'), a
 
 router.patch('/staff', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {
-    const { twoFactorEnabled } = req.body;
+    const { twoFactorEnabled, profileImageUrl } = req.body;
     const name = typeof req.body.name === 'string' ? req.body.name.trim() : undefined;
     if (name === '') return res.status(400).json({ error: 'Name cannot be blank' });
     // Title is purely informational (e.g. "Office Manager") — unlike name,
     // blank is a valid choice (clears it back to unset).
     const title = typeof req.body.title === 'string' ? req.body.title.trim() : undefined;
+    if (typeof profileImageUrl === 'string' && profileImageUrl.length > MAX_PROFILE_IMAGE_LENGTH) {
+      return res.status(400).json({ error: 'Profile photo is too large' });
+    }
     const staff = await prisma.staffUser.update({
       where: { id: req.user!.sub },
       data: {
         ...('twoFactorEnabled' in req.body ? { twoFactorEnabled: !!twoFactorEnabled } : {}),
         ...(name !== undefined ? { name } : {}),
         ...(title !== undefined ? { title: title || null } : {}),
+        ...('profileImageUrl' in req.body ? { profileImageUrl } : {}),
       },
-      select: { id: true, email: true, name: true, title: true, role: true, twoFactorEnabled: true },
+      select: { id: true, email: true, name: true, title: true, profileImageUrl: true, role: true, twoFactorEnabled: true },
     });
     res.json({ staff });
   } catch (err) {
@@ -347,8 +353,6 @@ router.get('/rep/:repId', requireAuth, requireRole('office_admin', 'office_staff
     res.status(500).json({ error: 'Could not fetch this rep\'s profile' });
   }
 });
-
-const MAX_PROFILE_IMAGE_LENGTH = 700_000; // ~500KB of actual image data once base64-decoded
 
 // --- Complete / update the logged-in rep's profile ------------------------
 router.patch('/rep', requireAuth, requireRole('rep'), async (req, res) => {
