@@ -952,7 +952,15 @@ function screenOfficeSettings() {
         <div id="addLocationBox" style="display:none;border:1px solid var(--line);border-radius:8px;padding:12px;">
           <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">New location</label>
           <input id="newLocationName" type="text" placeholder="Location name (e.g. Downtown Office)">
-          <input id="newLocationAddress" type="text" placeholder="Address">
+          <input id="newLocationStreet" type="text" placeholder="Street address" autocomplete="street-address">
+          <input id="newLocationCity" type="text" placeholder="City" autocomplete="address-level2">
+          <div style="display:flex;gap:8px;">
+            <select id="newLocationState" autocomplete="address-level1" style="flex:1;">
+              <option value="">State…</option>
+              ${US_STATE_OPTIONS.map(s => `<option value="${s.code}">${s.name}</option>`).join('')}
+            </select>
+            <input id="newLocationZip" type="text" inputmode="numeric" placeholder="ZIP code" autocomplete="postal-code" style="flex:1;">
+          </div>
           <input id="newLocationManagerEmail" type="email" placeholder="Manager email (optional)">
           <p style="font-size:11.5px;color:var(--slate);margin:-6px 0 10px;">If a different manager runs this location, add their email and we'll let them know it's been added.</p>
           <div id="addLocationErr"></div>
@@ -2547,20 +2555,32 @@ window.showAddLocation = function() {
 
 window.createLocation = async function() {
   const name = document.getElementById('newLocationName').value.trim();
-  const address = document.getElementById('newLocationAddress').value.trim();
+  const street = document.getElementById('newLocationStreet').value.trim();
+  const city = document.getElementById('newLocationCity').value.trim();
+  const stateVal = document.getElementById('newLocationState').value;
+  const zip = document.getElementById('newLocationZip').value.trim();
   const managerEmail = document.getElementById('newLocationManagerEmail').value.trim();
   const errBox = document.getElementById('addLocationErr');
 
-  if (!name || !address) {
-    errBox.innerHTML = `<div class="msg err">Location name and address are required</div>`;
+  if (!name || !street || !city || !stateVal || !zip) {
+    errBox.innerHTML = `<div class="msg err">Location name, street address, city, state, and ZIP code are all required</div>`;
     return;
   }
+
+  // Stored as one formatted string, same as everywhere else addresses are
+  // shown/searched — the form just breaks entry into clearer, less
+  // error-prone pieces so city/state/zip don't get left out or squished
+  // into one free-text line.
+  const address = `${street}, ${city}, ${stateVal} ${zip}`;
 
   try {
     await api('/api/locations', { method: 'POST', body: JSON.stringify({ name, address, managerEmail }) });
     errBox.innerHTML = '';
     document.getElementById('newLocationName').value = '';
-    document.getElementById('newLocationAddress').value = '';
+    document.getElementById('newLocationStreet').value = '';
+    document.getElementById('newLocationCity').value = '';
+    document.getElementById('newLocationState').value = '';
+    document.getElementById('newLocationZip').value = '';
     document.getElementById('newLocationManagerEmail').value = '';
     document.getElementById('addLocationBox').style.display = 'none';
     loadLocationsSettings();
