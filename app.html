@@ -925,9 +925,10 @@ function screenOfficeSettings() {
         <div id="twoFactorSavedMsg" style="font-size:12px;color:var(--teal-dark);margin-top:8px;display:none;">Saved.</div>
       </div>
 
-      <button type="button" onclick="toggleEmployeeSection()" style="display:flex;align-items:center;gap:6px;width:100%;background:none;border:none;padding:0;margin:18px 0 8px;cursor:pointer;text-align:left;">
-        <span id="employeeSectionArrow" style="font-size:10px;color:var(--slate);display:inline-block;transition:transform .15s;">▾</span>
-        <span style="font-size:13px;font-weight:600;">Our Team<span id="employeeSectionCount"></span></span>
+      <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Our Team<span id="employeeSectionCount"></span></p>
+      <button type="button" onclick="toggleEmployeeSection()" style="display:flex;align-items:center;gap:8px;width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;cursor:pointer;text-align:left;">
+        <span id="employeeSectionArrow" style="font-size:11px;color:var(--slate);display:inline-block;transition:transform .15s;">▾</span>
+        <span style="font-size:14px;font-weight:600;flex:1;">List your staff so reps know who they're meeting with</span>
       </button>
       <div class="card" id="employeeSectionBody">
         <p style="font-size:12px;color:var(--slate);margin-bottom:12px;">List your staff so reps know who they're meeting with when they visit.</p>
