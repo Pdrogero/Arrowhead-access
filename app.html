@@ -6159,7 +6159,7 @@ function render() {
   const profileMenuBox = document.getElementById('profileMenuBox');
   if (profileMenuBox) profileMenuBox.innerHTML = '';
   const officeSettingsBtn = document.getElementById('officeSettingsBtn');
-  if (officeSettingsBtn) officeSettingsBtn.style.display = (state.role === 'office' && state.screen !== 'role' && state.screen !== 'officeSettings') ? 'flex' : 'none';
+  if (officeSettingsBtn) officeSettingsBtn.style.display = (state.role === 'office' && state.me && state.screen !== 'officeSettings') ? 'flex' : 'none';
   document.body.classList.toggle('medical-bg', ['role', 'login', 'forgotPassword', 'resetPassword', 'terms', 'privacy'].includes(state.screen));
   if (!['dashboard', 'officeCalendar'].includes(state.screen)) officeCancelDraft = null;
   if (state.screen !== 'dashboard') repCancelDraft = null;
