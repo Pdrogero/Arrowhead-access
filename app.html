@@ -4231,6 +4231,7 @@ function screenDashboardOffice() {
         </div>
       </div>
       <div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div>
+      <div id="extraLunchesBox"></div>
     </div>`;
 }
 
@@ -5194,20 +5195,10 @@ window.togglePendingRequestsExpanded = function() {
   renderPendingRequestsBox(pendingRequestsSlots);
 };
 
-async function loadOfficeLedger() {
-  const box = document.getElementById('ledgerBox');
-  try {
-    const slots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
-    ledgerSlotsData = slots;
-    renderPendingRequestsBox(slots);
-    selectedLedgerSlotIds = new Set();
-    const bulkBar = document.getElementById('ledgerBulkBar');
-    if (bulkBar) bulkBar.style.display = slots.some(s => isLedgerSlotSelectable(s)) ? 'flex' : 'none';
-    updateLedgerBulkBar();
-    if (!slots.length) { box.innerHTML = '<div class="empty">No slots yet.</div>'; return; }
-    const repIds = slots.filter(s => s.booking?.rep).map(s => s.booking.rep.id);
-    const repRatings = await fetchRatingAverages(repIds, 'rep');
-    box.innerHTML = slots.map(s => `
+// One ledger row's markup — shared by the main list and the collapsible
+// "other lunches" section below it, so a slot looks identical either way.
+function renderLedgerRowHtml(s, repRatings) {
+  return `
       <div class="row" style="flex-wrap:wrap;">
         ${isLedgerSlotSelectable(s) ? `<input type="checkbox" class="ledgerSelectCb" style="margin-right:8px;align-self:center;" onchange="toggleLedgerSelect('${s.id}', this.checked)">` : ''}
         <div class="time" style="width:190px;">${fmtTimeRange(s.startTime, s.endTime)}</div>
@@ -5244,11 +5235,62 @@ async function loadOfficeLedger() {
             </div>
           </div>` : ''}
         ${s.booking?.rep ? rescheduleStatusHtml(s.booking, true, s.booking.rep.name) : ''}
-      </div>`).join('');
+      </div>`;
+}
+
+async function loadOfficeLedger() {
+  const box = document.getElementById('ledgerBox');
+  const extraBox = document.getElementById('extraLunchesBox');
+  try {
+    const slots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
+    ledgerSlotsData = slots;
+    renderPendingRequestsBox(slots);
+    selectedLedgerSlotIds = new Set();
+    const bulkBar = document.getElementById('ledgerBulkBar');
+    if (bulkBar) bulkBar.style.display = slots.some(s => isLedgerSlotSelectable(s)) ? 'flex' : 'none';
+    updateLedgerBulkBar();
+    if (!slots.length) { box.innerHTML = '<div class="empty">No slots yet.</div>'; if (extraBox) extraBox.innerHTML = ''; return; }
+    const repIds = slots.filter(s => s.booking?.rep).map(s => s.booking.rep.id);
+    const repRatings = await fetchRatingAverages(repIds, 'rep');
+
+    // Already sorted by startTime ascending (per the API), so the first
+    // lunch in the list is naturally the soonest one — it stays in the
+    // main list; every other lunch collapses behind a toggle below it,
+    // so a long run of booked-out lunches doesn't bury everything else.
+    const lunchSlots = slots.filter(s => s.eventType === 'LUNCH');
+    const extraLunchIds = new Set(lunchSlots.slice(1).map(s => s.id));
+    const mainSlots = slots.filter(s => !extraLunchIds.has(s.id));
+    const extraLunches = slots.filter(s => extraLunchIds.has(s.id));
+
+    box.innerHTML = mainSlots.map(s => renderLedgerRowHtml(s, repRatings)).join('');
+
+    if (extraBox) {
+      if (!extraLunches.length) {
+        extraBox.innerHTML = '';
+      } else {
+        extraBox.innerHTML = `
+          <button type="button" onclick="toggleExtraLunches()" style="display:flex;align-items:center;gap:8px;width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:16px 0 12px;cursor:pointer;text-align:left;">
+            <span id="extraLunchesArrow" style="font-size:11px;color:var(--slate);display:inline-block;transition:transform .15s;">▾</span>
+            <span style="font-size:14px;font-weight:600;flex:1;">🍽 ${extraLunches.length} more lunch${extraLunches.length === 1 ? '' : 'es'} scheduled</span>
+          </button>
+          <div class="listcard" id="extraLunchesBody" style="display:none;">
+            ${extraLunches.map(s => renderLedgerRowHtml(s, repRatings)).join('')}
+          </div>`;
+      }
+    }
   } catch (err) {
     box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
   }
 }
+
+window.toggleExtraLunches = function() {
+  const body = document.getElementById('extraLunchesBody');
+  const arrow = document.getElementById('extraLunchesArrow');
+  if (!body || !arrow) return;
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? 'block' : 'none';
+  arrow.style.transform = collapsed ? 'rotate(0deg)' : 'rotate(-90deg)';
+};
 
 async function loadMyBookings() {
   const box = document.getElementById('bookingsBox');
