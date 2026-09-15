@@ -301,40 +301,57 @@ function fmtTimeRange(startIso, endIso) {
 // margin zeroed) so the wrapper's height matches the input exactly, which
 // is what keeps the toggle centered vertically without extra positioning
 // math. Plain text rather than an eye icon reads calmer/more professional.
-function passwordFieldHtml(id, placeholder, autocomplete) {
+// withClear adds a quick "✕" button (alongside Show/Hide) once there's
+// something typed — saves backspacing the whole thing out. Off by default
+// since most password fields (login, signup, reset) are short-lived
+// one-time entries; opt in per field where it's worth the extra button.
+function passwordFieldHtml(id, placeholder, autocomplete, withClear) {
   // The name attribute (not just autocomplete) is what lets Safari/Chrome
   // recognize two password fields on the same form as a "new password" +
   // "confirm it" pair. Without it, the browser's strong-password suggestion
   // can independently generate a different random password for each field —
   // both hidden behind dots, so there's no way to notice before submitting.
   return `<div style="position:relative;margin-bottom:12px;">
-    <input id="${id}" name="${id}" type="password" placeholder="${placeholder}" autocomplete="${autocomplete}" style="margin-bottom:0;padding-right:52px;">
+    <input id="${id}" name="${id}" type="password" placeholder="${placeholder}" autocomplete="${autocomplete}" ${withClear ? `oninput="toggleClearButton('${id}')"` : ''} style="margin-bottom:0;padding-right:${withClear ? '90' : '52'}px;">
+    ${withClear ? `<button type="button" id="${id}ClearBtn" tabindex="-1" onclick="clearTextField('${id}')" aria-label="Clear" style="display:none;position:absolute;top:50%;right:54px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:4px;color:var(--slate);">✕</button>` : ''}
     <button type="button" tabindex="-1" onclick="togglePasswordVisibility('${id}', this)" aria-label="Show password" style="position:absolute;top:50%;right:10px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;letter-spacing:0.02em;line-height:1;padding:4px;color:var(--teal);">Show</button>
   </div>`;
 }
 
-// Email field with a quick "✕" clear button once there's something typed —
-// saves backspacing the whole thing out, e.g. after a browser autofills the
-// wrong saved account.
-function clearableEmailFieldHtml(id, autocomplete) {
-  return `<div style="position:relative;margin-bottom:12px;">
-    <input id="${id}" type="email" placeholder="Email" autocomplete="${autocomplete}" autocapitalize="none" autocorrect="off" spellcheck="false" oninput="toggleEmailClearButton('${id}')" style="margin-bottom:0;padding-right:36px;">
-    <button type="button" id="${id}ClearBtn" tabindex="-1" onclick="clearEmailField('${id}')" aria-label="Clear email" style="display:none;position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:4px;color:var(--slate);">✕</button>
+// Generic text/email field with a quick "✕" clear button once there's
+// something typed — saves backspacing the whole thing out, e.g. after a
+// browser autofills the wrong saved account. wrapperId/wrapperStyle let
+// external code show/hide the whole field (e.g. a conditional "Other…" input).
+function clearableTextFieldHtml(id, opts) {
+  opts = opts || {};
+  const type = opts.type || 'text';
+  const placeholder = opts.placeholder || '';
+  const autocomplete = opts.autocomplete || 'off';
+  const extraAttrs = opts.extraAttrs || '';
+  const wrapperId = opts.wrapperId || '';
+  const wrapperStyle = opts.wrapperStyle || 'position:relative;margin-bottom:12px;';
+  return `<div ${wrapperId ? `id="${wrapperId}"` : ''} style="${wrapperStyle}">
+    <input id="${id}" type="${type}" placeholder="${placeholder}" autocomplete="${autocomplete}" ${extraAttrs} oninput="toggleClearButton('${id}')" style="margin-bottom:0;padding-right:36px;">
+    <button type="button" id="${id}ClearBtn" tabindex="-1" onclick="clearTextField('${id}')" aria-label="Clear" style="display:none;position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:4px;color:var(--slate);">✕</button>
   </div>`;
 }
 
-window.toggleEmailClearButton = function(id) {
+function clearableEmailFieldHtml(id, autocomplete) {
+  return clearableTextFieldHtml(id, { type: 'email', placeholder: 'Email', autocomplete, extraAttrs: 'autocapitalize="none" autocorrect="off" spellcheck="false"' });
+}
+
+window.toggleClearButton = function(id) {
   const input = document.getElementById(id);
   const btn = document.getElementById(id + 'ClearBtn');
   if (input && btn) btn.style.display = input.value ? 'block' : 'none';
 };
 
-window.clearEmailField = function(id) {
+window.clearTextField = function(id) {
   const input = document.getElementById(id);
   if (!input) return;
   input.value = '';
   input.focus();
-  window.toggleEmailClearButton(id);
+  window.toggleClearButton(id);
 };
 
 window.togglePasswordVisibility = function(inputId, btn) {
@@ -767,13 +784,13 @@ function screenAccountSettings() {
       ${isOffice ? `
       <p style="font-size:13px;font-weight:600;margin:0 0 8px;">Your name &amp; title</p>
       <div class="card">
-        <input id="staffNameInput" type="text" placeholder="Your name">
+        ${clearableTextFieldHtml('staffNameInput', { placeholder: 'Your name' })}
         <select id="staffTitleSelect" onchange="handleStaffTitleSelectChange(this.value)" style="margin-bottom:0;">
           <option value="">Title (optional)…</option>
           ${EMPLOYEE_TITLE_OPTIONS.map(t => `<option value="${t}">${t}</option>`).join('')}
           <option value="__OTHER__">Other…</option>
         </select>
-        <input id="staffTitleCustomInput" type="text" placeholder="Enter title" style="display:none;margin-top:8px;">
+        ${clearableTextFieldHtml('staffTitleCustomInput', { placeholder: 'Enter title', wrapperId: 'staffTitleCustomWrap', wrapperStyle: 'display:none;position:relative;margin-top:8px;' })}
         <div id="staffNameSavedMsg" style="font-size:12px;color:var(--teal-dark);margin-top:8px;display:none;">Saved.</div>
         <button class="primary" style="margin-top:8px;" onclick="saveStaffName()">Save</button>
       </div>
@@ -781,9 +798,9 @@ function screenAccountSettings() {
       <div class="card">
         ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
         ${state.passwordChanged ? `<div class="msg ok">Password updated successfully.</div>` : ''}
-        ${passwordFieldHtml('currentPassword', 'Current password', 'current-password')}
-        ${passwordFieldHtml('newPassword', 'New password', 'new-password')}
-        ${passwordFieldHtml('confirmPassword', 'Confirm new password', 'new-password')}
+        ${passwordFieldHtml('currentPassword', 'Current password', 'current-password', true)}
+        ${passwordFieldHtml('newPassword', 'New password', 'new-password', true)}
+        ${passwordFieldHtml('confirmPassword', 'Confirm new password', 'new-password', true)}
         <p style="font-size:12px;color:var(--slate);margin:-4px 0 12px;">Tip: You can also turn on email login codes below for extra account security.</p>
         <button class="primary" onclick="doChangePassword()">Update password</button>
       </div>
@@ -804,26 +821,33 @@ async function loadTwoFactorSetting() {
     const profile = await api(state.role === 'office' ? '/api/profile/staff' : '/api/profile/rep');
     document.getElementById('twoFactorEnabled').checked = !!profile.twoFactorEnabled;
     const nameInput = document.getElementById('staffNameInput');
-    if (nameInput) nameInput.value = profile.name || '';
+    if (nameInput) {
+      nameInput.value = profile.name || '';
+      window.toggleClearButton('staffNameInput');
+    }
     const titleSelect = document.getElementById('staffTitleSelect');
     if (titleSelect) {
       const title = profile.title || '';
       const isKnownOption = !title || EMPLOYEE_TITLE_OPTIONS.includes(title);
       titleSelect.value = isKnownOption ? title : '__OTHER__';
+      const customWrap = document.getElementById('staffTitleCustomWrap');
       const customInput = document.getElementById('staffTitleCustomInput');
-      if (customInput) {
-        customInput.style.display = isKnownOption ? 'none' : 'block';
+      if (customWrap && customInput) {
+        customWrap.style.display = isKnownOption ? 'none' : 'block';
         customInput.value = isKnownOption ? '' : title;
+        window.toggleClearButton('staffTitleCustomInput');
       }
     }
   } catch (err) {}
 }
 
 window.handleStaffTitleSelectChange = function(value) {
+  const customWrap = document.getElementById('staffTitleCustomWrap');
   const customInput = document.getElementById('staffTitleCustomInput');
-  if (!customInput) return;
-  customInput.style.display = value === '__OTHER__' ? 'block' : 'none';
+  if (!customWrap || !customInput) return;
+  customWrap.style.display = value === '__OTHER__' ? 'block' : 'none';
   if (value !== '__OTHER__') customInput.value = '';
+  window.toggleClearButton('staffTitleCustomInput');
 };
 
 window.saveStaffName = async function() {
