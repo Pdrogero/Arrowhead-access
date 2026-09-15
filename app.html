@@ -541,6 +541,26 @@ function screenStaffInviteAccept() {
     </div>`;
 }
 
+const US_STATE_OPTIONS = [
+  { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
+  { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },
+  { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' }, { code: 'DC', name: 'District of Columbia' },
+  { code: 'FL', name: 'Florida' }, { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' },
+  { code: 'ID', name: 'Idaho' }, { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' },
+  { code: 'IA', name: 'Iowa' }, { code: 'KS', name: 'Kansas' }, { code: 'KY', name: 'Kentucky' },
+  { code: 'LA', name: 'Louisiana' }, { code: 'ME', name: 'Maine' }, { code: 'MD', name: 'Maryland' },
+  { code: 'MA', name: 'Massachusetts' }, { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' },
+  { code: 'MS', name: 'Mississippi' }, { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' },
+  { code: 'NE', name: 'Nebraska' }, { code: 'NV', name: 'Nevada' }, { code: 'NH', name: 'New Hampshire' },
+  { code: 'NJ', name: 'New Jersey' }, { code: 'NM', name: 'New Mexico' }, { code: 'NY', name: 'New York' },
+  { code: 'NC', name: 'North Carolina' }, { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' },
+  { code: 'OK', name: 'Oklahoma' }, { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' },
+  { code: 'RI', name: 'Rhode Island' }, { code: 'SC', name: 'South Carolina' }, { code: 'SD', name: 'South Dakota' },
+  { code: 'TN', name: 'Tennessee' }, { code: 'TX', name: 'Texas' }, { code: 'UT', name: 'Utah' },
+  { code: 'VT', name: 'Vermont' }, { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' },
+  { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
+];
+
 function screenSignup() {
   if (state.role === 'office') {
     return `
@@ -551,7 +571,15 @@ function screenSignup() {
           ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
           <input id="staffName" type="text" placeholder="Your name">
           <input id="officeName" type="text" placeholder="Office name">
-          <input id="address" type="text" placeholder="Address">
+          <input id="addressStreet" type="text" placeholder="Street address" autocomplete="street-address">
+          <input id="addressCity" type="text" placeholder="City" autocomplete="address-level2">
+          <div style="display:flex;gap:8px;">
+            <select id="addressState" autocomplete="address-level1" style="flex:1;">
+              <option value="">State…</option>
+              ${US_STATE_OPTIONS.map(s => `<option value="${s.code}">${s.name}</option>`).join('')}
+            </select>
+            <input id="addressZip" type="text" inputmode="numeric" placeholder="ZIP code" autocomplete="postal-code" style="flex:1;">
+          </div>
           <input id="email" type="email" placeholder="Email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
           ${passwordFieldHtml('password', 'Password', 'new-password')}
           ${passwordFieldHtml('confirmPassword', 'Confirm password', 'new-password')}
@@ -4420,7 +4448,10 @@ async function doRepSignup() {
 async function doOfficeSignup() {
   const name = document.getElementById('staffName').value.trim();
   const officeName = document.getElementById('officeName').value;
-  const address = document.getElementById('address').value;
+  const addressStreet = document.getElementById('addressStreet').value.trim();
+  const addressCity = document.getElementById('addressCity').value.trim();
+  const addressState = document.getElementById('addressState').value;
+  const addressZip = document.getElementById('addressZip').value.trim();
   const email = document.getElementById('email').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
   const confirmPassword = document.getElementById('confirmPassword').value;
@@ -4430,10 +4461,20 @@ async function doOfficeSignup() {
     setState({ formErr: 'Your name is required' });
     return;
   }
+  if (!addressStreet || !addressCity || !addressState || !addressZip) {
+    setState({ formErr: 'Street address, city, state, and ZIP code are all required' });
+    return;
+  }
   if (password !== confirmPassword) {
     setState({ formErr: "Passwords don't match" });
     return;
   }
+
+  // Stored as one formatted string, same as everywhere else addresses are
+  // shown/searched — the form just breaks entry into clearer, less
+  // error-prone pieces so city/state/zip don't get left out or squished
+  // into one free-text line.
+  const address = `${addressStreet}, ${addressCity}, ${addressState} ${addressZip}`;
 
   try {
     // The office's first location just takes the office name too — a
