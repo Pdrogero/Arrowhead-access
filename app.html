@@ -732,11 +732,17 @@ function screenAccountSettings() {
       <h1>Account Settings</h1>
       <p class="sub">Change the password for your account.</p>
       ${isOffice ? `
-      <p style="font-size:13px;font-weight:600;margin:0 0 8px;">Your name</p>
+      <p style="font-size:13px;font-weight:600;margin:0 0 8px;">Your name &amp; title</p>
       <div class="card">
         <input id="staffNameInput" type="text" placeholder="Your name">
-        <div id="staffNameSavedMsg" style="font-size:12px;color:var(--teal-dark);margin-top:-6px;display:none;">Saved.</div>
-        <button class="primary" style="margin-top:4px;" onclick="saveStaffName()">Save name</button>
+        <select id="staffTitleSelect" onchange="handleStaffTitleSelectChange(this.value)" style="margin-bottom:0;">
+          <option value="">Title (optional)…</option>
+          ${EMPLOYEE_TITLE_OPTIONS.map(t => `<option value="${t}">${t}</option>`).join('')}
+          <option value="__OTHER__">Other…</option>
+        </select>
+        <input id="staffTitleCustomInput" type="text" placeholder="Enter title" style="display:none;margin-top:8px;">
+        <div id="staffNameSavedMsg" style="font-size:12px;color:var(--teal-dark);margin-top:8px;display:none;">Saved.</div>
+        <button class="primary" style="margin-top:8px;" onclick="saveStaffName()">Save</button>
       </div>
       <p style="font-size:13px;font-weight:600;margin:18px 0 8px;">Password</p>` : ''}
       <div class="card">
@@ -766,16 +772,38 @@ async function loadTwoFactorSetting() {
     document.getElementById('twoFactorEnabled').checked = !!profile.twoFactorEnabled;
     const nameInput = document.getElementById('staffNameInput');
     if (nameInput) nameInput.value = profile.name || '';
+    const titleSelect = document.getElementById('staffTitleSelect');
+    if (titleSelect) {
+      const title = profile.title || '';
+      const isKnownOption = !title || EMPLOYEE_TITLE_OPTIONS.includes(title);
+      titleSelect.value = isKnownOption ? title : '__OTHER__';
+      const customInput = document.getElementById('staffTitleCustomInput');
+      if (customInput) {
+        customInput.style.display = isKnownOption ? 'none' : 'block';
+        customInput.value = isKnownOption ? '' : title;
+      }
+    }
   } catch (err) {}
 }
+
+window.handleStaffTitleSelectChange = function(value) {
+  const customInput = document.getElementById('staffTitleCustomInput');
+  if (!customInput) return;
+  customInput.style.display = value === '__OTHER__' ? 'block' : 'none';
+  if (value !== '__OTHER__') customInput.value = '';
+};
 
 window.saveStaffName = async function() {
   const name = document.getElementById('staffNameInput').value.trim();
   if (!name) { alert('Name cannot be blank'); return; }
+  const titleSelectValue = document.getElementById('staffTitleSelect').value;
+  const title = titleSelectValue === '__OTHER__'
+    ? document.getElementById('staffTitleCustomInput').value.trim()
+    : titleSelectValue;
   const msg = document.getElementById('staffNameSavedMsg');
   try {
-    await api('/api/profile/staff', { method: 'PATCH', body: JSON.stringify({ name }) });
-    state.me = { ...state.me, name };
+    await api('/api/profile/staff', { method: 'PATCH', body: JSON.stringify({ name, title }) });
+    state.me = { ...state.me, name, title };
     msg.style.display = 'block';
     setTimeout(() => { msg.style.display = 'none'; }, 2000);
   } catch (err) {
@@ -2182,7 +2210,7 @@ async function saveAttendees() {
   }
 }
 
-const EMPLOYEE_TITLE_OPTIONS = ['MD', 'DO', 'DPM', 'ARNP', 'PA', 'Nurse', 'LPN', 'Medical Assistant', 'Staff', 'Front Desk', 'Medical Student'];
+const EMPLOYEE_TITLE_OPTIONS = ['MD', 'DO', 'DPM', 'ARNP', 'PA', 'Nurse', 'LPN', 'Medical Assistant', 'Office Manager', 'Staff', 'Front Desk', 'Medical Student'];
 const NPI_ELIGIBLE_TITLES = ['MD', 'DO', 'DPM', 'ARNP', 'PA', 'Medical Student'];
 
 function renderEmployeeRows() {
@@ -4047,7 +4075,7 @@ function officeHeaderHtml() {
       <div style="width:64px;height:64px;border-radius:50%;background:var(--paper-raised,#E4EAE3);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--teal);flex-shrink:0;">${(firstName || '?').charAt(0)}</div>
       <div>
         <h1 style="margin-bottom:2px;">Hello, ${firstName}</h1>
-        <p class="sub" style="margin:0;">${[me?.location?.name, me?.role === 'ADMIN' ? 'Admin' : 'Staff'].filter(Boolean).join(' · ')}</p>
+        <p class="sub" style="margin:0;">${[me?.location?.name, me?.title || (me?.role === 'ADMIN' ? 'Admin' : 'Staff')].filter(Boolean).join(' · ')}</p>
       </div>
     </div>
     ${me && 'name' in me && !me.name ? `<p style="font-size:12px;color:var(--slate);margin:0 0 12px;">Add your name under <a href="#" onclick="event.preventDefault();setState({screen:'accountSettings'})" style="color:var(--teal);font-weight:600;">Account Settings</a> so we can greet you by name.</p>` : ''}`;

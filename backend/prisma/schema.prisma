@@ -243,6 +243,10 @@ model StaffUser {
   // member who hasn't accepted yet — the header greeting falls back to the
   // email's local part until it's set.
   name           String?
+  // Job title (e.g. "Office Manager") — purely informational, editable
+  // under Account Settings. Distinct from `role` below, which is the
+  // Admin/Staff permission level.
+  title          String?
   passwordHash   String
   role           StaffRole     @default(STAFF)
   twoFactorEnabled Boolean     @default(false)

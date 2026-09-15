@@ -146,7 +146,7 @@ router.get('/staff', requireAuth, requireRole('office_admin', 'office_staff'), a
   try {
     const staff = await prisma.staffUser.findUnique({
       where: { id: req.user!.sub },
-      select: { id: true, email: true, name: true, role: true, twoFactorEnabled: true, location: { select: { name: true } } },
+      select: { id: true, email: true, name: true, title: true, role: true, twoFactorEnabled: true, location: { select: { name: true } } },
     });
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
     res.json(staff);
@@ -161,13 +161,17 @@ router.patch('/staff', requireAuth, requireRole('office_admin', 'office_staff'),
     const { twoFactorEnabled } = req.body;
     const name = typeof req.body.name === 'string' ? req.body.name.trim() : undefined;
     if (name === '') return res.status(400).json({ error: 'Name cannot be blank' });
+    // Title is purely informational (e.g. "Office Manager") — unlike name,
+    // blank is a valid choice (clears it back to unset).
+    const title = typeof req.body.title === 'string' ? req.body.title.trim() : undefined;
     const staff = await prisma.staffUser.update({
       where: { id: req.user!.sub },
       data: {
         ...('twoFactorEnabled' in req.body ? { twoFactorEnabled: !!twoFactorEnabled } : {}),
         ...(name !== undefined ? { name } : {}),
+        ...(title !== undefined ? { title: title || null } : {}),
       },
-      select: { id: true, email: true, name: true, role: true, twoFactorEnabled: true },
+      select: { id: true, email: true, name: true, title: true, role: true, twoFactorEnabled: true },
     });
     res.json({ staff });
   } catch (err) {
