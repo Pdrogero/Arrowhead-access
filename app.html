@@ -302,8 +302,13 @@ function fmtTimeRange(startIso, endIso) {
 // is what keeps the toggle centered vertically without extra positioning
 // math. Plain text rather than an eye icon reads calmer/more professional.
 function passwordFieldHtml(id, placeholder, autocomplete) {
+  // The name attribute (not just autocomplete) is what lets Safari/Chrome
+  // recognize two password fields on the same form as a "new password" +
+  // "confirm it" pair. Without it, the browser's strong-password suggestion
+  // can independently generate a different random password for each field —
+  // both hidden behind dots, so there's no way to notice before submitting.
   return `<div style="position:relative;margin-bottom:12px;">
-    <input id="${id}" type="password" placeholder="${placeholder}" autocomplete="${autocomplete}" style="margin-bottom:0;padding-right:52px;">
+    <input id="${id}" name="${id}" type="password" placeholder="${placeholder}" autocomplete="${autocomplete}" style="margin-bottom:0;padding-right:52px;">
     <button type="button" tabindex="-1" onclick="togglePasswordVisibility('${id}', this)" aria-label="Show password" style="position:absolute;top:50%;right:10px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;letter-spacing:0.02em;line-height:1;padding:4px;color:var(--teal);">Show</button>
   </div>`;
 }
