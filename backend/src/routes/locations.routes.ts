@@ -97,7 +97,7 @@ router.post('/', requireAuth, requireRole('office_admin'), async (req, res) => {
       sendEmail({
         to: managerEmail,
         subject: `You've been added as the contact for ${location.name} on Arrowhead Access`,
-        html: `${emailLogoHeader()}<p>Hi,</p><p>${org?.name || 'Your organization'} added <strong>${location.name}</strong> (${location.address}) as a location on Arrowhead Access, the platform used to manage sales rep visit scheduling — and listed you as the contact for it.</p><p>If you need your own login to manage this location, reach out to your office administrator, or contact us at legal@arrowheadaccess.com.</p>`,
+        html: `${emailLogoHeader()}<p>Hi,</p><p>${org?.name || 'Your organization'} added <strong>${location.name}</strong> (${location.address}) as a location on Arrowhead Access, the platform used to manage sales rep visit scheduling — and listed you as the contact for it.</p><p>If you need your own login to manage this location, reach out to your office administrator, or contact us at support@arrowheadaccess.com.</p>`,
       }).catch(() => {});
     }
 

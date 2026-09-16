@@ -31,7 +31,7 @@ export function notifyAdmin(subject: string, html: string) {
   sendEmail({ to, subject, html }).catch(() => {});
 }
 
-export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
+export async function sendEmail({ to, subject, html, replyTo }: { to: string; subject: string; html: string; replyTo?: string }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('RESEND_API_KEY not set — skipping email send to', to);
@@ -46,7 +46,7 @@ export async function sendEmail({ to, subject, html }: { to: string; subject: st
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from, to, subject, html }),
+    body: JSON.stringify({ from, to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
   });
 
   if (!res.ok) {

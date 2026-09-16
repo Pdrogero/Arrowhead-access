@@ -30,7 +30,7 @@ function sendPasswordChangedEmail(to: string) {
   sendEmail({
     to,
     subject: 'Your Arrowhead Access password was changed',
-    html: `${emailLogoHeader()}<p>This is a confirmation that your Arrowhead Access password was just changed.</p><p>If this was you, no action is needed. If you didn't make this change, contact us right away at <a href="mailto:legal@arrowheadaccess.com">legal@arrowheadaccess.com</a> so we can secure your account.</p>`,
+    html: `${emailLogoHeader()}<p>This is a confirmation that your Arrowhead Access password was just changed.</p><p>If this was you, no action is needed. If you didn't make this change, contact us right away at <a href="mailto:support@arrowheadaccess.com">support@arrowheadaccess.com</a> so we can secure your account.</p>`,
   }).catch(() => {});
 }
 

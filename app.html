@@ -775,6 +775,53 @@ window.skipTwoFactorNudge = function() {
   setState({ screen: 'profile', role: 'rep' });
 };
 
+const SUPPORT_CATEGORY_OPTIONS = [
+  { value: 'ACCOUNT', label: 'Account or login issue' },
+  { value: 'BOOKING', label: 'Booking or scheduling' },
+  { value: 'BILLING', label: 'Billing' },
+  { value: 'BUG', label: 'Something looks broken' },
+  { value: 'OTHER', label: 'Other question' },
+];
+
+// In-app support form — replaces the old mailto: Help link so a message
+// doesn't depend on the device having an email app configured, and so
+// we get some context about who's asking without them having to explain it.
+function screenContactSupport() {
+  return `
+    <div class="wrap">
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <h1>Contact Support</h1>
+      <p class="sub">Have a question or run into an issue? Send us a message and we'll get back to you by email.</p>
+      <div class="card">
+        ${state.formErr ? `<div class="msg err">${state.formErr}</div>` : ''}
+        ${state.supportSent ? `<div class="msg ok">Thanks — your message was sent. We'll get back to you by email soon.</div>` : `
+          <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">What's this about?</label>
+          <select id="supportCategory" style="margin-bottom:12px;">
+            ${SUPPORT_CATEGORY_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}
+          </select>
+          <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Your message</label>
+          <textarea id="supportMessage" rows="6" placeholder="Tell us what's going on..." style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
+          <button class="primary" onclick="submitSupportRequest()">Send message</button>
+        `}
+      </div>
+    </div>`;
+}
+
+window.submitSupportRequest = async function() {
+  const category = document.getElementById('supportCategory').value;
+  const message = document.getElementById('supportMessage').value.trim();
+  if (!message) {
+    setState({ formErr: 'Please describe your question or issue' });
+    return;
+  }
+  try {
+    await api('/api/support/contact', { method: 'POST', body: JSON.stringify({ category, message }) });
+    setState({ formErr: null, supportSent: true });
+  } catch (err) {
+    setState({ formErr: err.message });
+  }
+};
+
 // Rep-only now — the same content for office accounts lives under Office
 // Settings (reached via the ⚙️ icon), combined alongside Our Team,
 // Locations, and Staff Logins instead of a separate screen.
@@ -4227,7 +4274,7 @@ function screenDashboardOffice() {
           <button class="link" style="text-align:right;margin:0;" onclick="setState({screen:'messages'})">Messages <span style="position:relative;display:inline-block;">💬<span id="messagesBadgeOffice" class="badge-dot" style="display:none;"></span></span></button>
           <button class="link" style="text-align:right;margin:0;" onclick="setState({screen:'literature'})">Literature 📄</button>
           <button class="link" style="text-align:right;margin:0;" onclick="setState({screen:'visitHistory'})">Visit History 📜</button>
-          <a href="mailto:legal@arrowheadaccess.com?subject=Arrowhead%20Access%20Support%20Request" style="display:block;width:100%;background:none;border:none;color:var(--teal);font-size:12px;text-align:right;text-decoration:none;cursor:pointer;">Help ❓</a>
+          <button class="link" style="text-align:right;margin:0;" onclick="setState({screen:'contactSupport', supportSent:false, formErr:null})">Help ❓</button>
         </div>
       </div>
       <div id="ledgerBox" class="listcard"><div class="empty">Loading…</div></div>
@@ -5597,7 +5644,7 @@ window.toggleProfileMenu = function() {
       <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="scrollToBilling()">💳 Billing</button>
       <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="openCalendar()">📅 Calendar Sync</button>
       <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="setState({screen:'accountSettings'})">🔑 Account Settings</button>
-      <a href="mailto:legal@arrowheadaccess.com?subject=Arrowhead%20Access%20Support%20Request" style="display:block;width:100%;background:none;border:none;color:var(--teal);font-size:12px;text-align:left;text-decoration:none;cursor:pointer;padding:8px 8px;">❓ Help</a>
+      <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;" onclick="setState({screen:'contactSupport', supportSent:false, formErr:null})">❓ Help</button>
       <button class="link" style="display:block;text-align:left;width:100%;margin:0;padding:8px 8px;color:#C23C3C;" onclick="logout()">⏻ Logout</button>
     </div>`;
 };
@@ -6380,6 +6427,7 @@ function render() {
   else if (state.screen === 'repProfileView') { app.innerHTML = screenRepProfileView(); }
   else if (state.screen === 'reviewVisit') { app.innerHTML = screenReviewVisit(); renderStarRating(); }
   else if (state.screen === 'accountSettings') { app.innerHTML = screenAccountSettings(); loadTwoFactorSetting(); }
+  else if (state.screen === 'contactSupport') { app.innerHTML = screenContactSupport(); }
   else if (state.screen === 'postSlot') {
     app.innerHTML = screenPostSlot();
     // The event type <select> defaults to its first option (Lunch) on
