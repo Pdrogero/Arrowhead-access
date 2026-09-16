@@ -273,6 +273,13 @@ async function api(path, options = {}) {
 }
 
 function setState(updates) { Object.assign(state, updates); render(); }
+// Tracks the last screen actually rendered so `render()` can tell a real
+// navigation (login landing on the dashboard, clicking into a sub-screen)
+// apart from an in-place re-render triggered by the same screen's own state
+// changes (toggling a checkbox, typing in a filter) — only the former should
+// snap the page back to the top; the latter would yank the user's scroll
+// position out from under them mid-interaction.
+let lastRenderedScreen = null;
 function logout() {
   localStorage.removeItem('token');
   favoriteLocationIds = new Set();
@@ -800,6 +807,7 @@ function screenContactSupport() {
             ${SUPPORT_CATEGORY_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}
           </select>
           <label style="font-size:13px;font-weight:600;margin-bottom:6px;display:block;">Your message</label>
+          <p style="font-size:12px;color:var(--slate);margin:0 0 6px;">Please be as specific as possible — include names, dates, or booking details where relevant, so we can help faster.</p>
           <textarea id="supportMessage" rows="6" placeholder="Tell us what's going on..." style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
           <button class="primary" onclick="submitSupportRequest()">Send message</button>
         `}
@@ -6395,6 +6403,10 @@ window.goToCheckout = async function(plan) {
 
 // ========== RENDER ==========
 function render() {
+  if (state.screen !== lastRenderedScreen) {
+    lastRenderedScreen = state.screen;
+    window.scrollTo(0, 0);
+  }
   const app = document.getElementById('app');
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.style.display = state.screen === 'role' ? 'none' : 'block';
