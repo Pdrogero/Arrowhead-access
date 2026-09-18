@@ -180,6 +180,11 @@ let browseOfficeRatings = {};
 let favoriteLocationIds = new Set();
 let favoriteOfficesData = null;
 let browseSearchQuery = '';
+// Office ids checked in the "Select office" panel — lets a rep browsing
+// slots across several accounts at once (e.g. covering a territory) narrow
+// to just those offices, in addition to (not instead of) the free-text
+// search box above it.
+let browseSelectedOfficeIds = new Set();
 // Appointment types currently shown in Open Slots — starts with all of
 // them checked (OFFICE_CLOSED excluded; it's a blocking placeholder, not
 // something a rep would search for) so the filter is a no-op until a rep
@@ -1147,14 +1152,15 @@ function screenBrowseSlots() {
       <p class="sub">Browse and claim open visits across all offices.</p>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <div style="position:relative;flex:1;">
-          <input id="browseSearch" type="text" placeholder="Search by office name…" autocomplete="off" oninput="filterBrowseSlots()" onblur="setTimeout(hideBrowseSearchSuggestions, 150)" value="${browseSearchQuery}" style="margin-bottom:0;width:100%;">
+          <input id="browseSearch" type="text" placeholder="Search by office name…" autocomplete="off" oninput="filterBrowseSlots()" onblur="setTimeout(hideBrowseSearchSuggestions, 150)" value="${browseSearchQuery}" style="margin-bottom:0;width:100%;padding-right:36px;">
+          <button type="button" id="browseSearchClearBtn" tabindex="-1" onclick="clearBrowseSearch()" aria-label="Clear" style="display:${browseSearchQuery.trim() ? 'block' : 'none'};position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:4px;color:var(--slate);">✕</button>
           <div id="browseSearchSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:10;max-height:240px;overflow-y:auto;"></div>
         </div>
         <button type="button" id="browseViewToggleBtn" onclick="toggleBrowseView()" style="white-space:nowrap;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">${browseViewMode === 'list' ? '📅 Calendar view' : '📋 List view'}</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <button type="button" id="browseFilterToggleBtn" onclick="toggleBrowseFilterPanel()" style="flex:1;min-width:140px;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🎚️ Appointment type${browseFilterSummary()}</button>
-        <button type="button" id="browseOfficeToggleBtn" onclick="toggleBrowseOfficePanel()" style="flex:1;min-width:140px;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🏢 Select office${browseSearchQuery.trim() ? ' ✓' : ''}</button>
+        <button type="button" id="browseOfficeToggleBtn" onclick="toggleBrowseOfficePanel()" style="flex:1;min-width:140px;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🏢 Select offices${browseSelectedOfficeIds.size ? ` (${browseSelectedOfficeIds.size})` : ''}</button>
         <button type="button" id="newOfficesToggleBtn" onclick="toggleNewOfficesPanel()" style="flex:1;min-width:140px;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">🆕 New Offices</button>
       </div>
       <div id="browseFilterPanel" style="display:none;margin-bottom:16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;flex-wrap:wrap;gap:12px;">
@@ -1193,38 +1199,54 @@ function renderBrowseOfficePanel() {
   const byOffice = new Map();
   openSlotsData.forEach(s => {
     if (s.eventType === 'OFFICE_CLOSED') return;
-    const entry = byOffice.get(s.location.id) || { name: s.location.name, count: 0 };
+    const entry = byOffice.get(s.location.id) || { id: s.location.id, name: s.location.name, count: 0 };
     entry.count++;
     byOffice.set(s.location.id, entry);
   });
   const offices = [...byOffice.values()].sort((a, b) => a.name.localeCompare(b.name));
-  const activeQuery = browseSearchQuery.trim().toLowerCase();
 
   if (!offices.length) {
     panel.innerHTML = `<div class="listcard"><div class="empty">No open slots to pick an office from right now.</div></div>`;
     return;
   }
   panel.innerHTML = `<div class="listcard" style="max-height:320px;overflow-y:auto;">
-    ${activeQuery ? `<div class="row" style="cursor:pointer;" onclick="selectBrowseOfficeFilter('')"><div class="mid"><div class="who">Show all offices</div></div></div>` : ''}
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;padding:10px 16px;border-bottom:1px solid var(--line);">
+      <input type="checkbox" id="browseOfficeSelectAll" ${offices.length && browseSelectedOfficeIds.size === offices.length ? 'checked' : ''} onchange="toggleBrowseOfficeSelectAll(this.checked)">
+      Select all
+    </label>
     ${offices.map(o => `
-      <div class="row" style="cursor:pointer;${o.name.toLowerCase() === activeQuery ? 'background:var(--paper-raised,#E4EAE3);' : ''}" onclick="selectBrowseOfficeFilter('${o.name.replace(/'/g, "\\'")}')">
+      <label class="row" style="cursor:pointer;display:flex;align-items:center;gap:10px;">
+        <input type="checkbox" class="browseOfficeCb" value="${o.id}" ${browseSelectedOfficeIds.has(o.id) ? 'checked' : ''} onchange="toggleBrowseOfficeSelection('${o.id}', this.checked)">
         <div class="mid">
           <div class="who">${o.name}</div>
           <div class="what">${o.count} open slot${o.count === 1 ? '' : 's'}</div>
         </div>
-      </div>`).join('')}
+      </label>`).join('')}
   </div>`;
 }
 
-window.selectBrowseOfficeFilter = function(name) {
-  browseSearchQuery = name;
-  const input = document.getElementById('browseSearch');
-  if (input) input.value = name;
-  hideBrowseSearchSuggestions();
-  const panel = document.getElementById('browseOfficePanel');
-  if (panel) panel.style.display = 'none';
+// Toggles one office's checkbox in/out of the multi-select filter — a rep
+// covering several accounts can narrow Open Slots to just the offices
+// they're actively scheduling with, instead of only ever being able to
+// pick one at a time.
+window.toggleBrowseOfficeSelection = function(id, checked) {
+  if (checked) browseSelectedOfficeIds.add(id);
+  else browseSelectedOfficeIds.delete(id);
+  const selectAllCb = document.getElementById('browseOfficeSelectAll');
+  if (selectAllCb) selectAllCb.checked = browseSelectedOfficeIds.size === document.querySelectorAll('.browseOfficeCb').length;
   const btn = document.getElementById('browseOfficeToggleBtn');
-  if (btn) btn.textContent = `🏢 Select office${name ? ' ✓' : ''}`;
+  if (btn) btn.textContent = `🏢 Select offices${browseSelectedOfficeIds.size ? ` (${browseSelectedOfficeIds.size})` : ''}`;
+  renderBrowseContent();
+};
+
+window.toggleBrowseOfficeSelectAll = function(checked) {
+  document.querySelectorAll('.browseOfficeCb').forEach(cb => {
+    cb.checked = checked;
+    if (checked) browseSelectedOfficeIds.add(cb.value);
+    else browseSelectedOfficeIds.delete(cb.value);
+  });
+  const btn = document.getElementById('browseOfficeToggleBtn');
+  if (btn) btn.textContent = `🏢 Select offices${browseSelectedOfficeIds.size ? ` (${browseSelectedOfficeIds.size})` : ''}`;
   renderBrowseContent();
 };
 
@@ -1644,6 +1666,7 @@ let browseSearchDebounceTimer = null;
 
 function filterBrowseSlots() {
   browseSearchQuery = document.getElementById('browseSearch').value;
+  toggleClearButton('browseSearch');
   renderBrowseContent();
 
   clearTimeout(browseSearchDebounceTimer);
@@ -1651,6 +1674,19 @@ function filterBrowseSlots() {
   if (!query) { hideBrowseSearchSuggestions(); return; }
   browseSearchDebounceTimer = setTimeout(() => loadBrowseSearchSuggestions(query), 250);
 }
+
+// Lets a rep clear the whole search box in one tap instead of backspacing
+// it out character by character.
+window.clearBrowseSearch = function() {
+  const input = document.getElementById('browseSearch');
+  if (!input) return;
+  input.value = '';
+  browseSearchQuery = '';
+  toggleClearButton('browseSearch');
+  hideBrowseSearchSuggestions();
+  renderBrowseContent();
+  input.focus();
+};
 
 async function loadBrowseSearchSuggestions(query) {
   try {
@@ -1685,6 +1721,7 @@ window.selectBrowseSearchSuggestion = function(name) {
   browseSearchQuery = name;
   const input = document.getElementById('browseSearch');
   if (input) input.value = name;
+  toggleClearButton('browseSearch');
   hideBrowseSearchSuggestions();
   renderBrowseContent();
 };
@@ -1701,6 +1738,9 @@ function renderBrowseContent() {
   let filtered = query
     ? openSlotsData.filter(s => s.location.name.toLowerCase().includes(query))
     : openSlotsData;
+  // Narrows to the offices checked in the "Select offices" panel, if any —
+  // combined with (not instead of) the free-text search above.
+  if (browseSelectedOfficeIds.size) filtered = filtered.filter(s => browseSelectedOfficeIds.has(s.location.id));
   // OFFICE_CLOSED entries are informational blockers, not appointment
   // types a rep would filter for, so they're always shown regardless.
   filtered = filtered.filter(s => s.eventType === 'OFFICE_CLOSED' || browseTypeFilter.has(s.eventType));
@@ -2957,7 +2997,7 @@ function screenOfficeDetail() {
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="browseSearchQuery='${o.name.replace(/'/g, "\\'")}';setState({screen:'browseSlots'})">🔍 View open slots</button>
+          <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="browseSearchQuery='${o.name.replace(/'/g, "\\'")}';browseSelectedOfficeIds=new Set();setState({screen:'browseSlots'})">🔍 View open slots</button>
           <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${o.id}', '${o.name.replace(/'/g, "\\'")}')">💬 Message Office</button>
           <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${o.id}', '${o.name.replace(/'/g, "\\'")}')">👥 Staff directory</button>
         </div>
@@ -4751,7 +4791,7 @@ async function loadFavoriteOffices() {
           <div class="what">${addressLinkHtml(o.address)}</div>
         </div>
         <span style="font-size:11px;color:var(--slate);white-space:nowrap;">${o.openSlotCount} open slot${o.openSlotCount === 1 ? '' : 's'}</span>
-        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="browseSearchQuery='${o.name.replace(/'/g, "\\'")}';setState({screen:'browseSlots'})">🔍 View slots</button>
+        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="browseSearchQuery='${o.name.replace(/'/g, "\\'")}';browseSelectedOfficeIds=new Set();setState({screen:'browseSlots'})">🔍 View slots</button>
         <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="toggleFavoriteOffice('${o.id}')">☆ Remove</button>
       </div>`).join('');
   } catch (err) {
