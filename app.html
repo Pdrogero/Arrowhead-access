@@ -2997,7 +2997,7 @@ function screenOfficeDetail() {
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="browseSearchQuery='${o.name.replace(/'/g, "\\'")}';browseSelectedOfficeIds=new Set();setState({screen:'browseSlots'})">🔍 View open slots</button>
+          <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="browseSearchQuery='${o.name.replace(/'/g, "\\'")}';browseSelectedOfficeIds=new Set();browseViewMode='list';setState({screen:'browseSlots'})">🔍 View open slots</button>
           <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${o.id}', '${o.name.replace(/'/g, "\\'")}')">💬 Message Office</button>
           <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${o.id}', '${o.name.replace(/'/g, "\\'")}')">👥 Staff directory</button>
         </div>
@@ -4791,7 +4791,7 @@ async function loadFavoriteOffices() {
           <div class="what">${addressLinkHtml(o.address)}</div>
         </div>
         <span style="font-size:11px;color:var(--slate);white-space:nowrap;">${o.openSlotCount} open slot${o.openSlotCount === 1 ? '' : 's'}</span>
-        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="browseSearchQuery='${o.name.replace(/'/g, "\\'")}';browseSelectedOfficeIds=new Set();setState({screen:'browseSlots'})">🔍 View slots</button>
+        <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="browseSearchQuery='${o.name.replace(/'/g, "\\'")}';browseSelectedOfficeIds=new Set();browseViewMode='list';setState({screen:'browseSlots'})">🔍 View slots</button>
         <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="toggleFavoriteOffice('${o.id}')">☆ Remove</button>
       </div>`).join('');
   } catch (err) {
