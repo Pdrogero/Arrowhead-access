@@ -299,6 +299,10 @@ function goHome() {
   }
 }
 function fmtTime(isoStr) { return new Date(isoStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+// Day of week (e.g. "Monday") — shown under the date/time in slot listings
+// so a rep or office doesn't have to look it up separately to tell whether,
+// say, a Sep 22 lunch is a Tuesday they're actually free for.
+function fmtDayOfWeek(isoStr) { return new Date(isoStr).toLocaleString('en-US', { weekday: 'long' }); }
 // Just the time portion (e.g. "12:00 PM") — used for the compact event
 // chips inside a calendar day cell, where the date is already implied.
 function fmtTimeOnly(isoStr) { return new Date(isoStr).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' }); }
@@ -1808,7 +1812,7 @@ function renderBrowseList(slots) {
   const content = document.getElementById('browseContent');
   content.innerHTML = `<div class="listcard">${slots.map(s => `
     <div class="row">
-      <div class="time">${fmtTime(s.startTime)}</div>
+      <div class="time">${fmtTime(s.startTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(s.startTime)}</div></div>
       <div class="mid">
         <div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${s.location.id}')">${favoriteStarHtml(s.location.id)} ${s.location.name}</div>
         <div class="what">${addressLinkHtml(s.location.address)}</div>
@@ -1971,7 +1975,7 @@ function renderBrowseCalendar(slots) {
       <div class="listcard">
         ${daySlots.length ? daySlots.map(s => `
           <div class="row">
-            <div class="time">${fmtTime(s.startTime)}</div>
+            <div class="time">${fmtTime(s.startTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(s.startTime)}</div></div>
             <div class="mid">
               <div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${s.location.id}')">${favoriteStarHtml(s.location.id)} ${s.location.name}</div>
               <div>${eventTypeChipHtml(s.eventType)}</div>
@@ -5296,7 +5300,7 @@ function renderLedgerRowHtml(s, repRatings) {
   return `
       <div class="row" style="flex-wrap:wrap;">
         ${isLedgerSlotSelectable(s) ? `<input type="checkbox" class="ledgerSelectCb" style="margin-right:8px;align-self:center;" onchange="toggleLedgerSelect('${s.id}', this.checked)">` : ''}
-        <div class="time" style="width:190px;">${fmtTimeRange(s.startTime, s.endTime)}</div>
+        <div class="time" style="width:190px;">${fmtTimeRange(s.startTime, s.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(s.startTime)}</div></div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">${s.eventType === 'OFFICE_CLOSED' ? 'Not available for booking' : 'Open slot'}</div>`}
           <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
