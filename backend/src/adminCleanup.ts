@@ -134,6 +134,28 @@ export async function runPreLaunchCleanup(confirm: boolean): Promise<string> {
   return out.join('\n');
 }
 
+// --- Read-only: how many founding-rep spots (of 30) are still available,
+// and who currently holds one — for checking without logging in as a rep.
+export async function foundingStatusReport(): Promise<string> {
+  const out: string[] = [];
+  try {
+    const founders = await prisma.rep.findMany({
+      where: { isFoundingRep: true },
+      select: { email: true, name: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const limit = 30; // keep in sync with FOUNDING_REP_LIMIT in routes/auth.routes.ts and routes/billing.routes.ts
+    out.push(`${founders.length} of ${limit} founding-rep spots taken — ${Math.max(0, limit - founders.length)} remaining.\n`);
+    if (founders.length) {
+      out.push('Current founding reps:');
+      founders.forEach(r => out.push(`  ${r.email}  —  ${r.name}  —  since ${r.createdAt.toISOString().slice(0, 10)}`));
+    }
+  } finally {
+    await prisma.$disconnect();
+  }
+  return out.join('\n');
+}
+
 // --- One-off: find every rep account matching an email case-insensitively -
 // (duplicate case-variant signups aren't possible going forward, but a few
 // predate that protection) so it's clear which row actually has activity
