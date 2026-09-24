@@ -21,6 +21,7 @@ import locationsRouter from './routes/locations.routes';
 import teammatesRouter from './routes/teammates.routes';
 import verificationRouter from './routes/verification.routes';
 import supportRouter from './routes/support.routes';
+import adminRouter from './routes/admin.routes';
 
 const app = express();
 
@@ -72,6 +73,7 @@ app.use('/api/locations', locationsRouter);
 app.use('/api/teammates', teammatesRouter);
 app.use('/api/verification', verificationRouter);
 app.use('/api/support', supportRouter);
+app.use('/api/admin', adminRouter);
 
 // Reports any error that reaches Express's error-handling chain to Sentry
 // before falling through to Express's default 500 response. Must be

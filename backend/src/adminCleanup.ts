@@ -134,8 +134,23 @@ export async function runPreLaunchCleanup(confirm: boolean): Promise<string> {
   return out.join('\n');
 }
 
+// --- Read-only: just the founding-spot counts, no rep PII — safe to expose
+// over the HTTP admin route (src/routes/admin.routes.ts) for when Render
+// Shell isn't available on the current plan.
+export async function foundingSpotsSummary(): Promise<{ taken: number; limit: number; remaining: number }> {
+  const limit = 30; // keep in sync with FOUNDING_REP_LIMIT in routes/auth.routes.ts and routes/billing.routes.ts
+  try {
+    const taken = await prisma.rep.count({ where: { isFoundingRep: true } });
+    return { taken, limit, remaining: Math.max(0, limit - taken) };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 // --- Read-only: how many founding-rep spots (of 30) are still available,
 // and who currently holds one — for checking without logging in as a rep.
+// Includes rep emails, so this is for the Shell-only script
+// (scripts/founding-status.ts), not the HTTP admin route.
 export async function foundingStatusReport(): Promise<string> {
   const out: string[] = [];
   try {
