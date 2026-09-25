@@ -330,6 +330,41 @@ function fmtTimeRange(startIso, endIso) {
   return `${fmtTime(startIso)} – ${endTime}`;
 }
 
+// Builds a standard .ics file for one booking and triggers a download —
+// clicking a booking's date/time hands a rep a file their phone/desktop
+// calendar app already knows how to import, without us needing a backend
+// endpoint or picking one calendar provider (Google/Apple/Outlook all open
+// .ics files the same way).
+window.downloadBookingIcs = function(startIso, endIso, title, location) {
+  const fmt = iso => new Date(iso).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const esc = s => String(s || '').replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;');
+  const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@arrowheadaccess.com`;
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Arrowhead Access//EN',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${fmt(new Date().toISOString())}`,
+    `DTSTART:${fmt(startIso)}`,
+    `DTEND:${fmt(endIso)}`,
+    `SUMMARY:${esc(title)}`,
+    `LOCATION:${esc(location)}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'arrowhead-visit.ics';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
 // A password <input> with a small text toggle ("Show"/"Hide") to reveal
 // what's typed — margin moves onto the wrapper (with the input's own
 // margin zeroed) so the wrapper's height matches the input exactly, which
@@ -5437,7 +5472,7 @@ function renderMyBookingsBox() {
   const officeRatings = myBookingsRatings;
   box.innerHTML = bookings.map(b => `
       <div class="row" style="flex-wrap:wrap;">
-        <div class="time" style="width:190px;">${fmtTimeRange(b.slot.startTime, b.slot.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(b.slot.startTime)}</div></div>
+        <div class="time" style="width:190px;${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? 'cursor:pointer;' : ''}" ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `title="Save to your calendar" onclick="downloadBookingIcs('${b.slot.startTime}', '${b.slot.endTime}', '${(eventTypeLabel(b.slot.eventType) + ' — ' + (b.slot.location.name || '')).replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}')"` : ''}>${fmtTimeRange(b.slot.startTime, b.slot.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(b.slot.startTime)}${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? ' 📅' : ''}</div></div>
         <div class="mid">
           <div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${b.slot.location.id}')">${favoriteStarHtml(b.slot.location.id)} ${b.slot.location.name}</div>
           <div class="what">${addressLinkHtml(b.slot.location.address)}</div>
