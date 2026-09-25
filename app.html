@@ -9,15 +9,21 @@
   <link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#2E6F5E">
+  <meta name="theme-color" content="#1B2A4E">
   <script src="https://browser.sentry-cdn.com/10.71.0/bundle.min.js" crossorigin="anonymous"></script>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
-      --teal: #2D6F5E;
-      --teal-dark: #1f4a3f;
-      --coral: #E8684A;
+      /* Brand accent colors (buttons, links, logo) — navy/gold matching
+         the business card. Kept as --teal/--coral to avoid renaming every
+         var() reference below. Status colors (confirmed/accepted/verified
+         chips, accept buttons) intentionally still use their own hardcoded
+         green literals elsewhere and are NOT part of this rebrand — they
+         signal "success," which should stay green regardless of brand. */
+      --teal: #1B2A4E;
+      --teal-dark: #0F1830;
+      --coral: #C9A227;
       --slate: #6B7280;
       --line: #E5E7EB;
       --ink: #1F2937;
@@ -27,8 +33,8 @@
     /* Rotating a square (rather than clip-path) gives the rounded-diamond
        look from the business card — sized down so the rotated diagonal
        (side * 1.414) lands back at the original ~22px visual footprint. */
-    .logo-mark{width:16px;height:16px;border-radius:4px;background:#2E6F5E;position:relative;flex-shrink:0;transform:rotate(45deg);}
-    .logo-mark::after{content:"";position:absolute;top:50%;left:50%;width:7px;height:7px;background:#D9684C;border-radius:1px;transform:translate(-50%,-50%);}
+    .logo-mark{width:16px;height:16px;border-radius:4px;background:#1B2A4E;position:relative;flex-shrink:0;transform:rotate(45deg);}
+    .logo-mark::after{content:"";position:absolute;top:50%;left:50%;width:7px;height:7px;background:#C9A227;border-radius:1px;transform:translate(-50%,-50%);}
     .btn-logout{font-size:12px;color:var(--slate);border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:none;cursor:pointer;}
     .wrap{max-width:480px;margin:0 auto;padding:32px 20px 20px;}
     .wrap.wide{max-width:640px;}
@@ -48,7 +54,7 @@
     .navicon-label{font-size:10.5px;font-weight:600;color:var(--slate);text-align:center;line-height:1.2;}
     /* Small unread-message dot overlaid on the 💬 emoji — shared by the
        rep's nav grid icon and the office dashboard's text menu link. */
-    .badge-dot{position:absolute;top:-3px;right:-6px;width:9px;height:9px;background:#D9684C;border:1.5px solid #fff;border-radius:50%;}
+    .badge-dot{position:absolute;top:-3px;right:-6px;width:9px;height:9px;background:#C9A227;border:1.5px solid #fff;border-radius:50%;}
     .listcard{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;}
     .row{display:flex;align-items:center;gap:12px;padding:14px;border-bottom:1px solid var(--line);}
     .row:last-child{border-bottom:none;}
@@ -94,14 +100,14 @@
       min-height:100vh;
       background-image:
         url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cg fill='none' stroke='%232D6F5E' stroke-width='3' stroke-linecap='round' opacity='0.22'%3E%3Cpath d='M32 18v28M18 32h28'/%3E%3C/g%3E%3C/svg%3E"),
-        radial-gradient(circle at 12% 8%, rgba(232,104,74,0.16) 0%, transparent 45%),
-        radial-gradient(circle at 90% 85%, rgba(45,111,94,0.16) 0%, transparent 50%),
+        radial-gradient(circle at 12% 8%, rgba(201,162,39,0.16) 0%, transparent 45%),
+        radial-gradient(circle at 90% 85%, rgba(27,42,78,0.16) 0%, transparent 50%),
         linear-gradient(180deg, #EAF7F1 0%, #FDF4F0 100%);
       background-repeat:repeat, no-repeat, no-repeat, no-repeat;
       background-size:64px 64px, cover, cover, cover;
       background-attachment:fixed, fixed, fixed, fixed;
     }
-    body.medical-bg .card{box-shadow:0 12px 32px rgba(31,74,63,0.14);}
+    body.medical-bg .card{box-shadow:0 12px 32px rgba(15,24,48,0.14);}
     /* .role-badge is a plain sizing/centering box (its margin-bottom stays
        predictable); .role-badge-diamond is the actual rotated square that
        renders as the rounded diamond from the card — sized down (side *
@@ -110,7 +116,7 @@
        inside an already-rotated parent, it inherits the 45deg and reads as
        an upright diamond on screen. */
     .role-badge{width:56px;height:56px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;}
-    .role-badge-diamond{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--teal),var(--teal-dark));display:flex;align-items:center;justify-content:center;transform:rotate(45deg);box-shadow:0 8px 20px rgba(45,111,94,0.28);}
+    .role-badge-diamond{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--teal),var(--teal-dark));display:flex;align-items:center;justify-content:center;transform:rotate(45deg);box-shadow:0 8px 20px rgba(27,42,78,0.28);}
     .role-badge .arrowhead-mark{width:16px;height:16px;background:var(--coral);border-radius:2px;}
   </style>
 </head>
@@ -2283,7 +2289,7 @@ function attendanceDetailRowsHtml() {
 function attendanceRosterRowHtml(label, checked) {
   return `
     <li style="display:flex;align-items:center;gap:11px;padding:8px 0;border-bottom:1px solid #EEF1EF;font-size:13.5px;${checked ? '' : 'color:#9CA3AF;'}">
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:3px;border:1.5px solid ${checked ? '#2E6F5E' : '#C7CFCB'};background:${checked ? '#2E6F5E' : 'transparent'};flex-shrink:0;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:3px;border:1.5px solid ${checked ? '#1B2A4E' : '#C7CFCB'};background:${checked ? '#1B2A4E' : 'transparent'};flex-shrink:0;">
         ${checked ? '<span style="color:#fff;font-size:10px;line-height:1;">&#10003;</span>' : ''}
       </span>
       <span>${label}</span>
@@ -2318,7 +2324,7 @@ window.printAttendance = function() {
 
     block.innerHTML = `
       <div style="max-width:640px;margin:0 auto;padding:40px 8px;font-family:Arial,Helvetica,sans-serif;color:#16241F;">
-        <div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #2E6F5E;padding-bottom:18px;margin-bottom:24px;">
+        <div style="display:flex;align-items:center;gap:12px;border-bottom:2px solid #1B2A4E;padding-bottom:18px;margin-bottom:24px;">
           <img src="icon-192.png" width="36" height="36" style="border-radius:8px;">
           <div>
             <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;">Arrowhead Access</div>
@@ -2326,7 +2332,7 @@ window.printAttendance = function() {
           </div>
         </div>
         <table style="width:100%;border-collapse:collapse;margin-bottom:26px;">${attendanceDetailRowsHtml()}</table>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#2E6F5E;border-bottom:1px solid #DDE4E0;padding-bottom:7px;margin-bottom:2px;">Attendees</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#1B2A4E;border-bottom:1px solid #DDE4E0;padding-bottom:7px;margin-bottom:2px;">Attendees</div>
         ${attendanceRosterHtml()}
         <div style="margin-top:40px;padding-top:14px;border-top:1px solid #DDE4E0;font-size:10.5px;color:#9CA3AF;">Printed from Arrowhead Access on ${printedAt}</div>
       </div>`;
