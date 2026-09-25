@@ -311,6 +311,10 @@ function logout() {
 function goHome() {
   if (localStorage.getItem('token') && state.me) {
     setState({ screen: 'dashboard' });
+  } else if (state.screen === 'role') {
+    // Already at the in-app "home" for a signed-out visitor — nowhere
+    // further inward to go, so send the logo tap out to the marketing site.
+    window.location.href = 'index.html';
   } else {
     setState({ screen: 'role', role: null, me: null });
   }
@@ -436,7 +440,7 @@ window.togglePasswordVisibility = function(inputId, btn) {
 function screenRole() {
   return `
     <div class="wrap" style="padding-top:52px;">
-      <div class="role-badge"><div class="role-badge-diamond"><div class="arrowhead-mark"></div></div></div>
+      <a href="index.html" style="display:block;width:56px;"><div class="role-badge"><div class="role-badge-diamond"><div class="arrowhead-mark"></div></div></div></a>
       <h1>Welcome to Arrowhead Access</h1>
       <p class="sub">The scheduling platform connecting medical sales reps with offices.</p>
       <button class="primary" onclick="setState({screen:'login',role:'office'})">Office</button>
