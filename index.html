@@ -54,8 +54,11 @@
      wrapping), which comfortably covers the shorter one-line desktop one too. */
   #how, #offices, #reps, #trust{scroll-margin-top:120px;}
   .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-0.01em;}
-  .logo-mark{width:28px;height:28px;border-radius:6px;background:var(--teal);position:relative;flex-shrink:0;}
-  .logo-mark::after{content:"";position:absolute;top:7px;left:7px;width:8px;height:8px;background:var(--coral);border-radius:1px;transform:rotate(45deg);}
+  /* Rotating a square (rather than clip-path) gives the rounded-diamond
+     look used across the app — sized down so the rotated diagonal
+     (side * 1.414) lands back at the original ~28px visual footprint. */
+  .logo-mark{width:20px;height:20px;border-radius:5px;background:var(--teal);position:relative;flex-shrink:0;transform:rotate(45deg);}
+  .logo-mark::after{content:"";position:absolute;top:50%;left:50%;width:9px;height:9px;background:var(--coral);border-radius:1px;transform:translate(-50%,-50%);}
   nav.links{display:flex;gap:32px;font-size:14px;font-weight:500;color:var(--slate);}
   nav.links a:hover{color:var(--ink);}
 
