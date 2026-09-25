@@ -22,6 +22,13 @@
       --line: #E5E7EB;
       --ink: #1F2937;
       --paper: #FAFAFA;
+      /* Deep forest green from the brand mark/business card (same value
+         already used for the wordmark in emailLogoHeader()) — the login
+         screens lean on this directly so they read as the same brand as
+         the printed card, not just "teal, but a website". */
+      --forest: #16241F;
+      --sage-1: #EDF2EA;
+      --sage-2: #E1E9DD;
     }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; background: var(--paper); color: var(--ink); }
     .logo-mark{width:22px;height:22px;border-radius:5px;background:#2E6F5E;position:relative;flex-shrink:0;}
@@ -90,17 +97,16 @@
     body.medical-bg{
       min-height:100vh;
       background-image:
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cg fill='none' stroke='%232D6F5E' stroke-width='3' stroke-linecap='round' opacity='0.22'%3E%3Cpath d='M32 18v28M18 32h28'/%3E%3C/g%3E%3C/svg%3E"),
-        radial-gradient(circle at 12% 8%, rgba(232,104,74,0.16) 0%, transparent 45%),
-        radial-gradient(circle at 90% 85%, rgba(45,111,94,0.16) 0%, transparent 50%),
-        linear-gradient(180deg, #EAF7F1 0%, #FDF4F0 100%);
-      background-repeat:repeat, no-repeat, no-repeat, no-repeat;
-      background-size:64px 64px, cover, cover, cover;
-      background-attachment:fixed, fixed, fixed, fixed;
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cg fill='none' stroke='%2316241F' stroke-width='3' stroke-linecap='round' opacity='0.14'%3E%3Cpath d='M32 18v28M18 32h28'/%3E%3C/g%3E%3C/svg%3E"),
+        radial-gradient(circle at 10% 6%, rgba(232,104,74,0.10) 0%, transparent 42%),
+        linear-gradient(180deg, var(--sage-1) 0%, var(--sage-2) 100%);
+      background-repeat:repeat, no-repeat, no-repeat;
+      background-size:64px 64px, cover, cover;
+      background-attachment:fixed, fixed, fixed;
     }
-    body.medical-bg .card{box-shadow:0 12px 32px rgba(31,74,63,0.14);}
-    .role-badge{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--teal),var(--teal-dark));display:flex;align-items:center;justify-content:center;margin-bottom:16px;box-shadow:0 8px 20px rgba(45,111,94,0.28);}
-    .role-badge .arrowhead-mark{width:18px;height:18px;background:var(--coral);clip-path:polygon(50% 0%, 0% 100%, 100% 100%);}
+    body.medical-bg .card{box-shadow:0 12px 32px rgba(22,36,31,0.14);}
+    .role-badge{width:56px;height:56px;border-radius:16px;background:var(--forest);display:flex;align-items:center;justify-content:center;margin-bottom:16px;box-shadow:0 8px 20px rgba(22,36,31,0.28);}
+    .role-badge .arrowhead-mark{width:18px;height:18px;background:var(--coral);border-radius:2px;transform:rotate(45deg);}
   </style>
 </head>
 <body>
@@ -387,7 +393,7 @@ function screenRole() {
       <div class="role-badge"><div class="arrowhead-mark"></div></div>
       <h1>Welcome to Arrowhead Access</h1>
       <p class="sub">The scheduling platform connecting medical sales reps with offices.</p>
-      <button class="primary" onclick="setState({screen:'login',role:'office'})">Office</button>
+      <button class="primary" style="background:var(--forest);" onclick="setState({screen:'login',role:'office'})">Office</button>
       <button class="primary" style="background:var(--coral);" onclick="setState({screen:'login',role:'rep'})">Sales Rep</button>
       <p style="text-align:center;font-size:11px;color:var(--slate);margin-top:24px;">
         <a href="#" onclick="event.preventDefault();setState({screen:'terms'})" style="color:var(--slate);">Terms of Service</a>
