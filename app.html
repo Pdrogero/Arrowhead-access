@@ -2886,6 +2886,7 @@ window.toggleInviteRepForm = function() {
       <div id="inviteRepErr"></div>
       <input id="inviteRepName" type="text" placeholder="Their name (optional)" style="margin-bottom:12px;">
       <input id="inviteRepEmail" type="email" placeholder="Their email address" style="margin-bottom:12px;" onkeydown="if(event.key==='Enter')submitInviteRep()">
+      <textarea id="inviteRepMessage" placeholder="Add a personal message (optional)" rows="3" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
       <button class="primary" id="inviteRepBtn" onclick="submitInviteRep()">Send Invite</button>
     </div>`;
 };
@@ -2895,6 +2896,7 @@ window.submitInviteRep = async function() {
   errBox.innerHTML = '';
   const email = document.getElementById('inviteRepEmail').value.trim();
   const name = document.getElementById('inviteRepName').value.trim();
+  const message = document.getElementById('inviteRepMessage').value.trim();
   if (!email) {
     errBox.innerHTML = '<div class="msg err">Enter an email address</div>';
     return;
@@ -2904,7 +2906,7 @@ window.submitInviteRep = async function() {
   btn.disabled = true;
   btn.textContent = 'Sending…';
   try {
-    await api('/api/profile/invite-rep', { method: 'POST', body: JSON.stringify({ email, name }) });
+    await api('/api/profile/invite-rep', { method: 'POST', body: JSON.stringify({ email, name, message }) });
     const box = document.getElementById('inviteRepBox');
     box.innerHTML = `<div class="msg ok">Invite sent to ${email.replace(/</g, '&lt;')}!</div>`;
   } catch (err) {

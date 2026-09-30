@@ -291,6 +291,7 @@ router.post('/invite-rep', requireAuth, requireRole('office_admin', 'office_staf
       return res.status(400).json({ error: 'Enter a valid email address' });
     }
     const repName = String(req.body.name || '').trim().slice(0, 100);
+    const personalMessage = String(req.body.message || '').trim().slice(0, 1000);
 
     const existingRep = await prisma.rep.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
     if (existingRep) {
@@ -299,10 +300,13 @@ router.post('/invite-rep', requireAuth, requireRole('office_admin', 'office_staf
 
     const appUrl = process.env.APP_URL || 'https://arrowheadaccess.com';
     const signupUrl = `${appUrl}/app.html?officeInvite=1&email=${encodeURIComponent(email)}&officeName=${encodeURIComponent(staff.location.name)}`;
+    const messageHtml = personalMessage
+      ? `<div style="background:#F6F6F4;border-radius:8px;padding:12px 14px;margin:14px 0;"><p style="font-size:12px;font-weight:700;margin-bottom:4px;">Message from ${staff.location.name}:</p><p style="margin:0;">${personalMessage.replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p></div>`
+      : '';
     await sendEmail({
       to: email,
       subject: `${staff.location.name} invited you to Arrowhead Access`,
-      html: `${emailLogoHeader()}<p>${repName ? `Hi ${repName.split(' ')[0]},</p><p>` : ''}<strong>${staff.location.name}</strong> uses Arrowhead Access to schedule rep visits — lunches, breakfasts, and other in-office time — and wants to connect with you there.</p><p><a href="${signupUrl}">Sign up with this email address</a> to create your account — there's a 14-day free trial to get started.</p>`,
+      html: `${emailLogoHeader()}<p>${repName ? `Hi ${repName.split(' ')[0]},</p><p>` : ''}<strong>${staff.location.name}</strong> uses Arrowhead Access to schedule rep visits — lunches, breakfasts, and other in-office time — and wants to connect with you there.</p>${messageHtml}<p><a href="${signupUrl}">Sign up with this email address</a> to create your account — there's a 14-day free trial to get started.</p>`,
     });
 
     res.json({ message: 'Invite sent' });
