@@ -5356,7 +5356,7 @@ function renderLedgerRowHtml(s, repRatings) {
   return `
       <div class="row" style="flex-wrap:wrap;">
         ${isLedgerSlotSelectable(s) ? `<input type="checkbox" class="ledgerSelectCb" style="margin-right:8px;align-self:center;" onchange="toggleLedgerSelect('${s.id}', this.checked)">` : ''}
-        <div class="time" style="width:190px;">${fmtTimeRange(s.startTime, s.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(s.startTime)}</div></div>
+        <div class="time" style="width:190px;${(s.booking?.rep && (s.status === 'CONFIRMED' || s.status === 'REQUESTED')) ? 'cursor:pointer;' : ''}" ${(s.booking?.rep && (s.status === 'CONFIRMED' || s.status === 'REQUESTED')) ? `title="Save to your calendar" onclick="downloadBookingIcs('${s.startTime}', '${s.endTime}', '${(eventTypeLabel(s.eventType) + ' — ' + (s.booking.rep.name || '') + (s.booking.rep.companyName ? ' (' + s.booking.rep.companyName + ')' : '')).replace(/'/g, "\\'")}', '')"` : ''}>${fmtTimeRange(s.startTime, s.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(s.startTime)}${(s.booking?.rep && (s.status === 'CONFIRMED' || s.status === 'REQUESTED')) ? ' 📅' : ''}</div></div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">${s.eventType === 'OFFICE_CLOSED' ? 'Not available for booking' : 'Open slot'}</div>`}
           <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
