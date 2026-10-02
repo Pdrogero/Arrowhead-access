@@ -369,6 +369,56 @@ window.downloadBookingIcs = function(startIso, endIso, title, location) {
   URL.revokeObjectURL(url);
 };
 
+// Google/Outlook both offer a "pre-filled compose" web link — opening one
+// in a new tab drops straight into an editable event with Save already
+// showing, no file download/save-location prompt involved (which is what
+// trips people up on browsers like mobile Edge, where downloading the .ics
+// means an extra detour through Files before it can be opened).
+function googleCalendarUrl(startIso, endIso, title, location) {
+  const fmt = iso => new Date(iso).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const params = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: `${fmt(startIso)}/${fmt(endIso)}`, location: location || '' });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+function outlookCalendarUrl(startIso, endIso, title, location) {
+  const fmt = iso => new Date(iso).toISOString().split('.')[0] + 'Z';
+  const params = new URLSearchParams({ path: '/calendar/action/compose', rru: 'addevent', subject: title, startdt: fmt(startIso), enddt: fmt(endIso), location: location || '' });
+  return `https://outlook.office.com/calendar/0/deeplink/compose?${params.toString()}`;
+}
+
+// Shared "Add to calendar ▾" control — id must be unique per row (callers
+// prefix it, e.g. "book-<bookingId>" vs "slot-<slotId>", so rep bookings
+// and office ledger rows never collide). Google/Outlook open directly in a
+// new tab pre-filled; the .ics option stays as the catch-all for Apple
+// Calendar or anything else.
+function addToCalendarMenuHtml(id, startIso, endIso, title, location) {
+  const safeTitle = title.replace(/'/g, "\\'");
+  const safeLoc = (location || '').replace(/'/g, "\\'");
+  return `
+    <div style="position:relative;margin-top:6px;">
+      <button type="button" onclick="toggleAddToCalendarMenu('${id}')" style="background:#F0F0EE;color:var(--ink);border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">📅 Add to calendar ▾</button>
+      <div id="addCalMenu-${id}" style="display:none;position:absolute;top:100%;left:0;z-index:50;margin-top:4px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.14);padding:6px;min-width:175px;">
+        <a href="${googleCalendarUrl(startIso, endIso, title, location)}" target="_blank" rel="noopener" style="display:block;padding:7px 8px;font-size:12.5px;color:var(--ink);text-decoration:none;border-radius:6px;white-space:nowrap;">📆 Google Calendar</a>
+        <a href="${outlookCalendarUrl(startIso, endIso, title, location)}" target="_blank" rel="noopener" style="display:block;padding:7px 8px;font-size:12.5px;color:var(--ink);text-decoration:none;border-radius:6px;white-space:nowrap;">📧 Outlook</a>
+        <button type="button" onclick="downloadBookingIcs('${startIso}', '${endIso}', '${safeTitle}', '${safeLoc}')" style="display:block;width:100%;text-align:left;padding:7px 8px;font-size:12.5px;color:var(--ink);background:none;border:none;cursor:pointer;border-radius:6px;white-space:nowrap;">🍎 Apple / download file</button>
+      </div>
+    </div>`;
+}
+
+window.toggleAddToCalendarMenu = function(id) {
+  const menu = document.getElementById('addCalMenu-' + id);
+  if (!menu) return;
+  const willOpen = menu.style.display !== 'block';
+  document.querySelectorAll('[id^="addCalMenu-"]').forEach(m => { m.style.display = 'none'; });
+  menu.style.display = willOpen ? 'block' : 'none';
+};
+
+// Closes any open "Add to calendar" menu on a tap outside it — same
+// click-outside pattern as the profile dropdown above.
+document.addEventListener('click', function(e) {
+  if (e.target.closest('[id^="addCalMenu-"]') || e.target.closest('button[onclick^="toggleAddToCalendarMenu"]')) return;
+  document.querySelectorAll('[id^="addCalMenu-"]').forEach(m => { m.style.display = 'none'; });
+});
+
 // A password <input> with a small text toggle ("Show"/"Hide") to reveal
 // what's typed — margin moves onto the wrapper (with the input's own
 // margin zeroed) so the wrapper's height matches the input exactly, which
@@ -5392,7 +5442,7 @@ function renderLedgerRowHtml(s, repRatings) {
       <div class="row" style="flex-wrap:wrap;">
         ${isLedgerSlotSelectable(s) ? `<input type="checkbox" class="ledgerSelectCb" style="margin-right:8px;align-self:center;" onchange="toggleLedgerSelect('${s.id}', this.checked)">` : ''}
         <div class="time" style="width:190px;">${fmtTimeRange(s.startTime, s.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(s.startTime)}</div>
-          ${(s.booking?.rep && (s.status === 'CONFIRMED' || s.status === 'REQUESTED')) ? `<button type="button" title="Download a calendar file for this visit" onclick="downloadBookingIcs('${s.startTime}', '${s.endTime}', '${(eventTypeLabel(s.eventType) + ' — ' + (s.booking.rep.name || '') + (s.booking.rep.companyName ? ' (' + s.booking.rep.companyName + ')' : '')).replace(/'/g, "\\'")}', '')" style="margin-top:6px;background:#F0F0EE;color:var(--ink);border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">📅 Add to calendar</button>` : ''}
+          ${(s.booking?.rep && (s.status === 'CONFIRMED' || s.status === 'REQUESTED')) ? addToCalendarMenuHtml('slot-' + s.id, s.startTime, s.endTime, eventTypeLabel(s.eventType) + ' — ' + (s.booking.rep.name || '') + (s.booking.rep.companyName ? ' (' + s.booking.rep.companyName + ')' : ''), '') : ''}
         </div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">${s.eventType === 'OFFICE_CLOSED' ? 'Not available for booking' : 'Open slot'}</div>`}
@@ -5514,7 +5564,7 @@ function renderMyBookingsBox() {
   box.innerHTML = bookings.map(b => `
       <div class="row" style="flex-wrap:wrap;">
         <div class="time" style="width:190px;">${fmtTimeRange(b.slot.startTime, b.slot.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(b.slot.startTime)}</div>
-          ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button type="button" title="Download a calendar file for this visit" onclick="downloadBookingIcs('${b.slot.startTime}', '${b.slot.endTime}', '${(eventTypeLabel(b.slot.eventType) + ' — ' + (b.slot.location.name || '')).replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}')" style="margin-top:6px;background:#F0F0EE;color:var(--ink);border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">📅 Add to calendar</button>` : ''}
+          ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? addToCalendarMenuHtml('book-' + b.id, b.slot.startTime, b.slot.endTime, eventTypeLabel(b.slot.eventType) + ' — ' + (b.slot.location.name || ''), b.slot.location.address || '') : ''}
         </div>
         <div class="mid">
           <div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${b.slot.location.id}')">${favoriteStarHtml(b.slot.location.id)} ${b.slot.location.name}</div>
