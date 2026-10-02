@@ -5787,6 +5787,18 @@ window.toggleProfileMenu = function() {
     </div>`;
 };
 
+// Closes the profile dropdown on a tap anywhere outside it, instead of
+// only via the Profile button itself. Attached once at script load (the
+// header lives outside #app and is never torn down by render()), and
+// harmless to run on every click since it's a no-op whenever the menu is
+// already closed or the click landed inside the menu/button.
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('repProfileMenuWrap');
+  const box = document.getElementById('profileMenuBox');
+  if (!wrap || !box || !box.innerHTML.trim()) return;
+  if (!wrap.contains(e.target)) box.innerHTML = '';
+});
+
 window.scrollToBilling = function() {
   if (state.screen !== 'dashboard' || state.role !== 'rep') {
     setState({ screen: 'dashboard', role: 'rep' });
