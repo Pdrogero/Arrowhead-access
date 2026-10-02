@@ -3058,13 +3058,40 @@ function screenOfficeDetail() {
           <p style="font-size:13px;margin-bottom:0;">Upcoming visits: <strong>${o.myStats.upcomingBookings}</strong></p>
         </div>
 
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
           <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="browseSearchQuery='${o.name.replace(/'/g, "\\'")}';browseSelectedOfficeIds=new Set();browseViewMode='list';setState({screen:'browseSlots'})">🔍 View open slots</button>
           <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${o.id}', '${o.name.replace(/'/g, "\\'")}')">💬 Message Office</button>
           <button style="flex:1;background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${o.id}', '${o.name.replace(/'/g, "\\'")}')">👥 Staff directory</button>
         </div>
+
+        <p style="font-size:13px;font-weight:700;margin-bottom:8px;">Open slots here</p>
+        <div id="officeDetailSlotsBox" class="listcard"><div class="empty">Loading…</div></div>
       `}
     </div>`;
+}
+
+// Lets a rep claim a lunch/visit right from an office's own detail page,
+// instead of always having to jump to the full Open Slots screen and
+// search/filter back down to this one office.
+async function loadOfficeDetailSlots(locationId) {
+  const box = document.getElementById('officeDetailSlotsBox');
+  if (!box) return;
+  try {
+    const allOpenSlots = await api('/api/slots/open');
+    const slots = allOpenSlots.filter(s => s.location.id === locationId && s.eventType !== 'OFFICE_CLOSED');
+    if (!slots.length) { box.innerHTML = '<div class="empty">No open slots here right now.</div>'; return; }
+    box.innerHTML = slots.map(s => `
+      <div class="row">
+        <div class="time">${fmtTime(s.startTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(s.startTime)}</div></div>
+        <div class="mid">
+          <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
+          ${lunchDetailsSummaryHtml(s)}
+        </div>
+        ${claimButtonOrStatusHtml(s)}
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = `<div class="msg err" style="margin:14px;">${err.message}</div>`;
+  }
 }
 
 window.viewOfficeDetail = async function(locationId) {
@@ -3074,6 +3101,7 @@ window.viewOfficeDetail = async function(locationId) {
   try {
     viewedOfficeDetail = await api(`/api/locations/${locationId}/detail`);
     render();
+    loadOfficeDetailSlots(locationId);
     const ratings = await fetchRatingAverages([locationId], 'office');
     const box = document.getElementById('officeDetailRatingBox');
     if (box) box.innerHTML = ratingBadge(ratings[locationId].average, ratings[locationId].count, 'office', locationId, viewedOfficeDetail.name);
