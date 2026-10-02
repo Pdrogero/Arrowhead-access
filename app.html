@@ -2123,6 +2123,11 @@ function screenCalendar() {
         </div>` : ''}
       <button class="link" style="text-align:left;margin-bottom:14px;" onclick="toggleCalendarSync()">🔗 Sync with Apple/Google Calendar</button>
       <div id="calendarSyncBox"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;font-size:12px;color:var(--slate);">
+        <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#E3F1EC;border:1px solid #215947;display:inline-block;"></span>Confirmed</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#FCF0DA;border:1px solid #7A4B0A;display:inline-block;"></span>Pending</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#FBE7E7;border:1px solid #8A2626;display:inline-block;"></span>Declined/Cancelled</span>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px;">
         ${['S','M','T','W','T','F','S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
         ${cells}
@@ -5386,7 +5391,9 @@ function renderLedgerRowHtml(s, repRatings) {
   return `
       <div class="row" style="flex-wrap:wrap;">
         ${isLedgerSlotSelectable(s) ? `<input type="checkbox" class="ledgerSelectCb" style="margin-right:8px;align-self:center;" onchange="toggleLedgerSelect('${s.id}', this.checked)">` : ''}
-        <div class="time" style="width:190px;${(s.booking?.rep && (s.status === 'CONFIRMED' || s.status === 'REQUESTED')) ? 'cursor:pointer;' : ''}" ${(s.booking?.rep && (s.status === 'CONFIRMED' || s.status === 'REQUESTED')) ? `title="Save to your calendar" onclick="downloadBookingIcs('${s.startTime}', '${s.endTime}', '${(eventTypeLabel(s.eventType) + ' — ' + (s.booking.rep.name || '') + (s.booking.rep.companyName ? ' (' + s.booking.rep.companyName + ')' : '')).replace(/'/g, "\\'")}', '')"` : ''}>${fmtTimeRange(s.startTime, s.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(s.startTime)}${(s.booking?.rep && (s.status === 'CONFIRMED' || s.status === 'REQUESTED')) ? ' 📅' : ''}</div></div>
+        <div class="time" style="width:190px;">${fmtTimeRange(s.startTime, s.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(s.startTime)}</div>
+          ${(s.booking?.rep && (s.status === 'CONFIRMED' || s.status === 'REQUESTED')) ? `<button type="button" title="Download a calendar file for this visit" onclick="downloadBookingIcs('${s.startTime}', '${s.endTime}', '${(eventTypeLabel(s.eventType) + ' — ' + (s.booking.rep.name || '') + (s.booking.rep.companyName ? ' (' + s.booking.rep.companyName + ')' : '')).replace(/'/g, "\\'")}', '')" style="margin-top:6px;background:#F0F0EE;color:var(--ink);border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">📅 Add to calendar</button>` : ''}
+        </div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">${s.eventType === 'OFFICE_CLOSED' ? 'Not available for booking' : 'Open slot'}</div>`}
           <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
@@ -5506,7 +5513,9 @@ function renderMyBookingsBox() {
   const officeRatings = myBookingsRatings;
   box.innerHTML = bookings.map(b => `
       <div class="row" style="flex-wrap:wrap;">
-        <div class="time" style="width:190px;${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? 'cursor:pointer;' : ''}" ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `title="Save to your calendar" onclick="downloadBookingIcs('${b.slot.startTime}', '${b.slot.endTime}', '${(eventTypeLabel(b.slot.eventType) + ' — ' + (b.slot.location.name || '')).replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}')"` : ''}>${fmtTimeRange(b.slot.startTime, b.slot.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(b.slot.startTime)}${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? ' 📅' : ''}</div></div>
+        <div class="time" style="width:190px;">${fmtTimeRange(b.slot.startTime, b.slot.endTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(b.slot.startTime)}</div>
+          ${(b.status === 'CONFIRMED' || b.status === 'REQUESTED') ? `<button type="button" title="Download a calendar file for this visit" onclick="downloadBookingIcs('${b.slot.startTime}', '${b.slot.endTime}', '${(eventTypeLabel(b.slot.eventType) + ' — ' + (b.slot.location.name || '')).replace(/'/g, "\\'")}', '${(b.slot.location.address || '').replace(/'/g, "\\'")}')" style="margin-top:6px;background:#F0F0EE;color:var(--ink);border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">📅 Add to calendar</button>` : ''}
+        </div>
         <div class="mid">
           <div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${b.slot.location.id}')">${favoriteStarHtml(b.slot.location.id)} ${b.slot.location.name}</div>
           <div class="what">${addressLinkHtml(b.slot.location.address)}</div>
