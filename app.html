@@ -2259,6 +2259,11 @@ function screenOfficeCalendar() {
         <div id="officeCalendarSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:10;max-height:260px;overflow-y:auto;"></div>
       </div>
       <p style="font-size:12px;color:var(--slate);margin:0 0 16px;">Looking for a past lunch? Check <a href="#" onclick="event.preventDefault();setState({screen:'visitHistory'})" style="color:var(--teal);">Visit History</a> instead — this calendar only searches what's still upcoming.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;font-size:12px;color:var(--slate);">
+        <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#E3F1EC;border:1px solid #215947;display:inline-block;"></span>Confirmed</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#FCF0DA;border:1px solid #7A4B0A;display:inline-block;"></span>Pending</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#FBE7E7;border:1px solid #8A2626;display:inline-block;"></span>Declined/Cancelled</span>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px;">
         ${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
         ${cells}
@@ -2272,6 +2277,7 @@ function screenOfficeCalendar() {
               <div class="mid">
                 <div class="who">${repNameLinkHtml(s.booking.rep)}</div>
                 <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
+                ${(s.booking.status === 'CONFIRMED' || s.booking.status === 'REQUESTED') ? addToCalendarMenuHtml('officecal-' + s.id, s.startTime, s.endTime, eventTypeLabel(s.eventType) + ' — ' + (s.booking.rep.name || '') + (s.booking.rep.companyName ? ' (' + s.booking.rep.companyName + ')' : ''), '') : ''}
               </div>
               <span class="chip ${s.booking.status}">${s.booking.status}</span>
               ${s.booking.status === 'CONFIRMED' && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Cancel this visit</button>` : ''}
