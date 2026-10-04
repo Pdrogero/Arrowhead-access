@@ -2,7 +2,14 @@ name: Renewal Reminders
 
 on:
   schedule:
-    - cron: '0 13 * * *'
+    # Every 3 hours rather than once a day — GitHub's free scheduled-workflow
+    # queue can delay a single daily run by several hours under load (seen
+    # firing anywhere from ~13:00 to ~20:00 UTC some days), which risked a
+    # same-day reminder email going out very late or not at all. All the
+    # endpoints below are flag-gated (each only sends once per
+    # booking/message/etc.), so running more often is safe — it just gives
+    # the check more chances to land close to on time.
+    - cron: '0 */3 * * *'
   workflow_dispatch: {}
 
 jobs:
