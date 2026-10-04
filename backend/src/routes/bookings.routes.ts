@@ -1290,6 +1290,42 @@ router.post('/check-monthly-schedule-reminders', async (req, res) => {
         await prisma.rep.update({ where: { id: rep.id }, data: { lastWeeklyReminderWeek: weekKey } });
         weeklyRemindersSent++;
       }
+
+      // Same Sunday digest for offices — each location's upcoming Monday-
+      // Friday confirmed and pending (requested) visits, in one email to
+      // every staff login at that location.
+      const locationsWithSlots = await prisma.location.findMany({
+        where: {
+          OR: [{ lastWeeklyReminderWeek: null }, { lastWeeklyReminderWeek: { not: weekKey } }],
+          slots: { some: { startTime: { gte: mondayStart, lte: fridayEnd }, booking: { status: { in: ['CONFIRMED', 'REQUESTED'] } } } },
+        },
+        include: {
+          staff: true,
+          slots: {
+            where: { startTime: { gte: mondayStart, lte: fridayEnd }, booking: { status: { in: ['CONFIRMED', 'REQUESTED'] } } },
+            include: { booking: { include: { rep: true } } },
+            orderBy: { startTime: 'asc' },
+          },
+        },
+      });
+
+      for (const location of locationsWithSlots) {
+        const itemsHtml = location.slots.map(s => {
+          const dateStr = s.startTime.toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+          const endStr = s.endTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+          const statusLabel = s.booking!.status === 'CONFIRMED' ? 'Confirmed' : 'Pending';
+          return `<li style="margin-bottom:10px;"><strong>${dateStr} – ${endStr}</strong> — ${EVENT_TYPE_LABEL[s.eventType] || s.eventType} with ${s.booking!.rep.name} (${s.booking!.rep.companyName}) — <span style="color:${s.booking!.status === 'CONFIRMED' ? '#166534' : '#92400E'};">${statusLabel}</span></li>`;
+        }).join('');
+        for (const staff of location.staff) {
+          sendEmail({
+            to: staff.email,
+            subject: `Your week ahead: ${location.slots.length} scheduled visit${location.slots.length > 1 ? 's' : ''}`,
+            html: `${emailLogoHeader()}<p>Here's what's on the books this week at <strong>${location.name}</strong>:</p><ul style="padding-left:18px;">${itemsHtml}</ul>${emailLoginButton()}`,
+          }).catch(() => {});
+        }
+        await prisma.location.update({ where: { id: location.id }, data: { lastWeeklyReminderWeek: weekKey } });
+        weeklyRemindersSent++;
+      }
     }
 
     res.json({ officeRemindersSent, repRemindersSent, weeklyRemindersSent });

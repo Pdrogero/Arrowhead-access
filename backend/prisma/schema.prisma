@@ -132,6 +132,9 @@ model Location {
   // "2026-09" style key for the month the new-month schedule-setup email
   // was last sent, so the daily cron only sends it once per month.
   lastMonthlyReminderMonth    String?
+  // Date (YYYY-MM-DD) of the Monday the weekly Sunday "your week ahead"
+  // digest was last sent for, so it only sends once per week.
+  lastWeeklyReminderWeek      String?
 
   staff  StaffUser[]
   slots  Slot[]
