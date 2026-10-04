@@ -31,26 +31,40 @@ export function notifyAdmin(subject: string, html: string) {
   sendEmail({ to, subject, html }).catch(() => {});
 }
 
-export async function sendEmail({ to, subject, html, replyTo }: { to: string; subject: string; html: string; replyTo?: string }) {
+// Returns whether the send actually succeeded, so callers that gate a
+// "don't resend this" flag on it (e.g. the lunch-reminder cron) only set
+// that flag when the email really went out — a rejected send (bad address,
+// unverified domain, rate limit) used to only get logged here and still
+// count as "sent" to the caller, permanently losing the reminder with no
+// retry. A caller that doesn't care about delivery can still fire-and-forget
+// this same as before.
+export async function sendEmail({ to, subject, html, replyTo }: { to: string; subject: string; html: string; replyTo?: string }): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('RESEND_API_KEY not set — skipping email send to', to);
-    return;
+    return false;
   }
 
   const from = process.env.RESEND_FROM_EMAIL || 'Arrowhead Access <onboarding@resend.dev>';
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ from, to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
-  });
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from, to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
+    });
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    console.error('Failed to send email:', res.status, body);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.error('Failed to send email:', res.status, body);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to send email (network error):', err);
+    return false;
   }
 }

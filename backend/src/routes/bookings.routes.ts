@@ -1041,19 +1041,25 @@ router.post('/check-lunch-reminders', async (req, res) => {
       dayBeforeByRep.set(booking.repId, list);
     }
 
+    // Tracks which bookings' rep email actually went out, so only those
+    // get flagged as reminded — a rejected send (bad address, unverified
+    // domain, rate limit) now retries on the next cron tick instead of
+    // being silently lost forever.
+    const sentBookingIds: string[] = [];
     for (const repBookings of dayBeforeByRep.values()) {
       const itemsHtml = repBookings.map(b => {
         const startStr = b.slot.startTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
         const endStr = b.slot.endTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
         return `<li style="margin-bottom:10px;"><strong>${startStr} – ${endStr}</strong> — ${EVENT_TYPE_LABEL[b.slot.eventType] || b.slot.eventType} at ${b.slot.location.name}<br><span style="color:#6b7280;font-size:13px;">${b.slot.location.address}</span></li>`;
       }).join('');
-      sendEmail({
+      const sent = await sendEmail({
         to: repBookings[0].rep.email,
         subject: repBookings.length > 1
           ? `Reminder: ${repBookings.length} visits tomorrow`
           : `Reminder: ${EVENT_TYPE_LABEL[repBookings[0].slot.eventType] || 'visit'} at ${repBookings[0].slot.location.name} tomorrow`,
         html: `${emailLogoHeader()}<p>Just a reminder — you have ${repBookings.length > 1 ? `${repBookings.length} visits` : 'a visit'} scheduled tomorrow, ${dateLabel}:</p><ul style="padding-left:18px;">${itemsHtml}</ul>${emailLoginButton()}`,
-      }).catch(() => {});
+      });
+      if (sent) sentBookingIds.push(...repBookings.map(b => b.id));
     }
 
     const dayBeforeByLocation = new Map<string, typeof dayBeforeBookings>();
@@ -1083,14 +1089,13 @@ router.post('/check-lunch-reminders', async (req, res) => {
       officeDayBeforeRemindersSent += locationBookings.length;
     }
 
-    let dayBeforeRemindersSent = 0;
-    if (dayBeforeBookings.length) {
+    if (sentBookingIds.length) {
       await prisma.booking.updateMany({
-        where: { id: { in: dayBeforeBookings.map(b => b.id) } },
+        where: { id: { in: sentBookingIds } },
         data: { lunchReminder1dSent: true },
       });
-      dayBeforeRemindersSent = dayBeforeBookings.length;
     }
+    const dayBeforeRemindersSent = sentBookingIds.length;
 
     // Same-day reminder — unchanged from before: lunch only, one email
     // per booking (a rep rarely has more than one lunch in a day, so
@@ -1108,13 +1113,15 @@ router.post('/check-lunch-reminders', async (req, res) => {
     for (const booking of dayOfBookings) {
       const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
       const endStr = booking.slot.endTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
-      await sendEmail({
+      const sent = await sendEmail({
         to: booking.rep.email,
         subject: `Reminder: lunch at ${booking.slot.location.name} today`,
         html: `${emailLogoHeader()}<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> today, ${dateStr} – ${endStr}.</p><p style="color:#6b7280;">${booking.slot.location.address}</p>${emailLoginButton()}`,
       });
-      await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminderDaySent: true } });
-      dayOfRemindersSent++;
+      if (sent) {
+        await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminderDaySent: true } });
+        dayOfRemindersSent++;
+      }
     }
 
     res.json({ dayBeforeRemindersSent, officeDayBeforeRemindersSent, dayOfRemindersSent });
