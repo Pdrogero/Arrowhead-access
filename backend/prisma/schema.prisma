@@ -580,6 +580,12 @@ model Booking {
   officeReminderSent Boolean   @default(false)
   lastNudgedAt       DateTime?
 
+  // Set only when this booking was auto-declined by the 3-day no-response
+  // timeout (never for an explicit office decline, which also lands on
+  // DECLINED) — lets "Your bookings" offer a one-tap "Request again" for
+  // the original slot instead of making the rep re-find it in open slots.
+  autoDeclinedNoResponse Boolean @default(false)
+
   // Set when the rep manually dismisses a cancelled/declined booking from
   // "Your bookings" — hides it from that list without deleting the record.
   hiddenFromRepBookings Boolean @default(false)

@@ -1143,11 +1143,14 @@ router.post('/check-expired-requests', async (req, res) => {
   }
 
   try {
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
 
+    // Reminder fires at the 2-day mark — one day before the 3-day
+    // auto-decline deadline below — so the office still has a day left
+    // to act on it instead of finding out only once it's already expired.
     const dueForReminder = await prisma.booking.findMany({
-      where: { status: 'REQUESTED', officeReminderSent: false, requestedAt: { lte: oneDayAgo, gt: threeDaysAgo } },
+      where: { status: 'REQUESTED', officeReminderSent: false, requestedAt: { lte: twoDaysAgo, gt: threeDaysAgo } },
       include: { rep: true, slot: { include: { location: true } } },
     });
 
@@ -1157,8 +1160,8 @@ router.post('/check-expired-requests', async (req, res) => {
       staff.forEach(s => {
         sendEmail({
           to: s.email,
-          subject: `Reminder: pending visit request from ${booking.rep.name}`,
-          html: `${emailLogoHeader()}<p>You still have a pending request from <strong>${booking.rep.name}</strong>${booking.rep.companyName ? ` (${booking.rep.companyName})` : ''} for ${dateStr}. Log in to approve or decline it — if there's no response within 3 days of the original request, it automatically reopens for other reps.</p>${emailLoginButton()}`,
+          subject: `Action needed tomorrow: pending request from ${booking.rep.name}`,
+          html: `${emailLogoHeader()}<p>You still have a pending request from <strong>${booking.rep.name}</strong>${booking.rep.companyName ? ` (${booking.rep.companyName})` : ''} for ${dateStr}. Log in to approve or decline it — <strong>if there's no response by tomorrow</strong>, it automatically reopens for other reps.</p>${emailLoginButton()}`,
         }).catch(() => {});
       });
       await prisma.booking.update({ where: { id: booking.id }, data: { officeReminderSent: true } });
@@ -1181,7 +1184,7 @@ router.post('/check-expired-requests', async (req, res) => {
       const datePassed = booking.slot.endTime < new Date();
       await prisma.$transaction([
         prisma.slot.update({ where: { id: booking.slotId }, data: { status: 'OPEN' } }),
-        prisma.booking.update({ where: { id: booking.id }, data: { status: 'DECLINED', decidedAt: new Date() } }),
+        prisma.booking.update({ where: { id: booking.id }, data: { status: 'DECLINED', decidedAt: new Date(), autoDeclinedNoResponse: !datePassed } }),
       ]);
       const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
       sendEmail({
