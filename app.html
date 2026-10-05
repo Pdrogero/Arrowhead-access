@@ -38,6 +38,20 @@
     .btn-logout{font-size:12px;color:var(--slate);border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:none;cursor:pointer;}
     .wrap{max-width:480px;margin:0 auto;padding:32px 20px 20px;}
     .wrap.wide{max-width:640px;}
+    /* On an actual desktop/laptop screen the narrow mobile-app-width
+       column leaves most of the window empty — widen the centered column
+       (not full-bleed; this is still single-column reading content, not a
+       multi-pane layout) at a couple of breakpoints. Phones and tablets in
+       portrait (the large majority of real usage) are untouched since
+       they're under the first breakpoint. */
+    @media (min-width: 900px) {
+      .wrap{max-width:640px;}
+      .wrap.wide{max-width:900px;}
+    }
+    @media (min-width: 1300px) {
+      .wrap{max-width:760px;}
+      .wrap.wide{max-width:1100px;}
+    }
     h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:26px;margin-bottom:6px;}
     p.sub{color:var(--slate);font-size:14px;margin-bottom:22px;}
     .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:26px;}
@@ -1257,7 +1271,7 @@ function screenPostSlot() {
 
 function screenBrowseSlots() {
   return `
-    <div class="wrap wide" style="max-width:960px;">
+    <div class="wrap wide">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
       <h1>Available slots</h1>
       <p class="sub">Browse and claim open visits across all offices.</p>
@@ -2154,7 +2168,7 @@ function screenCalendar() {
     : [];
 
   return `
-    <div class="wrap wide" style="max-width:960px;">
+    <div class="wrap wide">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeCalendarMonth(-1)">‹</button>
@@ -2266,7 +2280,7 @@ function screenOfficeCalendar() {
   const dayPending = officeCalendarSelectedDay ? (pendingByDay[officeCalendarSelectedDay] || []) : [];
 
   return `
-    <div class="wrap wide" style="max-width:960px;">
+    <div class="wrap wide">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeOfficeCalendarMonth(-1)">‹</button>
