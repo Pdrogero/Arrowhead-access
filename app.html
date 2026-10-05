@@ -2274,6 +2274,9 @@ function screenOfficeCalendar() {
         <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeOfficeCalendarMonth(1)">›</button>
       </div>
       <p class="sub">Tap a day to see what's scheduled — lunches, breakfasts, and visits — and cancel one if you need to.</p>
+      <div style="background:#EAF2FB;border:1px solid #CFE0F3;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:#2B5A8C;">
+        💡 <strong>Already arranged a visit outside the app?</strong> Tap the day on the calendar below, then "➕ Add a lunch/visit manually" to add it — pick one of your reps, or enter a new rep's email to invite them and confirm the visit in one step.
+      </div>
       <div style="position:relative;margin-bottom:8px;">
         <input id="officeCalendarSearch" type="text" placeholder="🔍 Search upcoming lunches/breakfasts by rep name…" autocomplete="off" oninput="filterOfficeCalendarSearch(this.value)" onblur="setTimeout(hideOfficeCalendarSearchResults, 150)" style="margin-bottom:0;width:100%;">
         <div id="officeCalendarSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:10;max-height:260px;overflow-y:auto;"></div>
