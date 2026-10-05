@@ -163,13 +163,54 @@ export async function claimOpenSlot(params: {
 
     await tx.slot.update({ where: { id: slotId }, data: { status: newSlotStatus } });
 
-    return tx.booking.create({
-      data: {
+    // Booking.slotId is unique — a slot that reopened after a decline or
+    // cancellation still has its old (DECLINED/CANCELLED) Booking row
+    // sitting on that slotId, so a plain create() here throws a unique-
+    // constraint error the moment anyone reclaims it (surfaced to the rep
+    // as a generic "Unexpected server error"). Since we already confirmed
+    // slot.status === OPEN above, any existing row for this slotId can only
+    // be that terminal leftover, never a live one — safe to overwrite it
+    // with a fresh request rather than insert a second row.
+    //
+    // That old row's id is about to represent a brand new, unrelated
+    // booking, so any transfer history still attached to it (e.g. a
+    // transfer that was PENDING when the prior visit got cancelled, same
+    // gap the withdraw endpoint above already guards against) has to go
+    // first — otherwise whoever that transfer was offered to could later
+    // "accept" it and land on a visit they have nothing to do with.
+    const staleBooking = await tx.booking.findUnique({ where: { slotId }, select: { id: true } });
+    if (staleBooking) {
+      await tx.bookingTransfer.deleteMany({ where: { bookingId: staleBooking.id } });
+    }
+
+    return tx.booking.upsert({
+      where: { slotId },
+      create: {
         slotId,
         repId,
         topic,
         status: newBookingStatus,
         decidedAt: requiresApproval ? null : new Date(),
+      },
+      update: {
+        repId,
+        topic,
+        status: newBookingStatus,
+        requestedAt: new Date(),
+        decidedAt: requiresApproval ? null : new Date(),
+        cancelReason: null,
+        cancelledBy: null,
+        suggestedRescheduleAt: null,
+        rescheduleResponse: null,
+        rescheduleResponseMessage: null,
+        rescheduleRespondedAt: null,
+        rescheduledBookingId: null,
+        autoDeclinedNoResponse: false,
+        officeReminderSent: false,
+        lastNudgedAt: null,
+        lunchReminder1dSent: false,
+        lunchReminderDaySent: false,
+        hiddenFromRepBookings: false,
       },
     });
   });
