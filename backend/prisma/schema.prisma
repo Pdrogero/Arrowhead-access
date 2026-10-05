@@ -145,6 +145,31 @@ model Location {
   literatureItems LiteratureItem[]
   favoritedBy FavoriteLocation[]
   savedReps   SavedRep[]
+  pendingSchedules PendingOfficeSchedule[]
+}
+
+// An office manually scheduled a visit for a rep by email who doesn't have
+// an Arrowhead Access account yet — e.g. adding an already-arranged lunch
+// to the calendar for someone brand new. Resolves into a real Slot +
+// CONFIRMED Booking the moment that email signs up (see the rep signup
+// route), the same "claim on signup" pattern BookingTransfer.toRepEmail
+// and TeammateInvite.toRepEmail already use. Deleted once resolved.
+model PendingOfficeSchedule {
+  id               String        @id @default(cuid())
+  locationId       String
+  location         Location      @relation(fields: [locationId], references: [id])
+  createdByStaffId String?
+  createdByStaff   StaffUser?    @relation(fields: [createdByStaffId], references: [id], onDelete: SetNull)
+  repEmail         String
+  repName          String?
+  startTime        DateTime
+  endTime          DateTime
+  eventType        SlotEventType
+  topic            String?
+  createdAt        DateTime      @default(now())
+
+  @@index([repEmail])
+  @@index([locationId, startTime])
 }
 
 // A rep's saved shortlist of offices they like, shown on their profile —
@@ -259,6 +284,7 @@ model StaffUser {
   createdSlots   Slot[]
   loginOtps      StaffLoginOtp[]
   trustedDevices StaffTrustedDevice[]
+  pendingSchedulesCreated PendingOfficeSchedule[]
 }
 
 // Mirrors RepLoginOtp, but for office staff logins.

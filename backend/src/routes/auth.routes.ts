@@ -95,10 +95,36 @@ router.post('/rep/signup', async (req, res) => {
       data: { toRepId: rep.id },
     });
 
+    // Same idea again for visits an office manually scheduled for this
+    // email before they had an account (see POST /bookings/office-schedule-
+    // invite) — each one becomes a real CONFIRMED slot + booking now that
+    // there's a rep to attach it to.
+    const pendingSchedules = await prisma.pendingOfficeSchedule.findMany({
+      where: { repEmail: { equals: email, mode: 'insensitive' } },
+    });
+    for (const pending of pendingSchedules) {
+      await prisma.$transaction(async (tx) => {
+        const slot = await tx.slot.create({
+          data: {
+            locationId: pending.locationId,
+            startTime: pending.startTime,
+            endTime: pending.endTime,
+            eventType: pending.eventType,
+            status: 'CONFIRMED',
+            createdByStaffId: pending.createdByStaffId,
+          },
+        });
+        await tx.booking.create({
+          data: { slotId: slot.id, repId: rep.id, topic: pending.topic, status: 'CONFIRMED', decidedAt: new Date() },
+        });
+        await tx.pendingOfficeSchedule.delete({ where: { id: pending.id } });
+      });
+    }
+
     sendEmail({
       to: rep.email,
       subject: 'Welcome to Arrowhead Access',
-      html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p>${claimedTransfers.count ? `<p>You also have ${claimedTransfers.count} pending visit transfer${claimedTransfers.count > 1 ? 's' : ''} waiting for you under Transfers.</p>` : ''}${claimedTeammateInvites.count ? `<p>You also have ${claimedTeammateInvites.count} teammate invite${claimedTeammateInvites.count > 1 ? 's' : ''} waiting for you under Transfers → My Team → Invites.</p>` : ''}${rep.twoFactorEnabled ? `<p>🔒 You turned on email login codes — from now on we'll send a 6-digit code to this address each time you log in from a new device. You can turn this off anytime in Account Settings.</p>` : ''}${emailLoginButton()}`,
+      html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>Your Arrowhead Access rep account is set up. You can now complete your profile, browse open visit slots, and start booking with offices on the platform.</p>${claimedTransfers.count ? `<p>You also have ${claimedTransfers.count} pending visit transfer${claimedTransfers.count > 1 ? 's' : ''} waiting for you under Transfers.</p>` : ''}${claimedTeammateInvites.count ? `<p>You also have ${claimedTeammateInvites.count} teammate invite${claimedTeammateInvites.count > 1 ? 's' : ''} waiting for you under Transfers → My Team → Invites.</p>` : ''}${pendingSchedules.length ? `<p>You also have ${pendingSchedules.length} visit${pendingSchedules.length > 1 ? 's' : ''} an office already scheduled with you, now confirmed under Your Bookings.</p>` : ''}${rep.twoFactorEnabled ? `<p>🔒 You turned on email login codes — from now on we'll send a 6-digit code to this address each time you log in from a new device. You can turn this off anytime in Account Settings.</p>` : ''}${emailLoginButton()}`,
     }).catch(() => {});
 
     notifyAdmin(

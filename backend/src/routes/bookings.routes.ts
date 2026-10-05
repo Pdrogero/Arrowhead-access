@@ -379,6 +379,123 @@ router.post('/office-schedule', requireAuth, requireRole('office_admin', 'office
   }
 });
 
+// --- Office staff: manually schedule a visit for a rep by email, who may --
+// not have an Arrowhead Access account yet. If the email already belongs
+// to a rep, this behaves exactly like /office-schedule above (so a
+// mistyped-but-real address still just works). Otherwise it stores a
+// PendingOfficeSchedule and emails that address an invite mentioning the
+// specific visit — it resolves into a real CONFIRMED booking automatically
+// the moment they sign up with the same email (see auth.routes.ts).
+router.post('/office-schedule-invite', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub }, include: { location: true } });
+    if (!staff) return res.status(404).json({ error: 'Staff account not found' });
+
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const repName = String(req.body.repName || '').trim().slice(0, 100);
+    const { startTime, endTime, eventType, topic } = req.body;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Enter a valid email address' });
+    }
+    if (!startTime || !endTime || !eventType) {
+      return res.status(400).json({ error: 'startTime, endTime, and eventType are required' });
+    }
+    if (new Date(endTime) <= new Date(startTime)) {
+      return res.status(400).json({ error: 'End time must be after start time' });
+    }
+    const cleanTopic = typeof topic === 'string' && topic.trim() ? topic.trim().slice(0, 500) : undefined;
+
+    const existingRep = await prisma.rep.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
+    if (existingRep) {
+      const booking = await officeScheduleRep({
+        locationId: staff.locationId,
+        staffId: staff.id,
+        repId: existingRep.id,
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+        eventType: String(eventType),
+        topic: cleanTopic,
+      });
+      const dateStr = new Date(startTime).toLocaleString('en-US', {
+        timeZone: staff.location.timezone,
+        weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      });
+      const eventLabel = EVENT_TYPE_LABEL[String(eventType)] || 'Visit';
+      sendEmail({
+        to: existingRep.email,
+        subject: `${staff.location.name} scheduled a ${eventLabel.toLowerCase()} with you`,
+        html: `${emailLogoHeader()}<p><strong>${staff.location.name}</strong> scheduled a ${eventLabel.toLowerCase()} with you on <strong>${dateStr}</strong>. It's already confirmed — no action needed, but you'll find it under Your Bookings.</p>${cleanTopic ? `<p><strong>Note from the office:</strong> ${cleanTopic}</p>` : ''}`,
+      }).catch(() => {});
+      return res.status(201).json({ pending: false, booking });
+    }
+
+    const pending = await prisma.pendingOfficeSchedule.create({
+      data: {
+        locationId: staff.locationId,
+        createdByStaffId: staff.id,
+        repEmail: email,
+        repName: repName || undefined,
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+        eventType: String(eventType) as any,
+        topic: cleanTopic,
+      },
+    });
+
+    const dateStr = pending.startTime.toLocaleString('en-US', {
+      timeZone: staff.location.timezone,
+      weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+    const eventLabel = EVENT_TYPE_LABEL[pending.eventType] || 'Visit';
+    const appUrl = process.env.APP_URL || 'https://arrowheadaccess.com';
+    const signupUrl = `${appUrl}/app.html?officeInvite=1&email=${encodeURIComponent(email)}&officeName=${encodeURIComponent(staff.location.name)}`;
+    sendEmail({
+      to: email,
+      subject: `${staff.location.name} scheduled a ${eventLabel.toLowerCase()} with you — sign up to see it`,
+      html: `${emailLogoHeader()}<p>${repName ? `Hi ${repName.split(' ')[0]},</p><p>` : ''}<strong>${staff.location.name}</strong> uses Arrowhead Access to manage rep visits, and scheduled a ${eventLabel.toLowerCase()} with you on <strong>${dateStr}</strong>.</p>${cleanTopic ? `<p><strong>Note from the office:</strong> ${cleanTopic}</p>` : ''}<p><a href="${signupUrl}">Sign up with this email address</a> to create your account — it's already confirmed and will show up under Your Bookings the moment you do, no further action needed. There's a 14-day free trial to get started.</p>`,
+    }).catch(() => {});
+
+    res.status(201).json({ pending: true, id: pending.id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not schedule or send invite' });
+  }
+});
+
+// --- Office staff: view/cancel their location's pending manual-schedule ---
+// invites — reps scheduled by email who haven't signed up yet.
+router.get('/locations/:locationId/pending-schedules', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    assertOwnsLocation(req, req.params.locationId);
+  } catch (err) {
+    return res.status(403).json({ error: (err as Error).message });
+  }
+  try {
+    const pending = await prisma.pendingOfficeSchedule.findMany({
+      where: { locationId: req.params.locationId },
+      orderBy: { startTime: 'asc' },
+    });
+    res.json(pending);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load pending invites' });
+  }
+});
+
+router.delete('/pending-schedules/:id', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff account not found' });
+    const pending = await prisma.pendingOfficeSchedule.findUnique({ where: { id: req.params.id } });
+    if (!pending || pending.locationId !== staff.locationId) return res.status(404).json({ error: 'Invite not found' });
+    await prisma.pendingOfficeSchedule.delete({ where: { id: pending.id } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not cancel invite' });
+  }
+});
+
 // --- Office staff: remove an open slot that hasn't been booked ------------
 // --- Office staff: remove several open, unbooked slots at once, e.g. to ---
 // clean up a batch of slots that were generated with a wrong time and need

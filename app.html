@@ -182,6 +182,7 @@ let calendarSearchQuery = '';
 let visitHistorySearchPrefill = '';
 let officeCalendarMonth = new Date();
 let officeCalendarSlots = [];
+let officeCalendarPending = []; // reps scheduled by email who haven't signed up yet
 let officeCalendarSelectedDay = null;
 let ledgerSlotsData = [];
 // Open (unbooked) slot ids currently checked in the office ledger, for
@@ -2221,14 +2222,21 @@ function screenOfficeCalendar() {
       (slotsByDay[day] = slotsByDay[day] || []).push(s);
     }
   });
+  const pendingByDay = {};
+  officeCalendarPending.forEach(p => {
+    const d = new Date(p.startTime);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      const day = d.getDate();
+      (pendingByDay[day] = pendingByDay[day] || []).push(p);
+    }
+  });
 
   const eventChipColors = { CONFIRMED: ['#E3F1EC', '#215947'], REQUESTED: ['#FCF0DA', '#7A4B0A'] };
   const maxChipsPerDay = 2;
   let cells = '';
   for (let i = 0; i < firstDay; i++) cells += `<div></div>`;
   for (let day = 1; day <= daysInMonth; day++) {
-    const has = slotsByDay[day];
-    const chips = (has || []).slice(0, maxChipsPerDay).map(s => {
+    const scheduledChips = (slotsByDay[day] || []).map(s => {
       const [bg, fg] = eventChipColors[s.booking.status] || ['#EFEFEF', 'var(--slate)'];
       const repName = (s.booking.rep.name || '').replace(/"/g, '&quot;');
       const title = `${eventTypeLabel(s.eventType)} — ${fmtTimeOnly(s.startTime)} — ${repName}`;
@@ -2236,14 +2244,26 @@ function screenOfficeCalendar() {
         <div style="font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${eventTypeLabel(s.eventType)} · ${fmtTimeOnly(s.startTime)}</div>
         <div style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${repName}</div>
       </div>`;
-    }).join('');
-    const overflow = (has || []).length > maxChipsPerDay ? `<div style="font-size:9.5px;color:var(--slate);margin-top:2px;">+${has.length - maxChipsPerDay} more</div>` : '';
+    });
+    const pendingChips = (pendingByDay[day] || []).map(p => {
+      const who = (p.repName || p.repEmail || '').replace(/"/g, '&quot;');
+      const title = `${eventTypeLabel(p.eventType)} — ${fmtTimeOnly(p.startTime)} — ${who} (invited, awaiting signup)`;
+      return `<div title="${title}" style="background:#EAF2FB;color:#2B5A8C;border-radius:4px;padding:2px 4px;margin-top:2px;line-height:1.25;overflow:hidden;">
+        <div style="font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">✉️ ${eventTypeLabel(p.eventType)} · ${fmtTimeOnly(p.startTime)}</div>
+        <div style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${who}</div>
+      </div>`;
+    });
+    const allChips = scheduledChips.concat(pendingChips);
+    const has = allChips.length > 0;
+    const chips = allChips.slice(0, maxChipsPerDay).join('');
+    const overflow = allChips.length > maxChipsPerDay ? `<div style="font-size:9.5px;color:var(--slate);margin-top:2px;">+${allChips.length - maxChipsPerDay} more</div>` : '';
     cells += `<div onclick="selectOfficeCalendarDay(${day})" style="height:118px;border:1px solid var(--line);border-radius:8px;background:${has ? 'rgba(46,111,94,.06)' : '#fff'};font-size:13px;padding:5px;cursor:pointer;display:flex;flex-direction:column;overflow:hidden;">
       <span>${day}</span>${chips}${overflow}
     </div>`;
   }
 
   const daySlots = officeCalendarSelectedDay ? (slotsByDay[officeCalendarSelectedDay] || []) : [];
+  const dayPending = officeCalendarSelectedDay ? (pendingByDay[officeCalendarSelectedDay] || []) : [];
 
   return `
     <div class="wrap wide" style="max-width:960px;">
@@ -2263,6 +2283,7 @@ function screenOfficeCalendar() {
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#E3F1EC;border:1px solid #215947;display:inline-block;"></span>Confirmed</span>
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#FCF0DA;border:1px solid #7A4B0A;display:inline-block;"></span>Pending</span>
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#FBE7E7;border:1px solid #8A2626;display:inline-block;"></span>Declined/Cancelled</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#EAF2FB;border:1px solid #2B5A8C;display:inline-block;"></span>Invited, awaiting signup</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px;">
         ${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
@@ -2282,7 +2303,20 @@ function screenOfficeCalendar() {
               <span class="chip ${s.booking.status}">${s.booking.status}</span>
               ${s.booking.status === 'CONFIRMED' && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Cancel this visit</button>` : ''}
               ${officeCancelDraft && officeCancelDraft.bookingId === s.booking.id ? cancelSuggestFormHtml(officeCancelDraft.repName, 'finalizeCancelOfficeBooking') : ''}
-            </div>`).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
+            </div>`).join('') : ''}
+          ${dayPending.map(p => `
+            <div class="row" style="flex-wrap:wrap;">
+              <div class="time">${fmtTime(p.startTime)}</div>
+              <div class="mid">
+                <div class="who">✉️ ${(p.repName || p.repEmail).replace(/</g, '&lt;')}</div>
+                ${p.repName ? `<div class="what">${p.repEmail.replace(/</g, '&lt;')}</div>` : ''}
+                <div style="margin-top:4px;">${eventTypeChipHtml(p.eventType)}</div>
+                <div style="font-size:11px;color:#2B5A8C;margin-top:4px;">Invited — confirms automatically once they sign up</div>
+              </div>
+              <span class="chip" style="background:#EAF2FB;color:#2B5A8C;">INVITED</span>
+              <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelPendingOfficeSchedule('${p.id}', '${(p.repName || p.repEmail).replace(/'/g, "\\'")}')">🗑 Cancel invite</button>
+            </div>`).join('')}
+          ${!daySlots.length && !dayPending.length ? '<div class="empty">Nothing scheduled this day.</div>' : ''}
         </div>
         <button type="button" class="link" style="text-align:left;margin-top:10px;" onclick="toggleManualOfficeScheduleForm()">➕ Add a lunch/visit manually</button>
         <p style="font-size:11.5px;color:var(--slate);margin:2px 0 0;">For when it's already arranged outside the app — this confirms it immediately, no claim or approval step.</p>
@@ -5977,6 +6011,7 @@ async function loadOfficeCalendarBookings() {
     // scope=all — the calendar's month-back navigation needs full history,
     // unlike the dashboard ledger which defaults to today onward.
     officeCalendarSlots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger?scope=all');
+    officeCalendarPending = await api('/api/bookings/locations/' + state.me.locationId + '/pending-schedules').catch(() => []);
     render();
   } catch (err) {}
 }
@@ -6024,29 +6059,43 @@ function renderManualOfficeScheduleForm() {
       <div id="manualOfficeScheduleErr"></div>
       ${repsDirectoryData === null ? '<p style="font-size:12.5px;color:var(--slate);">Loading your reps…</p>' : ''}
       ${repsDirectoryData === false ? '<p class="msg err">Could not load your reps list.</p>' : ''}
-      ${repsDirectoryData && !reps.length ? '<p style="font-size:12.5px;color:var(--slate);">No reps have booked at your location yet — a rep needs at least one prior visit here before you can schedule them directly. Post an open slot instead if this is a new rep.</p>' : ''}
       ${reps.length ? `
         <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Rep</label>
-        <select id="manualScheduleRepId" style="margin-bottom:12px;">${repOptionsHtml}</select>
-        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Event type</label>
-        <select id="manualScheduleEventType" style="margin-bottom:12px;" onchange="applyManualScheduleDefaultTimes()">
-          <option value="LUNCH">Lunch</option>
-          <option value="BREAKFAST">Breakfast</option>
-          <option value="COFFEE_SNACK">Coffee/Snack</option>
-          <option value="STAFF_TRAINING">Staff training</option>
-          <option value="REP_VISIT">Rep visit</option>
-        </select>
-        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Start time</label>
-        <input id="manualScheduleStart" type="datetime-local" value="${dateStr}T12:00" style="margin-bottom:12px;">
-        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">End time</label>
-        <input id="manualScheduleEnd" type="datetime-local" value="${dateStr}T13:00" style="margin-bottom:12px;">
-        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Note to the rep (optional)</label>
-        <textarea id="manualScheduleNote" rows="2" placeholder="Anything they should know" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
-        <p style="font-size:12px;color:var(--slate);margin:-6px 0 12px;">This confirms the visit immediately — no claim or approval step, since it's already arranged.</p>
-        <button class="primary" id="manualScheduleBtn" onclick="submitManualOfficeSchedule()">Add to calendar</button>
+        <select id="manualScheduleRepId" onchange="toggleManualScheduleInviteFields()" style="margin-bottom:12px;">${repOptionsHtml}<option value="">— Someone new (not in your list) —</option></select>
       ` : ''}
+      <div id="manualScheduleInviteFields" style="${reps.length ? 'display:none;' : ''}margin-bottom:4px;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Rep's email</label>
+        <input id="manualScheduleInviteEmail" type="email" placeholder="rep@company.com" style="margin-bottom:12px;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Rep's name (optional)</label>
+        <input id="manualScheduleInviteName" type="text" placeholder="So we can greet them by name" style="margin-bottom:4px;">
+        <p style="font-size:11.5px;color:var(--slate);margin:0 0 12px;">They're not in your reps list yet, so this sends them an email invite to sign up for Arrowhead Access — it's already confirmed and will show up under Your Bookings the moment they do.</p>
+      </div>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Event type</label>
+      <select id="manualScheduleEventType" style="margin-bottom:12px;" onchange="applyManualScheduleDefaultTimes()">
+        <option value="LUNCH">Lunch</option>
+        <option value="BREAKFAST">Breakfast</option>
+        <option value="COFFEE_SNACK">Coffee/Snack</option>
+        <option value="STAFF_TRAINING">Staff training</option>
+        <option value="REP_VISIT">Rep visit</option>
+      </select>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Start time</label>
+      <input id="manualScheduleStart" type="datetime-local" value="${dateStr}T12:00" style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">End time</label>
+      <input id="manualScheduleEnd" type="datetime-local" value="${dateStr}T13:00" style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Note to the rep (optional)</label>
+      <textarea id="manualScheduleNote" rows="2" placeholder="Anything they should know" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
+      <p style="font-size:12px;color:var(--slate);margin:-6px 0 12px;">This confirms the visit immediately — no claim or approval step, since it's already arranged.</p>
+      <button class="primary" id="manualScheduleBtn" onclick="submitManualOfficeSchedule()">Add to calendar</button>
     </div>`;
 }
+
+// Switches between the rep <select> and the "someone new" email/name
+// fields when that's picked from the dropdown — only relevant when there
+// are known reps to choose from in the first place.
+window.toggleManualScheduleInviteFields = function() {
+  const isNew = document.getElementById('manualScheduleRepId').value === '';
+  document.getElementById('manualScheduleInviteFields').style.display = isNew ? 'block' : 'none';
+};
 
 // Mirrors applyScheduleRepDefaultTimes above, for the manual-calendar form's
 // own field ids and fixed (already-selected) date.
@@ -6077,20 +6126,32 @@ window.submitManualOfficeSchedule = async function() {
     return;
   }
 
-  const payload = {
-    repId: document.getElementById('manualScheduleRepId').value,
-    eventType: document.getElementById('manualScheduleEventType').value,
-    startTime,
-    endTime,
-    topic: document.getElementById('manualScheduleNote').value.trim(),
-  };
+  const repIdField = document.getElementById('manualScheduleRepId');
+  const repId = repIdField ? repIdField.value : '';
+  const eventType = document.getElementById('manualScheduleEventType').value;
+  const topic = document.getElementById('manualScheduleNote').value.trim();
+
+  let endpoint, payload;
+  if (repId) {
+    endpoint = '/api/bookings/office-schedule';
+    payload = { repId, eventType, startTime, endTime, topic };
+  } else {
+    const email = document.getElementById('manualScheduleInviteEmail').value.trim();
+    if (!email) {
+      errBox.innerHTML = '<div class="msg err">Enter the rep\'s email address</div>';
+      return;
+    }
+    endpoint = '/api/bookings/office-schedule-invite';
+    payload = { email, repName: document.getElementById('manualScheduleInviteName').value.trim(), eventType, startTime, endTime, topic };
+  }
 
   const btn = document.getElementById('manualScheduleBtn');
   btn.disabled = true;
   btn.textContent = 'Adding…';
   try {
-    await api('/api/bookings/office-schedule', { method: 'POST', body: JSON.stringify(payload) });
+    const result = await api(endpoint, { method: 'POST', body: JSON.stringify(payload) });
     document.getElementById('manualOfficeScheduleBox').innerHTML = '';
+    if (result && result.pending) alert('Invite sent! It\'ll confirm automatically and show up on this calendar once they sign up.');
     await loadOfficeCalendarBookings();
   } catch (err) {
     errBox.innerHTML = `<div class="msg err">${err.message}</div>`;
@@ -6225,6 +6286,16 @@ window.removeSelectedLedgerSlots = async function() {
       await api('/api/bookings/bulk-cancel', { method: 'POST', body: JSON.stringify({ bookingIds: confirmedBookingIds, reason }) });
     }
     loadOfficeLedger();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+window.cancelPendingOfficeSchedule = async function(id, who) {
+  if (!confirm(`Cancel the invite for ${who}? They won't get the email, and this time slot won't be reserved for them anymore.`)) return;
+  try {
+    await api('/api/bookings/pending-schedules/' + id, { method: 'DELETE' });
+    await loadOfficeCalendarBookings();
   } catch (err) {
     alert(err.message);
   }
