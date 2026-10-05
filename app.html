@@ -6065,6 +6065,9 @@ window.toggleManualOfficeScheduleForm = function() {
   if (box.innerHTML.trim()) { box.innerHTML = ''; return; }
   renderManualOfficeScheduleForm();
   if (repsDirectoryData === null) loadRepsDirectory().then(renderManualOfficeScheduleForm);
+  // Scroll the newly-opened form into view and center it — it can land
+  // well below the fold depending on how long the day's own list is.
+  box.scrollIntoView({ behavior: 'smooth', block: 'center' });
 };
 
 function renderManualOfficeScheduleForm() {
@@ -6084,9 +6087,12 @@ function renderManualOfficeScheduleForm() {
       ${repsDirectoryData === false ? '<p class="msg err">Could not load your reps list.</p>' : ''}
       ${reps.length ? `
         <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Rep</label>
-        <select id="manualScheduleRepId" onchange="toggleManualScheduleInviteFields()" style="margin-bottom:12px;">${repOptionsHtml}<option value="">— Someone new (not in your list) —</option></select>
+        <select id="manualScheduleRepId" onchange="toggleManualScheduleInviteFields()" style="margin-bottom:12px;">
+          <option value="" selected>— Someone new (not in your list of favorites) —</option>
+          ${repOptionsHtml}
+        </select>
       ` : ''}
-      <div id="manualScheduleInviteFields" style="${reps.length ? 'display:none;' : ''}margin-bottom:4px;">
+      <div id="manualScheduleInviteFields" style="margin-bottom:4px;">
         <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Rep's email</label>
         <input id="manualScheduleInviteEmail" type="email" placeholder="rep@company.com" style="margin-bottom:12px;">
         <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Rep's name (optional)</label>
