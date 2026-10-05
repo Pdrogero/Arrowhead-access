@@ -192,17 +192,21 @@ router.get('/reps', requireAuth, requireRole('office_admin', 'office_staff'), as
     const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
 
-    const reps = await prisma.rep.findMany({
-      where: {
-        OR: [
-          { bookings: { some: { slot: { locationId: staff.locationId } } } },
-          { savedByLocations: { some: { locationId: staff.locationId } } },
-        ],
-      },
-      select: { id: true, name: true, companyName: true, title: true, verificationStatus: true, profileImageUrl: true },
-      orderBy: { name: 'asc' },
-    });
-    res.json(reps);
+    const [reps, savedReps] = await Promise.all([
+      prisma.rep.findMany({
+        where: {
+          OR: [
+            { bookings: { some: { slot: { locationId: staff.locationId } } } },
+            { savedByLocations: { some: { locationId: staff.locationId } } },
+          ],
+        },
+        select: { id: true, name: true, companyName: true, title: true, verificationStatus: true, profileImageUrl: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.savedRep.findMany({ where: { locationId: staff.locationId }, select: { repId: true } }),
+    ]);
+    const savedIds = new Set(savedReps.map(s => s.repId));
+    res.json(reps.map(r => ({ ...r, isSaved: savedIds.has(r.id) })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not fetch reps' });
@@ -351,7 +355,7 @@ router.get('/rep/:repId', requireAuth, requireRole('office_admin', 'office_staff
       },
     });
     if (!rep) return res.status(404).json({ error: 'Rep not found' });
-    res.json(rep);
+    res.json({ ...rep, isSaved: !!isSaved });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not fetch this rep\'s profile' });

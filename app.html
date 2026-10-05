@@ -210,6 +210,7 @@ let browseOfficeRatings = {};
 // on each toggle, so every screen showing an office can show the right
 // star state without a full refetch.
 let favoriteLocationIds = new Set();
+let favoriteRepIds = new Set(); // office-side mirror — which reps this office has starred/saved
 let favoriteOfficesData = null;
 let browseSearchQuery = '';
 // Office ids checked in the "Select office" panel — lets a rep browsing
@@ -1523,7 +1524,7 @@ function repNameLinkHtml(rep) {
   if (!rep) return '';
   const safeName = (rep.name || '').replace(/'/g, "\\'");
   const label = rep.companyName ? `${rep.name} · ${rep.companyName}` : rep.name;
-  return `<span onclick="event.stopPropagation();viewRepProfile('${rep.id}','${safeName}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);">${label}</span>`;
+  return `${repFavoriteStarHtml(rep.id)}<span onclick="event.stopPropagation();viewRepProfile('${rep.id}','${safeName}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);">${label}</span>`;
 }
 
 // Shared inline "suggest a new time?" form shown after a cancel reason has
@@ -3064,7 +3065,7 @@ function renderRepsDirectory() {
         ? `<img src="${r.profileImageUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
         : `<div style="width:40px;height:40px;border-radius:50%;background:var(--paper-raised,#E4EAE3);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--teal);flex-shrink:0;">${(r.name || '?').charAt(0)}</div>`}
       <div class="mid">
-        <div class="who">${r.name}</div>
+        <div class="who">${repFavoriteStarHtml(r.id)} ${r.name}</div>
         <div class="what">${[r.companyName, r.title].filter(Boolean).join(' · ')}</div>
         ${r.verificationStatus === 'VERIFIED' ? `<div style="font-size:11.5px;font-weight:600;color:#2D6F5E;margin-top:2px;">✅ Verified Professional</div>` : ''}
       </div>
@@ -3134,6 +3135,7 @@ async function loadRepsDirectory() {
   const box = document.getElementById('repsDirectoryBox');
   try {
     repsDirectoryData = await api('/api/profile/reps');
+    favoriteRepIds = new Set(repsDirectoryData.filter(r => r.isSaved).map(r => r.id));
     renderRepsDirectory();
   } catch (err) {
     repsDirectoryData = false;
@@ -3238,7 +3240,7 @@ function screenRepProfileView() {
             ? `<img src="${rep.profileImageUrl}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
             : `<div style="width:64px;height:64px;border-radius:50%;background:var(--paper-raised,#E4EAE3);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--teal);flex-shrink:0;">${(rep.name || '?').charAt(0)}</div>`}
           <div>
-            <h1 style="margin-bottom:2px;">${rep.name}</h1>
+            <h1 style="margin-bottom:2px;">${rep.name} ${state.role === 'office' ? repFavoriteStarHtml(viewedRepProfileId) : ''}</h1>
             <p class="sub" style="margin:0;">${[rep.companyName, rep.title].filter(Boolean).join(' · ')}</p>
             ${rep.verificationStatus === 'VERIFIED' ? `<p style="font-size:13px;color:#2D6F5E;font-weight:600;margin:4px 0 0;">✅ Verified Professional</p>` : ''}
           </div>
@@ -3279,6 +3281,7 @@ window.viewRepProfile = async function(repId, repName) {
   setState({ screen: 'repProfileView' });
   try {
     viewedRepProfile = await api(`/api/profile/rep/${repId}`);
+    if (viewedRepProfile.isSaved) favoriteRepIds.add(repId); else favoriteRepIds.delete(repId);
     render();
   } catch (err) {
     viewedRepProfile = false;
@@ -5046,6 +5049,43 @@ window.toggleFavoriteOffice = async function(locationId) {
   }
 };
 
+// Office-side mirror of favoriteStarHtml/toggleFavoriteOffice above — lets
+// an office star a rep from My Reps or from the rep's own profile. Reuses
+// the existing save/unsave-to-My-Reps endpoint, since a favorited rep and
+// a "saved" one are the same underlying relationship — the star is just a
+// quicker, more visible way to set it than the search result's "Save"
+// button, and works for a rep already in the list (via booking history),
+// not just ones found through search.
+function repFavoriteStarHtml(repId) {
+  const isFav = favoriteRepIds.has(repId);
+  return `<button type="button" data-fav-rep="${repId}" onclick="event.stopPropagation();toggleFavoriteRep('${repId}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}" style="background:none;border:none;font-size:18px;line-height:1;cursor:pointer;color:${isFav ? '#D9A441' : 'var(--slate)'};padding:2px 4px;">${isFav ? '★' : '☆'}</button>`;
+}
+
+window.toggleFavoriteRep = async function(repId) {
+  const isFavorited = favoriteRepIds.has(repId);
+  try {
+    if (isFavorited) {
+      await api(`/api/profile/reps/${repId}/save`, { method: 'DELETE' });
+      favoriteRepIds.delete(repId);
+    } else {
+      await api(`/api/profile/reps/${repId}/save`, { method: 'POST' });
+      favoriteRepIds.add(repId);
+    }
+    const nowFav = favoriteRepIds.has(repId);
+    document.querySelectorAll(`[data-fav-rep="${repId}"]`).forEach(btn => {
+      btn.textContent = nowFav ? '★' : '☆';
+      btn.style.color = nowFav ? '#D9A441' : 'var(--slate)';
+      btn.title = nowFav ? 'Remove from favorites' : 'Add to favorites';
+    });
+    // My Reps shows booked-or-saved reps — un-starring one who's never
+    // actually booked here removes them from the list entirely, so reload
+    // it rather than just flipping the icon in place.
+    if (state.screen === 'repsDirectory') loadRepsDirectory();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 // Resizes/compresses a picked image client-side (to keep the data: URL well
 // under MAX_PROFILE_IMAGE_LENGTH on the backend) and hands the result to
 // onReady — shared by the rep and office profile-photo pickers below.
@@ -5551,7 +5591,13 @@ async function loadOfficeLedger() {
   const box = document.getElementById('ledgerBox');
   const extraBox = document.getElementById('extraLunchesBox');
   try {
-    const slots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger');
+    // Needed so repNameLinkHtml's favorite star is accurate on first paint
+    // here too, not just after visiting My Reps — same lazy-load-once
+    // pattern the rep side uses for favoriteOfficesData.
+    const [slots] = await Promise.all([
+      api('/api/bookings/locations/' + state.me.locationId + '/ledger'),
+      repsDirectoryData === null ? loadRepsDirectory().catch(() => {}) : Promise.resolve(),
+    ]);
     ledgerSlotsData = slots;
     renderPendingRequestsBox(slots);
     selectedLedgerSlotIds = new Set();
@@ -6030,6 +6076,9 @@ async function loadOfficeCalendarBookings() {
     // unlike the dashboard ledger which defaults to today onward.
     officeCalendarSlots = await api('/api/bookings/locations/' + state.me.locationId + '/ledger?scope=all');
     officeCalendarPending = await api('/api/bookings/locations/' + state.me.locationId + '/pending-schedules').catch(() => []);
+    // Same favorite-star prefetch as loadOfficeLedger, so repNameLinkHtml's
+    // star is accurate here too on first paint.
+    if (repsDirectoryData === null) await loadRepsDirectory().catch(() => {});
     render();
   } catch (err) {}
 }
