@@ -424,8 +424,23 @@ window.toggleAddToCalendarMenu = function(id) {
   const menu = document.getElementById('addCalMenu-' + id);
   if (!menu) return;
   const willOpen = menu.style.display !== 'block';
-  document.querySelectorAll('[id^="addCalMenu-"]').forEach(m => { m.style.display = 'none'; });
-  menu.style.display = willOpen ? 'block' : 'none';
+  document.querySelectorAll('[id^="addCalMenu-"]').forEach(m => { m.style.display = 'none'; m.style.left = ''; m.style.right = ''; });
+  if (!willOpen) return;
+  menu.style.display = 'block';
+  // The toggle button usually sits mid-row, not flush against the left
+  // edge, so this fixed-width dropdown opening further right/left-anchored
+  // can run off a narrow phone screen. Flip it to right-anchored instead
+  // when it would overflow either edge of the viewport.
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) {
+    menu.style.left = 'auto';
+    menu.style.right = '0';
+  }
+  const rect2 = menu.getBoundingClientRect();
+  if (rect2.left < 0) {
+    menu.style.left = '0';
+    menu.style.right = 'auto';
+  }
 };
 
 // Closes any open "Add to calendar" menu on a tap outside it — same
