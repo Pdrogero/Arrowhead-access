@@ -2283,7 +2283,10 @@ function screenOfficeCalendar() {
               ${s.booking.status === 'CONFIRMED' && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Cancel this visit</button>` : ''}
               ${officeCancelDraft && officeCancelDraft.bookingId === s.booking.id ? cancelSuggestFormHtml(officeCancelDraft.repName, 'finalizeCancelOfficeBooking') : ''}
             </div>`).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
-        </div>` : ''}
+        </div>
+        <button type="button" class="link" style="text-align:left;margin-top:10px;" onclick="toggleManualOfficeScheduleForm()">➕ Add a lunch/visit manually</button>
+        <p style="font-size:11.5px;color:var(--slate);margin:2px 0 0;">For when it's already arranged outside the app — this confirms it immediately, no claim or approval step.</p>
+        <div id="manualOfficeScheduleBox" style="margin-top:10px;"></div>` : ''}
     </div>`;
 }
 
@@ -5989,6 +5992,111 @@ window.selectOfficeCalendarDay = function(day) {
   officeCalendarSelectedDay = day;
   officeCancelDraft = null;
   render();
+};
+
+// "Add a lunch/visit manually" on the office calendar — for a visit that
+// was already arranged outside the app (phone, email, in person) rather
+// than through claim/request. Reuses the same office-schedule endpoint
+// and rep list as the "Schedule {rep}" button on a rep's profile; the
+// only difference here is the day comes from whichever calendar cell is
+// selected, and the rep is picked from a dropdown instead of already
+// being on screen.
+window.toggleManualOfficeScheduleForm = function() {
+  const box = document.getElementById('manualOfficeScheduleBox');
+  if (!box) return;
+  if (box.innerHTML.trim()) { box.innerHTML = ''; return; }
+  renderManualOfficeScheduleForm();
+  if (repsDirectoryData === null) loadRepsDirectory().then(renderManualOfficeScheduleForm);
+};
+
+function renderManualOfficeScheduleForm() {
+  const box = document.getElementById('manualOfficeScheduleBox');
+  if (!box) return;
+  const pad = n => String(n).padStart(2, '0');
+  const dateStr = `${officeCalendarMonth.getFullYear()}-${pad(officeCalendarMonth.getMonth() + 1)}-${pad(officeCalendarSelectedDay)}`;
+  const reps = repsDirectoryData || [];
+  const repOptionsHtml = reps.length
+    ? reps.map(r => `<option value="${r.id}">${r.name}${r.companyName ? ' — ' + r.companyName : ''}</option>`).join('')
+    : '';
+  box.innerHTML = `
+    <div class="card">
+      <p style="font-size:13px;font-weight:700;margin-bottom:10px;">Add a lunch/visit manually</p>
+      <div id="manualOfficeScheduleErr"></div>
+      ${repsDirectoryData === null ? '<p style="font-size:12.5px;color:var(--slate);">Loading your reps…</p>' : ''}
+      ${repsDirectoryData === false ? '<p class="msg err">Could not load your reps list.</p>' : ''}
+      ${repsDirectoryData && !reps.length ? '<p style="font-size:12.5px;color:var(--slate);">No reps have booked at your location yet — a rep needs at least one prior visit here before you can schedule them directly. Post an open slot instead if this is a new rep.</p>' : ''}
+      ${reps.length ? `
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Rep</label>
+        <select id="manualScheduleRepId" style="margin-bottom:12px;">${repOptionsHtml}</select>
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Event type</label>
+        <select id="manualScheduleEventType" style="margin-bottom:12px;" onchange="applyManualScheduleDefaultTimes()">
+          <option value="LUNCH">Lunch</option>
+          <option value="BREAKFAST">Breakfast</option>
+          <option value="COFFEE_SNACK">Coffee/Snack</option>
+          <option value="STAFF_TRAINING">Staff training</option>
+          <option value="REP_VISIT">Rep visit</option>
+        </select>
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Start time</label>
+        <input id="manualScheduleStart" type="datetime-local" value="${dateStr}T12:00" style="margin-bottom:12px;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">End time</label>
+        <input id="manualScheduleEnd" type="datetime-local" value="${dateStr}T13:00" style="margin-bottom:12px;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Note to the rep (optional)</label>
+        <textarea id="manualScheduleNote" rows="2" placeholder="Anything they should know" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:8px;font-size:15px;margin-bottom:12px;font-family:inherit;"></textarea>
+        <p style="font-size:12px;color:var(--slate);margin:-6px 0 12px;">This confirms the visit immediately — no claim or approval step, since it's already arranged.</p>
+        <button class="primary" id="manualScheduleBtn" onclick="submitManualOfficeSchedule()">Add to calendar</button>
+      ` : ''}
+    </div>`;
+}
+
+// Mirrors applyScheduleRepDefaultTimes above, for the manual-calendar form's
+// own field ids and fixed (already-selected) date.
+window.applyManualScheduleDefaultTimes = function() {
+  const defaults = { LUNCH: [12, 0, 13, 0], BREAKFAST: [8, 0, 9, 0] }[document.getElementById('manualScheduleEventType').value];
+  if (!defaults) return;
+  const [startH, startM, endH, endM] = defaults;
+  const pad = n => String(n).padStart(2, '0');
+  const dateStr = `${officeCalendarMonth.getFullYear()}-${pad(officeCalendarMonth.getMonth() + 1)}-${pad(officeCalendarSelectedDay)}`;
+  document.getElementById('manualScheduleStart').value = `${dateStr}T${pad(startH)}:${pad(startM)}`;
+  document.getElementById('manualScheduleEnd').value = `${dateStr}T${pad(endH)}:${pad(endM)}`;
+};
+
+window.submitManualOfficeSchedule = async function() {
+  const startVal = document.getElementById('manualScheduleStart').value;
+  const endVal = document.getElementById('manualScheduleEnd').value;
+  const errBox = document.getElementById('manualOfficeScheduleErr');
+  errBox.innerHTML = '';
+
+  if (!startVal || !endVal) {
+    errBox.innerHTML = '<div class="msg err">Both start and end times are required</div>';
+    return;
+  }
+  const startTime = new Date(startVal).toISOString();
+  const endTime = new Date(endVal).toISOString();
+  if (new Date(endTime) <= new Date(startTime)) {
+    errBox.innerHTML = '<div class="msg err">End time must be after start time</div>';
+    return;
+  }
+
+  const payload = {
+    repId: document.getElementById('manualScheduleRepId').value,
+    eventType: document.getElementById('manualScheduleEventType').value,
+    startTime,
+    endTime,
+    topic: document.getElementById('manualScheduleNote').value.trim(),
+  };
+
+  const btn = document.getElementById('manualScheduleBtn');
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+  try {
+    await api('/api/bookings/office-schedule', { method: 'POST', body: JSON.stringify(payload) });
+    document.getElementById('manualOfficeScheduleBox').innerHTML = '';
+    await loadOfficeCalendarBookings();
+  } catch (err) {
+    errBox.innerHTML = `<div class="msg err">${err.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'Add to calendar';
+  }
 };
 
 // Searches this office's already-loaded calendar data (officeCalendarSlots,
