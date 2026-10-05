@@ -8,7 +8,7 @@
 // per-rep email list) restricted to the Shell-only script instead
 // (scripts/founding-status.ts).
 import { Router } from 'express';
-import { foundingSpotsSummary } from '../adminCleanup';
+import { foundingSpotsSummary, backfillAutoDeclinedNoResponse } from '../adminCleanup';
 
 const router = Router();
 
@@ -21,6 +21,21 @@ router.get('/founding-status', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).send('Error generating report');
+  }
+});
+
+// One-time backfill for bookings auto-declined (3-day no-response timeout)
+// before the autoDeclinedNoResponse flag existed — see adminCleanup.ts for
+// how it tells those apart from an explicit office decline. Safe to run
+// more than once; already-flagged rows are excluded on each pass.
+router.get('/backfill-auto-declined', async (req, res) => {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret || req.query.secret !== secret) return res.status(404).end();
+  try {
+    res.type('text/plain').send(await backfillAutoDeclinedNoResponse());
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error running backfill');
   }
 });
 

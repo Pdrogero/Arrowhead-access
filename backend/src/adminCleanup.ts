@@ -171,6 +171,44 @@ export async function foundingStatusReport(): Promise<string> {
   return out.join('\n');
 }
 
+// --- One-off: backfill Booking.autoDeclinedNoResponse on bookings that
+// auto-declined via the 3-day no-response timeout before that flag existed
+// (added after check-expired-requests had already been running for a
+// while), so "Your bookings" can retroactively offer "Request again" on
+// them instead of only on newly-declined ones going forward.
+//
+// Can't tell a timeout decline apart from an explicit office decline by
+// status alone — both land on DECLINED, reopen the slot, and can have a
+// null cancelReason (the decline-reason prompt is optional). But only the
+// cron declines at precisely requestedAt + 3 days, on one of its 3-hourly
+// ticks — a human clicking decline essentially never lands in that exact
+// window — so decidedAt falling within a few hours after that mark is a
+// reliable signal. Only touches rows still relevant (the slot's date
+// hasn't passed) so nothing in Visit History is affected.
+export async function backfillAutoDeclinedNoResponse(): Promise<string> {
+  try {
+    const candidates = await prisma.booking.findMany({
+      where: { status: 'DECLINED', cancelReason: null, autoDeclinedNoResponse: false, slot: { startTime: { gte: new Date() } } },
+      select: { id: true, requestedAt: true, decidedAt: true },
+    });
+    const toUpdate = candidates.filter(b => {
+      if (!b.decidedAt) return false;
+      const threeDaysAfterRequest = b.requestedAt.getTime() + 3 * 24 * 60 * 60 * 1000;
+      const delta = b.decidedAt.getTime() - threeDaysAfterRequest;
+      return delta >= 0 && delta <= 4 * 60 * 60 * 1000; // within 4h after the 3-day mark
+    });
+    if (toUpdate.length) {
+      await prisma.booking.updateMany({
+        where: { id: { in: toUpdate.map(b => b.id) } },
+        data: { autoDeclinedNoResponse: true },
+      });
+    }
+    return `Checked ${candidates.length} declined booking(s) still in the future with no reason on file — flagged ${toUpdate.length} as auto-declined-by-timeout, now eligible for "Request again".`;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 // --- One-off: find every rep account matching an email case-insensitively -
 // (duplicate case-variant signups aren't possible going forward, but a few
 // predate that protection) so it's clear which row actually has activity
