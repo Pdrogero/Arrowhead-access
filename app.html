@@ -4496,6 +4496,20 @@ function screenVisitHistory() {
     </div>`;
 }
 
+// Always evaluated in Eastern time regardless of the viewer's own device/
+// browser timezone, since that's where the business operates — a rep or
+// office logging in from any other timezone still gets a greeting that
+// matches the team's actual workday, not a technically-correct but
+// confusing one for their own locale. toLocaleString can report hour 24
+// for midnight in h23 mode on some engines, hence the % 24.
+function timeOfDayGreeting() {
+  const hourStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' });
+  const hour = Number(hourStr) % 24;
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 function officeHeaderHtml() {
   const me = state.me;
   const firstName = (me?.name || '').trim().split(' ')[0] || me?.email || 'there';
@@ -4508,7 +4522,7 @@ function officeHeaderHtml() {
         <span style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:var(--teal);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">📷</span>
       </div>
       <div>
-        <h1 style="margin-bottom:2px;cursor:pointer;" onclick="setState({screen:'officeSettings'})" title="Change profile photo">Hello, ${firstName}</h1>
+        <h1 style="margin-bottom:2px;cursor:pointer;" onclick="setState({screen:'officeSettings'})" title="Change profile photo">${timeOfDayGreeting()}, ${firstName}</h1>
         <p class="sub" style="margin:0;">${[me?.location?.name, me?.title || (me?.role === 'ADMIN' ? 'Admin' : 'Staff')].filter(Boolean).join(' · ')}</p>
       </div>
     </div>
@@ -4572,7 +4586,7 @@ function repHeaderHtml() {
         <span style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-radius:50%;background:var(--teal);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">📷</span>
       </div>
       <div>
-        <h1 style="margin-bottom:2px;cursor:pointer;" onclick="setState({screen:'profile'})" title="Change profile photo">Hello, ${firstName}</h1>
+        <h1 style="margin-bottom:2px;cursor:pointer;" onclick="setState({screen:'profile'})" title="Change profile photo">${timeOfDayGreeting()}, ${firstName}</h1>
         <p class="sub" style="margin:0;">${[me?.companyName, me?.title].filter(Boolean).join(' · ')}</p>
         <p style="font-size:13px;font-weight:600;margin:4px 0 0;color:${verified ? '#2D6F5E' : 'var(--slate)'};">${verified ? '✅ Verified Professional' : pending ? '⏳ verification pending' : '⏳ not verified'}</p>
       </div>
