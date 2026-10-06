@@ -6997,6 +6997,19 @@ function render() {
     }
     else setTimeout(() => alert('Checkout cancelled — no charge was made.'), 300);
   }
+
+  // Mirror whichever "← Back" button a screen already has at the bottom of
+  // its content too, so scrolling to the bottom of a long list/page doesn't
+  // mean scrolling all the way back up just to navigate away. Clones
+  // (rather than hardcoding a destination per screen) so it always matches
+  // the top one's label and behavior exactly, on every screen that has one.
+  const topBackBtn = [...app.querySelectorAll('button.link')].find(b => b.textContent.trim().startsWith('←'));
+  const wrapEl = app.querySelector('.wrap');
+  if (topBackBtn && wrapEl) {
+    const bottomBackBtn = topBackBtn.cloneNode(true);
+    bottomBackBtn.style.cssText += 'margin-top:28px;padding-top:16px;border-top:1px solid var(--line);';
+    wrapEl.appendChild(bottomBackBtn);
+  }
 }
 
 // Init
