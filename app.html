@@ -5717,7 +5717,9 @@ function renderMyBookingsBox() {
           ${(b.status === 'CANCELLED' || b.status === 'DECLINED') && b.cancelReason ? `<div style="font-size:11.5px;color:#991B1B;margin-top:4px;">Reason: ${b.cancelReason.replace(/</g, '&lt;')}</div>` : ''}
           ${b.status === 'DECLINED' && b.autoDeclinedNoResponse ? `<div style="font-size:11.5px;color:var(--slate);margin-top:4px;">The office didn't respond within 3 days, so this reopened for anyone to request.</div>` : ''}
         </div>
-        <span class="chip ${b.status}">${b.status}</span>
+        ${b.status === 'DECLINED' && b.autoDeclinedNoResponse
+          ? `<span class="chip" style="background:#FCF0DA;color:#7A4B0A;">REOPENED</span>`
+          : `<span class="chip ${b.status}">${b.status}</span>`}
         <div style="width:100%;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px;">
           <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="viewOfficeStaff('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}')">👥 Staff</button>
           <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${b.slot.location.id}', '${(b.slot.location.name || '').replace(/'/g, "\\'")}', '${eventMessageLabel(b.slot).replace(/'/g, "\\'")}')">💬 Message Office</button>
