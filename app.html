@@ -249,7 +249,6 @@ let recurringTemplates = [];
 let viewedOfficeStaff = null;
 let viewedOfficeStaffName = '';
 let viewedOfficeDetail = null; // null = loading, false = load failed
-let viewedOfficeDetailReturnScreen = 'dashboard';
 let viewedRepProfile = null;
 let viewedRepProfileName = '';
 let viewedRepProfileId = null;
@@ -3210,7 +3209,7 @@ function screenOfficeDetail() {
   const o = viewedOfficeDetail;
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:viewedOfficeDetailReturnScreen})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       ${o === null ? '<div class="empty">Loading…</div>' : o === false ? '<div class="msg err">Could not load this office.</div>' : `
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px;">
           <h1 style="margin-bottom:0;">${o.name}</h1>
@@ -3275,7 +3274,6 @@ async function loadOfficeDetailSlots(locationId) {
 
 window.viewOfficeDetail = async function(locationId) {
   viewedOfficeDetail = null;
-  if (state.screen !== 'officeDetail') viewedOfficeDetailReturnScreen = state.screen;
   setState({ screen: 'officeDetail' });
   try {
     viewedOfficeDetail = await api(`/api/locations/${locationId}/detail`);
@@ -3512,20 +3510,18 @@ let reviewListKind = null;
 let reviewListId = null;
 let reviewListTitle = '';
 let reviewListData = [];
-let reviewListReturnScreen = 'dashboard';
 
 window.openReviewList = function(kind, id, title) {
   reviewListKind = kind;
   reviewListId = id;
   reviewListTitle = title;
-  reviewListReturnScreen = state.screen;
   setState({ screen: 'reviewList' });
 };
 
 function screenReviewList() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:reviewListReturnScreen})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>${reviewListTitle}</h1>
       <p class="sub">${reviewListKind === 'rep' ? 'What offices have said' : 'What reps have said'}</p>
       <div id="reviewListBox" class="listcard"><div class="empty">Loading…</div></div>
