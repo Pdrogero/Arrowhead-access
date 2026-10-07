@@ -188,6 +188,11 @@ let selectedStaffProfileImage; // same idea, for the office side's own profile p
 const SPECIALTY_OPTIONS = ['PCP','Wound Care Specialists','Podiatry','Vascular Surgery','Plastic and Reconstructive Surgery','General Surgery','Home Health','Long-Term Care','Hospital Value Analysis','ASCs','Traveling Physicians','Medical Distributors','Orthopedic Surgery','Interventional Cardiology','Cardiology','Endocrinology','Infectious Disease','Dermatology','Emergency Medicine','Trauma Surgery','Physical Medicine and Rehabilitation (PM&R)','Internal Medicine','Family Medicine','Hospital Medicine','Geriatric Medicine','Colorectal Surgery','Cardiothoracic Surgery','Neurosurgery','Urology','OB/GYN','Gynecologic Surgery','ENT (Otolaryngology)','Oral and Maxillofacial Surgery','Pain Management','Sports Medicine','Rheumatology','Nephrology','Surgical Oncology','Medical Oncology','Radiation Oncology','Transplant Surgery','Hand Surgery','Ophthalmology','Interventional Radiology','Gastroenterology','Pulmonology','Critical Care Medicine','Anesthesiology','Pediatric Surgery'];
 let calendarMonth = new Date();
 let calendarBookings = [];
+// Visits this rep transferred away and the other rep accepted — once
+// accepted, the booking's ownership moves to them so it drops out of
+// calendarBookings entirely; these are tracked separately so the date
+// still shows something here instead of just going quietly blank.
+let calendarTransferredAway = [];
 let calendarSelectedDay = null;
 let calendarSearchQuery = '';
 // Set by clicking a past visit in the calendar to jump straight into Visit
@@ -2194,6 +2199,14 @@ function screenCalendar() {
       (bookingsByDay[day] = bookingsByDay[day] || []).push(b);
     }
   });
+  const transferredByDay = {};
+  calendarTransferredAway.forEach(t => {
+    const d = new Date(t.booking.slot.startTime);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      const day = d.getDate();
+      (transferredByDay[day] = transferredByDay[day] || []).push(t);
+    }
+  });
 
   const eventChipColors = { CONFIRMED: ['#E3F1EC', '#215947'], REQUESTED: ['#FCF0DA', '#7A4B0A'] };
   const maxChipsPerDay = 2;
@@ -2201,22 +2214,31 @@ function screenCalendar() {
   let cells = '';
   for (let i = 0; i < firstDay; i++) cells += `<div></div>`;
   for (let day = 1; day <= daysInMonth; day++) {
-    const has = bookingsByDay[day];
-    const chips = (has || []).slice(0, maxChipsPerDay).map(b => {
+    const dayTransfers = transferredByDay[day] || [];
+    const has = bookingsByDay[day] || [];
+    const allChips = has.map(b => {
       const [bg, fg] = eventChipColors[b.status] || ['#FBE7E7', '#8A2626'];
       const title = `${eventTypeLabel(b.slot.eventType)} — ${fmtTimeOnly(b.slot.startTime)} — ${b.slot.location.name}`.replace(/"/g, '&quot;');
       return `<div onclick="event.stopPropagation();viewOfficeDetail('${b.slot.location.id}')" title="${title}" style="background:${bg};color:${fg};border-radius:4px;padding:2px 4px;margin-top:2px;line-height:1.25;overflow:hidden;cursor:pointer;">
         <div style="font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${eventTypeLabel(b.slot.eventType)} · ${fmtTimeOnly(b.slot.startTime)}</div>
         <div style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${b.slot.location.name}</div>
       </div>`;
-    }).join('');
-    const overflow = (has || []).length > maxChipsPerDay ? `<div style="font-size:9.5px;color:var(--slate);margin-top:2px;">+${has.length - maxChipsPerDay} more</div>` : '';
-    cells += `<div onclick="selectCalendarDay(${day})" style="height:118px;border:1px solid var(--line);border-radius:8px;background:${has ? 'rgba(46,111,94,.06)' : '#fff'};font-size:13px;padding:5px;cursor:pointer;display:flex;flex-direction:column;overflow:hidden;">
+    }).concat(dayTransfers.map(t => {
+      const title = `${eventTypeLabel(t.booking.slot.eventType)} — ${fmtTimeOnly(t.booking.slot.startTime)} — Transferred to ${t.toRep ? t.toRep.name : t.toRepEmail}`.replace(/"/g, '&quot;');
+      return `<div onclick="event.stopPropagation();transfersTab='visits';setState({screen:'transfers'});" title="${title}" style="background:#EDEDED;color:var(--slate);border-radius:4px;padding:2px 4px;margin-top:2px;line-height:1.25;overflow:hidden;cursor:pointer;">
+        <div style="font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🔄 Transferred · ${fmtTimeOnly(t.booking.slot.startTime)}</div>
+        <div style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.booking.slot.location.name}</div>
+      </div>`;
+    }));
+    const chips = allChips.slice(0, maxChipsPerDay).join('');
+    const overflow = allChips.length > maxChipsPerDay ? `<div style="font-size:9.5px;color:var(--slate);margin-top:2px;">+${allChips.length - maxChipsPerDay} more</div>` : '';
+    cells += `<div onclick="selectCalendarDay(${day})" style="height:118px;border:1px solid var(--line);border-radius:8px;background:${allChips.length ? 'rgba(46,111,94,.06)' : '#fff'};font-size:13px;padding:5px;cursor:pointer;display:flex;flex-direction:column;overflow:hidden;">
       <span>${day}</span>${chips}${overflow}
     </div>`;
   }
 
   const dayBookings = calendarSelectedDay ? (bookingsByDay[calendarSelectedDay] || []) : [];
+  const dayTransferred = calendarSelectedDay ? (transferredByDay[calendarSelectedDay] || []) : [];
   const now = new Date();
 
   const query = calendarSearchQuery.trim().toLowerCase();
@@ -2252,6 +2274,7 @@ function screenCalendar() {
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#E3F1EC;border:1px solid #215947;display:inline-block;"></span>Confirmed</span>
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#FCF0DA;border:1px solid #7A4B0A;display:inline-block;"></span>Pending</span>
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#FBE7E7;border:1px solid #8A2626;display:inline-block;"></span>Declined/Cancelled</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#EDEDED;border:1px solid var(--slate);display:inline-block;"></span>Transferred away</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px;">
         ${['S','M','T','W','T','F','S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
@@ -2275,7 +2298,18 @@ function screenCalendar() {
               </div>
               <span class="chip ${b.status}">${b.status}</span>
             </div>`;
-          }).join('') : '<div class="empty">Nothing scheduled this day.</div>'}
+          }).join('') : ''}
+          ${dayTransferred.map(t => `
+            <div class="row" style="flex-wrap:wrap;">
+              <div class="time">${fmtTime(t.booking.slot.startTime)}</div>
+              <div class="mid">
+                <div class="who">${t.booking.slot.location.name}</div>
+                <div style="margin-top:4px;">${eventTypeChipHtml(t.booking.slot.eventType)}</div>
+                <div class="what">Transferred to ${t.toRep ? t.toRep.name : t.toRepEmail}</div>
+              </div>
+              <span class="chip" style="background:#EDEDED;color:var(--slate);">🔄 TRANSFERRED</span>
+            </div>`).join('')}
+          ${!dayBookings.length && !dayTransferred.length ? '<div class="empty">Nothing scheduled this day.</div>' : ''}
         </div>` : ''}
     </div>`;
 }
@@ -6087,6 +6121,8 @@ window.openCalendar = function() {
 async function loadCalendarBookings() {
   try {
     calendarBookings = await api('/api/bookings/calendar');
+    const outgoing = await api('/api/transfers/outgoing').catch(() => []);
+    calendarTransferredAway = outgoing.filter(t => t.status === 'ACCEPTED');
     render();
   } catch (err) {}
 }
@@ -6587,13 +6623,16 @@ window.copyCalendarLink = function(url) {
     .catch(() => alert('Could not copy automatically — tap the link field above and select the text instead.'));
 };
 
+let incomingTransfersData = [];
+
 async function loadTransfers() {
   const incomingBox = document.getElementById('incomingBox');
   const outgoingBox = document.getElementById('outgoingBox');
   try {
     const incoming = await api('/api/transfers/incoming');
+    incomingTransfersData = incoming;
     incomingBox.innerHTML = incoming.length ? incoming.map(t => `
-      <div class="row">
+      <div class="row" id="transferRow-${t.id}">
         <div class="time">${fmtTime(t.booking.slot.startTime)}</div>
         <div class="mid">
           <div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${t.booking.slot.location.id}')">${favoriteStarHtml(t.booking.slot.location.id)} ${t.booking.slot.location.name}</div>
@@ -6866,7 +6905,25 @@ window.respondToRepReschedule = async function(bookingId, decision) {
 window.decideTransfer = async function(id, decision) {
   try {
     await api('/api/transfers/' + id + '/decide', { method: 'POST', body: JSON.stringify({ decision }) });
-    loadTransfers();
+    if (decision === 'accept') {
+      // Swap this row for a confirmation + calendar prompt instead of just
+      // reloading it away — it's now a confirmed visit on their calendar,
+      // so this is the moment to actually suggest adding it to their own.
+      const t = incomingTransfersData.find(x => x.id === id);
+      const row = document.getElementById(`transferRow-${id}`);
+      if (t && row) {
+        row.innerHTML = `
+          <div class="mid" style="width:100%;">
+            <div class="who">✅ Accepted — ${t.booking.slot.location.name}</div>
+            <div class="what" style="margin-bottom:6px;">Want to add it to your own calendar?</div>
+            ${addToCalendarMenuHtml('transferAccepted-' + id, t.booking.slot.startTime, t.booking.slot.endTime, eventTypeLabel(t.booking.slot.eventType) + ' — ' + (t.booking.slot.location.name || ''), t.booking.slot.location.address || '')}
+          </div>`;
+      } else {
+        loadTransfers();
+      }
+    } else {
+      loadTransfers();
+    }
   } catch (err) {
     alert(err.message);
   }
