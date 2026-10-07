@@ -3703,7 +3703,7 @@ function screenConversation() {
   return `
     <div class="wrap">
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to messages</button>
-      <h1>${activeConversationCounterpart}</h1>
+      <h1 style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);" onclick="${state.role === 'rep' ? `viewOfficeDetail('${activeConversationTargetId}')` : `viewRepProfile('${activeConversationTargetId}', '${activeConversationCounterpart.replace(/'/g, "\\'")}')`}" title="View ${state.role === 'rep' ? 'office' : 'rep'} profile">${activeConversationCounterpart}</h1>
       <div id="messagesBox" class="listcard" style="margin-bottom:12px;max-height:400px;overflow-y:auto;"><div class="empty">Loading…</div></div>
       ${activeConversationEventLabel ? `
         <div style="display:flex;align-items:center;gap:8px;background:#FFF8F0;border:1px solid #F0D9B5;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
