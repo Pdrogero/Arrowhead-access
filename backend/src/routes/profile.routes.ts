@@ -320,19 +320,41 @@ router.post('/invite-rep', requireAuth, requireRole('office_admin', 'office_staf
   }
 });
 
-// --- Office staff: view a rep's profile — only for reps who've actually ---
-// booked at this location, so it's not a way to browse the whole rep list.
-router.get('/rep/:repId', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+// --- View a rep's profile ---------------------------------------------
+// Office staff can view any rep who's booked at their location or been
+// saved to My Reps (so it's not a way to browse the whole rep list); a rep
+// can view another rep's profile only when there's a teammate connection
+// between them — a pending invite either direction, or already-accepted
+// teammates — covering every place a rep's name links here (My Teammates,
+// an invite they received, an invite they sent to someone already signed up).
+router.get('/rep/:repId', requireAuth, requireRole('office_admin', 'office_staff', 'rep'), async (req, res) => {
   try {
-    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
-    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+    let isSaved: unknown = null;
 
-    const [hasBookedHere, isSaved] = await Promise.all([
-      prisma.booking.findFirst({ where: { repId: req.params.repId, slot: { locationId: staff.locationId } } }),
-      prisma.savedRep.findUnique({ where: { repId_locationId: { repId: req.params.repId, locationId: staff.locationId } } }),
-    ]);
-    if (!hasBookedHere && !isSaved) {
-      return res.status(403).json({ error: 'You can only view profiles for reps who have booked at your location or been saved to My Reps' });
+    if (req.user!.role === 'rep') {
+      const connection = await prisma.teammateInvite.findFirst({
+        where: {
+          OR: [
+            { fromRepId: req.user!.sub, toRepId: req.params.repId },
+            { fromRepId: req.params.repId, toRepId: req.user!.sub },
+          ],
+        },
+      });
+      if (!connection) {
+        return res.status(403).json({ error: "You can only view profiles for your teammates or pending teammate invites" });
+      }
+    } else {
+      const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+      if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+      const [hasBookedHere, savedRep] = await Promise.all([
+        prisma.booking.findFirst({ where: { repId: req.params.repId, slot: { locationId: staff.locationId } } }),
+        prisma.savedRep.findUnique({ where: { repId_locationId: { repId: req.params.repId, locationId: staff.locationId } } }),
+      ]);
+      if (!hasBookedHere && !savedRep) {
+        return res.status(403).json({ error: 'You can only view profiles for reps who have booked at your location or been saved to My Reps' });
+      }
+      isSaved = savedRep;
     }
 
     const rep = await prisma.rep.findUnique({
