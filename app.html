@@ -1577,6 +1577,16 @@ function repNameLinkHtml(rep) {
   return `${repFavoriteStarHtml(rep.id)}<span onclick="event.stopPropagation();viewRepProfile('${rep.id}','${safeName}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);">${label}</span>`;
 }
 
+// Same clickable-name-to-profile pattern as repNameLinkHtml, for a rep
+// looking at another rep (a teammate or invite under Transfers → My Team)
+// rather than an office looking at a rep — no favorite star, since
+// favoriting a rep is an office-only action.
+function teammateNameLinkHtml(rep) {
+  if (!rep) return '';
+  const safeName = (rep.name || '').replace(/'/g, "\\'");
+  return `<span onclick="event.stopPropagation();viewRepProfile('${rep.id}','${safeName}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);">${rep.name}</span>`;
+}
+
 // Shared inline "suggest a new time?" form shown after a cancel reason has
 // been given, on both the office side (cancelOfficeBooking/finalizeCancelOfficeBooking)
 // and the rep side (cancelRepBooking/finalizeCancelRepBooking).
@@ -6662,7 +6672,7 @@ function renderTeamBox() {
     box.innerHTML = teammatesData.length ? teammatesData.map(r => `
       <div class="row">
         <div class="mid">
-          <div class="who">${r.name}</div>
+          <div class="who">${teammateNameLinkHtml(r)}</div>
           <div class="what">${r.companyName}${r.title ? ` · ${r.title}` : ''}</div>
         </div>
       </div>`).join('') : '<div class="empty">You have no teammates. Try Suggested Teammates or wait for an invite.</div>';
@@ -6704,7 +6714,7 @@ function renderTeamBox() {
     const invitesListHtml = teamInvitesData.length ? teamInvitesData.map(inv => `
       <div class="row">
         <div class="mid">
-          <div class="who">${inv.fromRep.name}</div>
+          <div class="who">${teammateNameLinkHtml(inv.fromRep)}</div>
           <div class="what">${inv.fromRep.companyName}${inv.fromRep.title ? ` · ${inv.fromRep.title}` : ''}</div>
         </div>
         <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="respondToTeammateInvite('${inv.id}','accept')">✓ Accept</button>
@@ -6720,7 +6730,7 @@ function renderTeamBox() {
         return `
         <div class="row" style="flex-wrap:wrap;">
           <div class="mid">
-            <div class="who">${who}</div>
+            <div class="who">${inv.toRep ? teammateNameLinkHtml(inv.toRep) : who}</div>
             <div class="what">${inv.toRep ? [inv.toRep.companyName, inv.toRep.title].filter(Boolean).join(' · ') : 'Not signed up yet'}</div>
           </div>
           <span class="chip PENDING">PENDING</span>
