@@ -1548,7 +1548,7 @@ function eventTypeLabel(t) {
 // other months, not just when today's actual date is on screen.
 function calendarWeekdayHeaderHtml() {
   const todayWeekday = new Date().getDay();
-  return ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => `<div style="text-align:center;font-size:11px;font-family:'IBM Plex Mono',monospace;${i === todayWeekday ? 'font-weight:700;color:var(--teal);' : 'color:var(--slate);'}">${d}</div>`).join('');
+  return ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => `<div style="text-align:center;font-size:14px;font-family:'IBM Plex Mono',monospace;padding:3px 0;border-radius:6px;${i === todayWeekday ? 'font-weight:700;color:var(--teal);border:2px solid var(--teal);' : 'color:var(--slate);border:2px solid transparent;'}">${d}</div>`).join('');
 }
 
 function eventTypeChipHtml(t) {
