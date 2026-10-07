@@ -2210,6 +2210,7 @@ function screenCalendar() {
 
   const eventChipColors = { CONFIRMED: ['#E3F1EC', '#215947'], REQUESTED: ['#FCF0DA', '#7A4B0A'] };
   const maxChipsPerDay = 2;
+  const now = new Date();
 
   let cells = '';
   for (let i = 0; i < firstDay; i++) cells += `<div></div>`;
@@ -2218,10 +2219,12 @@ function screenCalendar() {
     const has = bookingsByDay[day] || [];
     const allChips = has.map(b => {
       const [bg, fg] = eventChipColors[b.status] || ['#FBE7E7', '#8A2626'];
-      const title = `${eventTypeLabel(b.slot.eventType)} — ${fmtTimeOnly(b.slot.startTime)} — ${b.slot.location.name}`.replace(/"/g, '&quot;');
+      const completed = b.status === 'CONFIRMED' && new Date(b.slot.endTime || b.slot.startTime) < now;
+      const strike = completed ? 'text-decoration:line-through;' : '';
+      const title = `${eventTypeLabel(b.slot.eventType)} — ${fmtTimeOnly(b.slot.startTime)} — ${b.slot.location.name}${completed ? ' (completed)' : ''}`.replace(/"/g, '&quot;');
       return `<div onclick="event.stopPropagation();viewOfficeDetail('${b.slot.location.id}')" title="${title}" style="background:${bg};color:${fg};border-radius:4px;padding:2px 4px;margin-top:2px;line-height:1.25;overflow:hidden;cursor:pointer;">
-        <div style="font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${eventTypeLabel(b.slot.eventType)} · ${fmtTimeOnly(b.slot.startTime)}</div>
-        <div style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${b.slot.location.name}</div>
+        <div style="font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${strike}">${eventTypeLabel(b.slot.eventType)} · ${fmtTimeOnly(b.slot.startTime)}</div>
+        <div style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${strike}">${b.slot.location.name}</div>
       </div>`;
     }).concat(dayTransfers.map(t => {
       const title = `${eventTypeLabel(t.booking.slot.eventType)} — ${fmtTimeOnly(t.booking.slot.startTime)} — Transferred to ${t.toRep ? t.toRep.name : t.toRepEmail}`.replace(/"/g, '&quot;');
@@ -2239,7 +2242,6 @@ function screenCalendar() {
 
   const dayBookings = calendarSelectedDay ? (bookingsByDay[calendarSelectedDay] || []) : [];
   const dayTransferred = calendarSelectedDay ? (transferredByDay[calendarSelectedDay] || []) : [];
-  const now = new Date();
 
   const query = calendarSearchQuery.trim().toLowerCase();
   const searchMatches = query
@@ -2285,11 +2287,12 @@ function screenCalendar() {
         <div class="listcard">
           ${dayBookings.length ? dayBookings.map(b => {
             const isPast = new Date(b.slot.endTime || b.slot.startTime) < now;
+            const completed = isPast && b.status === 'CONFIRMED';
             return `
             <div class="row" style="flex-wrap:wrap;">
               <div class="time">${fmtTime(b.slot.startTime)}</div>
               <div class="mid"${isPast ? ` style="cursor:pointer;" onclick="goToVisitHistoryFor('${(b.slot.location.name || '').replace(/'/g, "\\'")}')"` : ''}>
-                <div class="who">${b.slot.location.name}</div>
+                <div class="who"${completed ? ' style="text-decoration:line-through;color:var(--slate);"' : ''}>${b.slot.location.name}</div>
                 <div style="margin-top:4px;">${eventTypeChipHtml(b.slot.eventType)}</div>
                 <div class="what">${addressLinkHtml(b.slot.location.address)}</div>
                 ${isPast ? `<div style="font-size:11px;color:var(--teal);margin-top:2px;">Tap for visit history &amp; office info →</div>` : ''}
