@@ -267,11 +267,14 @@ router.post('/invites/:id/respond', requireAuth, requireRole('rep'), async (req,
 
     // toRepId was already confirmed to match the authenticated caller above,
     // so toRep is guaranteed to be populated here.
-    if (decision === 'ACCEPTED' && updated.toRep) {
+    if (updated.toRep) {
+      const accepted = decision === 'ACCEPTED';
       sendEmail({
         to: updated.fromRep.email,
-        subject: `${updated.toRep.name} accepted your teammate invite`,
-        html: `${emailLogoHeader()}<p><strong>${updated.toRep.name}</strong> accepted your invite to connect as teammates on Arrowhead Access.</p>`,
+        subject: accepted ? `${updated.toRep.name} accepted your teammate invite` : `${updated.toRep.name} declined your teammate invite`,
+        html: accepted
+          ? `${emailLogoHeader()}<p><strong>${updated.toRep.name}</strong> accepted your invite to connect as teammates on Arrowhead Access.</p>`
+          : `${emailLogoHeader()}<p><strong>${updated.toRep.name}</strong> declined your invite to connect as teammates on Arrowhead Access.</p>`,
       }).catch(() => {});
     }
 
