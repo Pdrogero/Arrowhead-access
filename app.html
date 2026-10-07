@@ -1543,6 +1543,18 @@ function eventTypeChipHtml(t) {
   return `<span class="chip" style="background:${c.bg};color:${c.color};">${eventTypeLabel(t)}</span>`;
 }
 
+// Shared Approve/Decline buttons for a REQUESTED booking — every screen
+// that can show a pending request (ledger, calendar day-view, dashboard's
+// pending-requests box) renders this instead of its own copy, so adding or
+// changing the decision action only has to happen in one place. (A screen
+// missing this entirely was the bug reported for Dermatology Associates of
+// Tallahassee — the calendar view had no way to approve a pending request.)
+function requestDecisionButtonsHtml(bookingId) {
+  return `
+    <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${bookingId}','approve')">✓ Approve</button>
+    <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${bookingId}','decline')">✕ Decline</button>`;
+}
+
 // Short plain-text label identifying a specific visit (e.g. "Lunch — Sep
 // 15, 12:00 PM"), used to tag a message as being about that visit.
 function eventMessageLabel(slot) {
@@ -2358,10 +2370,7 @@ function screenOfficeCalendar() {
                 ${(s.booking.status === 'CONFIRMED' || s.booking.status === 'REQUESTED') ? addToCalendarMenuHtml('officecal-' + s.id, s.startTime, s.endTime, eventTypeLabel(s.eventType) + ' — ' + (s.booking.rep.name || '') + (s.booking.rep.companyName ? ' (' + s.booking.rep.companyName + ')' : ''), '') : ''}
               </div>
               <span class="chip ${s.booking.status}">${s.booking.status}</span>
-              ${s.booking.status === 'REQUESTED' ? `
-                <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','approve')">✓ Approve</button>
-                <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
-              ` : ''}
+              ${s.booking.status === 'REQUESTED' ? requestDecisionButtonsHtml(s.booking.id) : ''}
               ${s.booking.status === 'CONFIRMED' && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Cancel this visit</button>` : ''}
               ${officeCancelDraft && officeCancelDraft.bookingId === s.booking.id ? cancelSuggestFormHtml(officeCancelDraft.repName, 'finalizeCancelOfficeBooking') : ''}
             </div>`).join('') : ''}
@@ -5587,8 +5596,7 @@ function renderPendingRequestsBox(slots) {
               <div class="who">${repNameLinkHtml(s.booking.rep)}</div>
               <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
             </div>
-            <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','approve')">✓ Approve</button>
-            <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
+            ${requestDecisionButtonsHtml(s.booking.id)}
           </div>`).join('')}
       </div>` : ''}`;
 }
@@ -5613,10 +5621,7 @@ function renderLedgerRowHtml(s, repRatings) {
           ${lunchDetailsSummaryHtml(s)}
         </div>
         ${s.eventType === 'OFFICE_CLOSED' ? '' : `<span class="chip ${s.status}">${s.status}</span>`}
-        ${s.status === 'REQUESTED' && s.booking ? `
-          <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','approve')">✓ Approve</button>
-          <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
-        ` : ''}
+        ${s.status === 'REQUESTED' && s.booking ? requestDecisionButtonsHtml(s.booking.id) : ''}
         ${s.status === 'CONFIRMED' && s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="openReviewVisit('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}')">⭐ Rate rep</button>` : ''}
         ${s.booking?.rep ? `<button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="startConversation('${s.booking.rep.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${eventMessageLabel(s).replace(/'/g, "\\'")}')">💬 Message</button>` : ''}
         ${s.status === 'OPEN' ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="removeOpenSlot('${s.id}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Remove</button>` : ''}
