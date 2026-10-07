@@ -2358,6 +2358,10 @@ function screenOfficeCalendar() {
                 ${(s.booking.status === 'CONFIRMED' || s.booking.status === 'REQUESTED') ? addToCalendarMenuHtml('officecal-' + s.id, s.startTime, s.endTime, eventTypeLabel(s.eventType) + ' — ' + (s.booking.rep.name || '') + (s.booking.rep.companyName ? ' (' + s.booking.rep.companyName + ')' : ''), '') : ''}
               </div>
               <span class="chip ${s.booking.status}">${s.booking.status}</span>
+              ${s.booking.status === 'REQUESTED' ? `
+                <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','approve')">✓ Approve</button>
+                <button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="decide('${s.booking.id}','decline')">✕ Decline</button>
+              ` : ''}
               ${s.booking.status === 'CONFIRMED' && !(officeCancelDraft && officeCancelDraft.bookingId === s.booking.id) ? `<button style="background:#FDEAEA;color:#C23C3C;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="cancelOfficeBooking('${s.booking.id}', '${(s.booking.rep.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">🗑 Cancel this visit</button>` : ''}
               ${officeCancelDraft && officeCancelDraft.bookingId === s.booking.id ? cancelSuggestFormHtml(officeCancelDraft.repName, 'finalizeCancelOfficeBooking') : ''}
             </div>`).join('') : ''}
@@ -6911,7 +6915,8 @@ window.decide = async function(id, decision) {
   }
   try {
     await api('/api/bookings/' + id + '/decide', { method: 'POST', body: JSON.stringify({ decision, reason }) });
-    loadOfficeLedger();
+    if (state.screen === 'officeCalendar') loadOfficeCalendarBookings();
+    else loadOfficeLedger();
   } catch (err) {
     alert(err.message);
   }
