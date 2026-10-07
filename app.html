@@ -2242,10 +2242,11 @@ function screenCalendar() {
         <div style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.booking.slot.location.name}</div>
       </div>`;
     }));
+    const isToday = day === now.getDate() && month === now.getMonth() && year === now.getFullYear();
     const chips = allChips.slice(0, maxChipsPerDay).join('');
     const overflow = allChips.length > maxChipsPerDay ? `<div style="font-size:9.5px;color:var(--slate);margin-top:2px;">+${allChips.length - maxChipsPerDay} more</div>` : '';
-    cells += `<div onclick="selectCalendarDay(${day})" style="height:118px;border:1px solid var(--line);border-radius:8px;background:${allChips.length ? 'rgba(46,111,94,.06)' : '#fff'};font-size:13px;padding:5px;cursor:pointer;display:flex;flex-direction:column;overflow:hidden;">
-      <span>${day}</span>${chips}${overflow}
+    cells += `<div onclick="selectCalendarDay(${day})" style="height:118px;border:${isToday ? '2px solid var(--teal)' : '1px solid var(--line)'};border-radius:8px;background:${allChips.length ? 'rgba(46,111,94,.06)' : '#fff'};font-size:13px;padding:${isToday ? '4px' : '5px'};cursor:pointer;display:flex;flex-direction:column;overflow:hidden;">
+      <span${isToday ? ' style="font-weight:800;"' : ''}>${day}</span>${chips}${overflow}
     </div>`;
   }
 
@@ -2332,6 +2333,7 @@ function screenOfficeCalendar() {
   const monthLabel = officeCalendarMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' });
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const now = new Date();
 
   const scheduled = officeCalendarSlots.filter(s => s.booking && ['REQUESTED', 'CONFIRMED'].includes(s.booking.status));
   const slotsByDay = {};
@@ -2378,8 +2380,10 @@ function screenOfficeCalendar() {
     const chips = allChips.slice(0, maxChipsPerDay).join('');
     const overflow = allChips.length > maxChipsPerDay ? `<div style="font-size:9.5px;color:var(--slate);margin-top:2px;">+${allChips.length - maxChipsPerDay} more</div>` : '';
     const isSelected = day === officeCalendarSelectedDay;
-    cells += `<div onclick="selectOfficeCalendarDay(${day})" style="height:118px;border:${isSelected ? '2px solid var(--teal)' : '1px solid var(--line)'};border-radius:8px;background:${isSelected ? 'rgba(27,42,78,.08)' : (has ? 'rgba(46,111,94,.06)' : '#fff')};font-size:13px;padding:${isSelected ? '4px' : '5px'};cursor:pointer;display:flex;flex-direction:column;overflow:hidden;">
-      <span style="${isSelected ? 'font-weight:800;' : ''}">${day}</span>${chips}${overflow}
+    const isToday = day === now.getDate() && month === now.getMonth() && year === now.getFullYear();
+    const emphasized = isSelected || isToday;
+    cells += `<div onclick="selectOfficeCalendarDay(${day})" style="height:118px;border:${emphasized ? '2px solid var(--teal)' : '1px solid var(--line)'};border-radius:8px;background:${isSelected ? 'rgba(27,42,78,.08)' : (has ? 'rgba(46,111,94,.06)' : '#fff')};font-size:13px;padding:${emphasized ? '4px' : '5px'};cursor:pointer;display:flex;flex-direction:column;overflow:hidden;">
+      <span style="${emphasized ? 'font-weight:800;' : ''}">${day}</span>${chips}${overflow}
     </div>`;
   }
 
