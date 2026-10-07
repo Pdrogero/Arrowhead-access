@@ -6599,7 +6599,7 @@ async function loadTransfers() {
       <div class="row">
         <div class="time">${fmtTime(t.booking.slot.startTime)}</div>
         <div class="mid">
-          <div class="who">${t.booking.slot.location.name}</div>
+          <div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${t.booking.slot.location.id}')">${favoriteStarHtml(t.booking.slot.location.id)} ${t.booking.slot.location.name}</div>
           <div class="what">from ${t.fromRep.name} · ${t.fromRep.companyName}</div>
         </div>
         <button style="background:#E8F5E9;color:#2D6F5E;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;" onclick="decideTransfer('${t.id}','accept')">✓ Accept</button>
@@ -6615,7 +6615,7 @@ async function loadTransfers() {
       <div class="row">
         <div class="time">${fmtTime(t.booking.slot.startTime)}</div>
         <div class="mid">
-          <div class="who">${t.booking.slot.location.name}</div>
+          <div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${t.booking.slot.location.id}')">${favoriteStarHtml(t.booking.slot.location.id)} ${t.booking.slot.location.name}</div>
           <div class="what">${t.toRep ? `to ${t.toRep.name} · ${t.toRep.companyName}` : `to ${t.toRepEmail} — not signed up yet, invited by email`}</div>
         </div>
         <span class="chip ${t.status}">${t.status}</span>
