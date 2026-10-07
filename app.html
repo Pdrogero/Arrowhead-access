@@ -310,7 +310,29 @@ async function api(path, options = {}) {
   return res.json();
 }
 
-function setState(updates) { Object.assign(state, updates); render(); }
+// Stack of screens navigated away from, so the generic goBack() below can
+// return to wherever the user actually came from (office detail → Staff →
+// back, conversation → back, etc.) instead of every "← Back" button
+// hardcoding a single fixed destination regardless of entry point.
+let screenHistory = [];
+function setState(updates) {
+  if (updates.screen !== undefined && updates.screen !== state.screen) {
+    screenHistory.push(state.screen);
+    if (screenHistory.length > 30) screenHistory.shift();
+  }
+  Object.assign(state, updates);
+  render();
+}
+// Pops the history stack directly (bypassing setState's own push above, or
+// "back" would just bounce between the last two screens instead of
+// actually walking back further on repeated taps) and falls back to the
+// dashboard for a screen with nothing behind it (e.g. opened via a direct
+// link, or the history cap was hit).
+window.goBack = function() {
+  const prev = screenHistory.pop();
+  state.screen = prev || 'dashboard';
+  render();
+};
 // Tracks the last screen actually rendered so `render()` can tell a real
 // navigation (login landing on the dashboard, clicking into a sub-screen)
 // apart from an in-place re-render triggered by the same screen's own state
@@ -322,6 +344,7 @@ function logout() {
   localStorage.removeItem('token');
   favoriteLocationIds = new Set();
   favoriteOfficesData = null;
+  screenHistory = [];
   setState({ screen: 'role', role: null, me: null });
 }
 function goHome() {
@@ -793,7 +816,7 @@ function screenSignup() {
 function screenProfile() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>Complete your profile</h1>
       <p class="sub">Help offices know who they're meeting with. You can skip this and fill it in later.</p>
 
@@ -942,7 +965,7 @@ const SUPPORT_CATEGORY_OPTIONS = [
 function screenContactSupport() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>Contact Support</h1>
       <p class="sub">Have a question or run into an issue? Send us a message and we'll get back to you by email.</p>
       <div class="card">
@@ -982,7 +1005,7 @@ window.submitSupportRequest = async function() {
 function screenAccountSettings() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>Account Settings</h1>
       <p class="sub">Change the password for your account.</p>
       <div class="card">
@@ -1097,7 +1120,7 @@ window.saveAllAccountSettings = async function() {
 function screenOfficeSettings() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>Office Settings</h1>
       <p class="sub">Manage your account, team, and locations.</p>
 
@@ -1193,7 +1216,7 @@ function screenOfficeSettings() {
 function screenPostSlot() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>Post an open slot</h1>
       <p class="sub">Let sales reps know when you're available for a visit.</p>
       <div class="card">
@@ -1288,7 +1311,7 @@ function screenPostSlot() {
 function screenBrowseSlots() {
   return `
     <div class="wrap wide">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to bookings</button>
       <h1>Available slots</h1>
       <p class="sub">Browse and claim open visits across all offices.</p>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -2185,7 +2208,7 @@ function screenCalendar() {
 
   return `
     <div class="wrap wide">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to bookings</button>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeCalendarMonth(-1)">‹</button>
         <h1 style="margin:0;">${monthLabel}</h1>
@@ -2298,7 +2321,7 @@ function screenOfficeCalendar() {
 
   return `
     <div class="wrap wide">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to bookings</button>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <button class="link" style="width:auto;margin:0;font-size:26px;font-weight:800;line-height:1;" onclick="changeOfficeCalendarMonth(-1)">‹</button>
         <h1 style="margin:0;">${monthLabel}</h1>
@@ -2361,7 +2384,7 @@ function screenOfficeCalendar() {
 function screenAttendance() {
   return `
     <div class="wrap">
-      <button class="link no-print" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <button class="link no-print" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to bookings</button>
       <h1 class="no-print">Visit attendance</h1>
       <p class="sub no-print">${attendanceLocationName} — ${attendanceDateStr}</p>
       <p class="no-print" style="font-size:12px;color:var(--slate);margin-bottom:16px;">Check off everyone who attended, for your own expense report. NPI is optional.</p>
@@ -2967,7 +2990,7 @@ window.saveEmployees = async function(silent) {
 function screenOfficeStaff() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to bookings</button>
       <h1>${viewedOfficeStaffName}</h1>
       <p class="sub">Team members this office has listed.</p>
       <div class="listcard">
@@ -2993,7 +3016,7 @@ window.viewOfficeStaff = async function(locationId, locationName) {
 function screenRepsDirectory() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to bookings</button>
       <h1>Reps</h1>
       <p class="sub">Reps who have booked a visit at your location. Click on a rep's name to view their profile, schedule a visit, or send them a message.</p>
       <input id="repsDirectorySearch" type="text" placeholder="Search by name or company…" style="margin-bottom:12px;" oninput="renderRepsDirectory()">
@@ -3248,7 +3271,7 @@ function screenRepProfileView() {
   const rep = viewedRepProfile;
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to bookings</button>
       ${rep === null ? '<div class="empty">Loading…</div>' : rep === false ? `<div class="msg err">Could not load ${viewedRepProfileName}'s profile.</div>` : `
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
           ${rep.profileImageUrl
@@ -3394,7 +3417,7 @@ window.submitScheduleRep = async function() {
 function screenReviewVisit() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>Rate this visit</h1>
       <p class="sub">${reviewCounterpartName}</p>
       <div class="card">
@@ -3520,7 +3543,7 @@ async function fetchRatingAverages(ids, kind) {
 function screenMessages() {
   return `
     <div class="wrap wide">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>Messages</h1>
       <input id="conversationSearchInput" type="text" placeholder="${state.role === 'rep' ? '🔍 Search by office name…' : '🔍 Search by rep name…'}" oninput="filterConversations(this.value)" style="width:100%;margin-bottom:14px;">
       <div id="conversationsBox" class="listcard"><div class="empty">Loading…</div></div>
@@ -3679,7 +3702,7 @@ window.startConversation = async function(targetId, counterpart, eventLabel) {
 function screenConversation() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'messages'})">&larr; Back to messages</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to messages</button>
       <h1>${activeConversationCounterpart}</h1>
       <div id="messagesBox" class="listcard" style="margin-bottom:12px;max-height:400px;overflow-y:auto;"><div class="empty">Loading…</div></div>
       ${activeConversationEventLabel ? `
@@ -3891,7 +3914,7 @@ function screenLiterature() {
   const isOffice = state.role === 'office';
   return `
     <div class="wrap wide">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>Literature & Samples</h1>
       ${!isOffice ? `
         <p class="sub">Send literature or sample info to an office you've visited before.</p>
@@ -3928,7 +3951,7 @@ function screenLiterature() {
 function screenMaterials() {
   return `
     <div class="wrap wide">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>Marketing Materials</h1>
       <p class="sub">Upload brochures, case studies, and product sheets once — then pick from them anytime you send literature to an office.</p>
       <div class="note" style="margin-bottom:16px;">This page is just for uploading and storing your materials. To actually send something to a customer, go back to the <strong>Literature</strong> tab and pick from your saved materials there.</div>
@@ -3947,7 +3970,7 @@ function screenIdVerification() {
   const req = idVerificationRequest;
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to bookings</button>
       <h1>Verify your identity</h1>
       <p class="sub">We couldn't automatically verify your account from your email address, so we review a photo of your company ID or badge by hand instead.</p>
       <div class="card" id="idVerificationCard">
@@ -4453,7 +4476,7 @@ function teamSubTabButtonHtml(tab, label) {
 function screenTransfers() {
   return `
     <div class="wrap wide">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to bookings</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to bookings</button>
       <h1>Transfers</h1>
       <div style="display:flex;border-bottom:1px solid var(--line);margin-bottom:20px;">
         ${transfersTabButtonHtml('visits', 'Visit Transfers')}
@@ -4487,7 +4510,7 @@ function screenVisitHistory() {
   visitHistorySearchPrefill = '';
   return `
     <div class="wrap wide">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back to dashboard</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to dashboard</button>
       <h1>Visit History</h1>
       <p class="sub">Past visits, including lunches that were scheduled and carried out.</p>
       <input id="historySearchInput" type="text" placeholder="${state.role === 'office' ? '🔍 Search by rep name…' : '🔍 Search by office name…'}" value="${prefill.replace(/"/g, '&quot;')}" oninput="filterHistorySearch(this.value)" style="width:100%;margin-bottom:14px;">
@@ -4964,7 +4987,7 @@ async function initProfileScreen() {
 function screenFavoriteOffices() {
   return `
     <div class="wrap">
-      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="setState({screen:'dashboard'})">&larr; Back</button>
+      <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back</button>
       <h1>⭐ Favorite Offices</h1>
       <p class="sub">Offices you've starred while browsing — kept here for quick access.</p>
       <div style="position:relative;margin-bottom:16px;">
