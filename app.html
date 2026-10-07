@@ -1542,6 +1542,15 @@ function eventTypeLabel(t) {
   return EVENT_TYPE_LABELS[t] || t;
 }
 
+// The S/M/T/W/T/F/S header row shared by every month-grid calendar (rep,
+// office, browse slots) — bolds and colors whichever column is today's
+// weekday, so it's easy to spot that column at a glance while browsing
+// other months, not just when today's actual date is on screen.
+function calendarWeekdayHeaderHtml() {
+  const todayWeekday = new Date().getDay();
+  return ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => `<div style="text-align:center;font-size:11px;font-family:'IBM Plex Mono',monospace;${i === todayWeekday ? 'font-weight:700;color:var(--teal);' : 'color:var(--slate);'}">${d}</div>`).join('');
+}
+
 function eventTypeChipHtml(t) {
   const c = EVENT_TYPE_COLORS[t] || { bg: 'var(--paper)', color: 'var(--slate)' };
   return `<span class="chip" style="background:${c.bg};color:${c.color};">${eventTypeLabel(t)}</span>`;
@@ -2279,7 +2288,7 @@ function screenCalendar() {
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#EDEDED;border:1px solid var(--slate);display:inline-block;"></span>Transferred away</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px;">
-        ${['S','M','T','W','T','F','S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
+        ${calendarWeekdayHeaderHtml()}
         ${cells}
       </div>
       ${calendarSelectedDay ? `
@@ -2401,7 +2410,7 @@ function screenOfficeCalendar() {
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#EAF2FB;border:1px solid #2B5A8C;display:inline-block;"></span>Invited, awaiting signup</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px;">
-        ${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div style="text-align:center;font-size:11px;color:var(--slate);font-family:'IBM Plex Mono',monospace;">${d}</div>`).join('')}
+        ${calendarWeekdayHeaderHtml()}
         ${cells}
       </div>
       ${officeCalendarSelectedDay ? `
