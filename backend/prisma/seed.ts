@@ -36,6 +36,15 @@ const CATALOG: Record<string, string[]> = {
   'BioStem Technologies': [],
   'Tela Bio': [],
   'Zimmer Biomet': [],
+  // Dental
+  'Dentsply Sirona': [],
+  'Envista Holdings': [],
+  'Straumann Group': [],
+  'Align Technology': [],
+  // Pain management
+  'Avanos Medical': [],
+  'Nevro Corp': [],
+  'Pacira BioSciences': [],
 };
 
 // Verified corporate email domains for the manufacturers above — a rep
