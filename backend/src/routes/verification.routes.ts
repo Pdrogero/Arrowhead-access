@@ -219,33 +219,51 @@ router.get('/review', async (req, res) => {
   }
 });
 
-// --- Daily check: nudge reps who are still unverified two days after -------
-// signup, called by an external scheduled trigger. Guarded by the same
-// shared cron secret as the other daily reminder checks.
-const UNVERIFIED_REMINDER_DELAY_MS = 2 * 24 * 60 * 60 * 1000;
+// --- Daily check: nudge reps who are still unverified, called by an -------
+// external scheduled trigger. Guarded by the same shared cron secret as
+// the other daily reminder checks. Two stages, same pattern as the
+// multi-threshold renewal-reminder check: a first nudge at day 2, and a
+// second, firmer one at day 5 if they're still unverified by then.
+const UNVERIFIED_REMINDER_STAGES: Array<{ delayDays: number; field: 'unverifiedReminder2dSent' | 'unverifiedReminder5dSent'; html: (name: string) => string }> = [
+  {
+    delayDays: 2,
+    field: 'unverifiedReminder2dSent',
+    html: (name) => `<p>Hi ${name},</p><p>Your Arrowhead Access account is still unverified — we couldn't automatically confirm it from your email address, so booking is on hold until you upload a quick photo of your company ID or badge. It only takes a minute, and our team usually reviews it within a business day.</p>${emailLoginButton('Upload ID to get verified')}`,
+  },
+  {
+    delayDays: 5,
+    field: 'unverifiedReminder5dSent',
+    html: (name) => `<p>Hi ${name},</p><p>Just a follow-up — your Arrowhead Access account is still unverified, five days after signing up. You won't be able to claim visits, message offices, or book anything until you upload a photo of your company ID or badge. It's quick, and keeps your account from sitting idle.</p>${emailLoginButton('Upload ID to get verified')}`,
+  },
+];
 
 router.post('/check-unverified-reminders', async (req, res) => {
   if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   try {
-    const cutoff = new Date(Date.now() - UNVERIFIED_REMINDER_DELAY_MS);
-    const reps = await prisma.rep.findMany({
-      where: { verificationStatus: 'UNVERIFIED', unverifiedReminder2dSent: false, createdAt: { lte: cutoff } },
-    });
-
+    let checked = 0;
     let remindersSent = 0;
-    for (const rep of reps) {
-      sendEmail({
-        to: rep.email,
-        subject: "You're not verified yet on Arrowhead Access",
-        html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>Your Arrowhead Access account is still unverified — we couldn't automatically confirm it from your email address, so booking is on hold until you upload a quick photo of your company ID or badge. It only takes a minute, and our team usually reviews it within a business day.</p>${emailLoginButton('Upload ID to get verified')}`,
-      }).catch(() => {});
-      await prisma.rep.update({ where: { id: rep.id }, data: { unverifiedReminder2dSent: true } });
-      remindersSent++;
+
+    for (const stage of UNVERIFIED_REMINDER_STAGES) {
+      const cutoff = new Date(Date.now() - stage.delayDays * 24 * 60 * 60 * 1000);
+      const reps = await prisma.rep.findMany({
+        where: { verificationStatus: 'UNVERIFIED', [stage.field]: false, createdAt: { lte: cutoff } },
+      });
+      checked += reps.length;
+
+      for (const rep of reps) {
+        sendEmail({
+          to: rep.email,
+          subject: "You're not verified yet on Arrowhead Access",
+          html: `${emailLogoHeader()}${stage.html(rep.name)}`,
+        }).catch(() => {});
+        await prisma.rep.update({ where: { id: rep.id }, data: { [stage.field]: true } });
+        remindersSent++;
+      }
     }
 
-    res.json({ checked: reps.length, remindersSent });
+    res.json({ checked, remindersSent });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not check unverified reminders' });
