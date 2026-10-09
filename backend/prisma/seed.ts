@@ -20,6 +20,10 @@ const CATALOG: Record<string, string[]> = {
   'Coloplast': ['Biatain Dressings', 'Comfeel', 'Purilon Gel'],
   'Mölnlycke Health Care': ['Mepilex', 'Exufiber', 'Mepitel'],
   'MiMedx Group': ['EpiFix', 'AmnioFix', 'EpiCord'],
+  // Software infrastructure for in-home healthcare supply ordering
+  // (insurance checks, diagnostics, vendor tracking) rather than a device
+  // manufacturer with named products — seeded company-only.
+  'Verse Medical': [],
 };
 
 // Verified corporate email domains for the manufacturers above — a rep
