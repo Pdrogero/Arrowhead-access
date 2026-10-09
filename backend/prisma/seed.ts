@@ -24,6 +24,18 @@ const CATALOG: Record<string, string[]> = {
   // (insurance checks, diagnostics, vendor tracking) rather than a device
   // manufacturer with named products — seeded company-only.
   'Verse Medical': [],
+  // Recommended additions below — company-only (no guessed product names),
+  // same reasoning as Verse Medical above.
+  'Kerecis': [],
+  'Vericel': [],
+  'Avita Medical': [],
+  'PolyNovo': [],
+  'Aroa Biosurgery': [],
+  'Royal Biologics': [],
+  'Extremity Care': [],
+  'BioStem Technologies': [],
+  'Tela Bio': [],
+  'Zimmer Biomet': [],
 };
 
 // Verified corporate email domains for the manufacturers above — a rep
