@@ -92,7 +92,7 @@ router.post('/slots/:slotId/claim', requireAuth, requireVerifiedRep, requireActi
 });
 
 // --- Rep: request a new (non-listed) time --------------------------------
-router.post('/locations/:locationId/request', requireAuth, requireVerifiedRep, async (req, res) => {
+router.post('/locations/:locationId/request', requireAuth, requireVerifiedRep, requireActiveSubscription, async (req, res) => {
   try {
     const booking = await requestNewSlot({
       locationId: req.params.locationId,

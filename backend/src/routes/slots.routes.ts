@@ -4,7 +4,7 @@
 
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { requireAuth, requireRole, requireActiveSubscription } from '../auth/auth.guard';
+import { requireAuth, requireRole } from '../auth/auth.guard';
 import { sendEmail, emailLogoHeader } from '../email';
 
 const prisma = new PrismaClient();
@@ -283,7 +283,12 @@ router.patch('/:id/lunch-details', requireAuth, async (req, res) => {
 // a claimedByMe flag, so a slot they claimed still appears — marked as
 // claimed — instead of just vanishing once they navigate back to this
 // screen, especially once the office approves it.
-router.get('/open', requireAuth, requireRole('rep'), requireActiveSubscription, async (req, res) => {
+//
+// Deliberately NOT behind requireActiveSubscription — a rep who hasn't
+// started their trial yet can still browse what's out there (it's part of
+// what sells the trial); claiming one is the actual paid action, gated on
+// the claim endpoint below instead.
+router.get('/open', requireAuth, requireRole('rep'), async (req, res) => {
   const now = new Date();
   const rep = await prisma.rep.findUnique({ where: { id: req.user!.sub }, select: { complimentaryAccess: true } });
   // The internal "Arrowhead Access" test office stays hidden from every

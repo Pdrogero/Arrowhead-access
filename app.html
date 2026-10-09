@@ -211,6 +211,12 @@ let officeCancelDraft = null; // { bookingId, repName, timeLabel, reason } once 
 let repCancelDraft = null; // { bookingId, officeName, timeLabel, reason } once a reason has been given
 let openSlotsData = [];
 let browseOfficeRatings = {};
+// Whether the logged-in rep currently has an active (or trialing) Stripe
+// subscription — browsing open slots is allowed either way, but claiming
+// one still isn't, so claimButtonOrStatusHtml checks this to show a
+// "start your trial" prompt instead of a Claim button when it's false.
+// Kept fresh by loadBillingStatus() (dashboard) and loadOpenSlots() itself.
+let repHasActiveSubscription = false;
 // Office ids the rep has favorited — loaded once and kept in sync locally
 // on each toggle, so every screen showing an office can show the right
 // star state without a full refetch.
@@ -1968,6 +1974,12 @@ function claimButtonOrStatusHtml(s) {
   if (s.claimedByMe) {
     return `<span class="chip ${s.claimedByMe}">${s.claimedByMe === 'CONFIRMED' ? '✓ Claimed' : '⏳ Requested'}</span>
       <button style="background:#F0F0EE;color:var(--ink);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:6px;" onclick="recallClaimedSlot('${s.booking.id}', '${s.claimedByMe}', '${(s.location.name || '').replace(/'/g, "\\'")}', '${fmtTime(s.startTime).replace(/'/g, "\\'")}')">↩️ Recall</button>`;
+  }
+  // A rep can browse open slots before starting their trial, but claiming
+  // one is the actual paid action — nudge toward Billing instead of
+  // letting the click just fail against the backend's own gate.
+  if (!repHasActiveSubscription) {
+    return `<button style="background:#F0F0EE;color:var(--slate);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="scrollToBilling()" title="Start your free trial to book this">🔒 Start trial to book</button>`;
   }
   return `<button style="background:rgba(46,111,94,.14);color:var(--teal-dark);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="claimSlot('${s.id}')">Claim</button>`;
 }
@@ -5969,6 +5981,7 @@ async function loadBillingStatus() {
   try {
     const res = await api('/api/billing/founding-status');
     const { isFoundingRep, foundingSpotsRemaining, complimentaryAccess, hasActiveSubscription, cancelAtPeriodEnd, currentPeriodEnd, billingCycle, subscriptionStatus } = res;
+    repHasActiveSubscription = hasActiveSubscription || complimentaryAccess;
 
     if (complimentaryAccess) {
       box.innerHTML = `
@@ -6035,7 +6048,15 @@ window.cancelSubscription = async function() {
 async function loadOpenSlots() {
   const content = document.getElementById('browseContent');
   try {
-    openSlotsData = await api('/api/slots/open');
+    // Billing status fetched alongside the slots themselves (not just on the
+    // dashboard) so claimButtonOrStatusHtml is accurate even if a rep lands
+    // on this screen before ever visiting the dashboard in this session.
+    const [slots, billingStatus] = await Promise.all([
+      api('/api/slots/open'),
+      api('/api/billing/founding-status').catch(() => null),
+    ]);
+    openSlotsData = slots;
+    if (billingStatus) repHasActiveSubscription = billingStatus.hasActiveSubscription || billingStatus.complimentaryAccess;
     browseOfficeRatings = await fetchRatingAverages(openSlotsData.map(s => s.location.id), 'office');
     if (favoriteOfficesData === null) {
       try {
