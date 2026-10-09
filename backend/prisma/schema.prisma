@@ -391,6 +391,10 @@ model Rep {
   renewalReminder30dSent Boolean           @default(false)
   renewalReminder7dSent  Boolean           @default(false)
   renewalReminder1dSent  Boolean           @default(false)
+  // Sent once, 2 days after signup, to a rep who still hasn't started
+  // checkout at all (no Stripe customer yet) — nudges them to pick a plan.
+  // Same one-time cadence as unverifiedReminder2dSent above.
+  noPlanReminder2dSent Boolean             @default(false)
   // "2026-09" style key for the month the new-month booking-reminder email
   // was last sent, so the daily cron only sends it once per month.
   lastMonthlyReminderMonth String?

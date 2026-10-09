@@ -16,7 +16,7 @@ import { Router } from 'express';
 import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
-import { sendEmail, emailLogoHeader } from '../email';
+import { sendEmail, emailLogoHeader, emailLoginButton } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -287,6 +287,47 @@ router.post('/check-renewals', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not check renewals' });
+  }
+});
+
+// --- Daily check: nudge reps who signed up but never started checkout ----
+// at all, called by the same kind of external scheduled trigger as the
+// other daily reminder checks. Separate from check-renewals above, which
+// only ever looks at reps who already have a subscription — this is for
+// the rep who created an account and then just... never picked a plan.
+// Same one-time, 2-day-after-signup cadence as the unverified-rep reminder.
+const NO_PLAN_REMINDER_DELAY_MS = 2 * 24 * 60 * 60 * 1000;
+
+router.post('/check-no-plan-reminders', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const cutoff = new Date(Date.now() - NO_PLAN_REMINDER_DELAY_MS);
+    const reps = await prisma.rep.findMany({
+      where: {
+        stripeCustomerId: null,
+        complimentaryAccess: false,
+        noPlanReminder2dSent: false,
+        createdAt: { lte: cutoff },
+      },
+    });
+
+    let remindersSent = 0;
+    for (const rep of reps) {
+      sendEmail({
+        to: rep.email,
+        subject: 'Your free trial is waiting on Arrowhead Access',
+        html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>You signed up for Arrowhead Access, but haven't started your 14-day free trial yet — you can browse open visit slots anytime, but claiming one (or messaging an office) needs a plan picked first. It only takes a minute, and you won't be charged until the trial ends.</p>${emailLoginButton('Choose your plan')}`,
+      }).catch(() => {});
+      await prisma.rep.update({ where: { id: rep.id }, data: { noPlanReminder2dSent: true } });
+      remindersSent++;
+    }
+
+    res.json({ checked: reps.length, remindersSent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check no-plan reminders' });
   }
 });
 
