@@ -34,13 +34,13 @@ function adminResultPage(message: string): string {
 // something for them to reveal — a data URI in Gmail never shows at all.
 function pickAPlanPreviewShotFrame(path: string, alt: string): string {
   const appUrl = process.env.APP_URL || 'https://arrowheadaccess.com';
-  return `<div style="border:1px solid #E2E1D8;border-radius:12px;overflow:hidden;margin:16px 0 6px;">
+  return `<div style="border:1px solid #E2E1D8;border-radius:12px;overflow:hidden;margin:16px auto 6px;max-width:360px;">
     <div style="padding:9px 12px;background:#F5F5F0;border-bottom:1px solid #E2E1D8;font-size:0;">
       <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D8D7CC;margin-right:6px;"></span>
       <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D8D7CC;margin-right:6px;"></span>
       <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D8D7CC;"></span>
     </div>
-    <img src="${appUrl}/${path}" alt="${alt}" width="560" style="display:block;width:100%;height:auto;">
+    <img src="${appUrl}/${path}" alt="${alt}" width="360" style="display:block;width:100%;height:auto;">
   </div>`;
 }
 
