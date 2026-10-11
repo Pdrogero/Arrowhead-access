@@ -44,26 +44,25 @@ function pickAPlanPreviewShotFrame(path: string, alt: string): string {
   </div>`;
 }
 
-// Approximates app.html's body.medical-bg (the tiled teal "+" cross
-// pattern, plus two soft gold/navy gradient blooms over a mint-to-peach
-// gradient, used on the role-selection/login screens). CSS background-image
-// on a div is silently stripped by Gmail (confirmed in testing — the
-// pattern just never appeared), so this uses the old bulletproof email
-// technique instead: a real hosted tile image via the HTML `background`
-// attribute on a <table>, which Gmail and most other clients do honor and
-// tile automatically. The two radial gradient blooms are dropped — they
-// don't tile, and baking them into the repeating image would just smear
-// color bands across the table — so this is the cross pattern over a flat
-// pale mint fill rather than the full gradient app.html has.
+// Nods to app.html's body.medical-bg (the tiled teal "+" cross pattern
+// behind the role-selection/login screens) without trying to reproduce a
+// true behind-text background — confirmed in testing that Gmail honors
+// neither CSS background-image on a div nor the HTML background attribute
+// on a table; both silently vanish. The one thing proven to actually
+// render in this inbox is a plain <img>, so the cross pattern appears as a
+// flat decorative banner strip (medical-bg-banner.png) above and below the
+// content instead of literally behind it, over a solid pale mint fill
+// (plain background-color always renders, no image involved).
 function pickAPlanPreviewWrap(innerHtml: string): string {
   const appUrl = process.env.APP_URL || 'https://arrowheadaccess.com';
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#EEF4EE" background="${appUrl}/email-assets/medical-bg-tile.png" style="background-repeat:repeat;">
-    <tr><td style="padding:28px 16px;">
-      <div style="max-width:420px;margin:0 auto;color:#14213D;">
-        ${innerHtml}
-      </div>
-    </td></tr>
-  </table>`;
+  const banner = `<img src="${appUrl}/email-assets/medical-bg-banner.png" alt="" width="420" style="display:block;width:100%;max-width:420px;height:auto;margin:0 auto;">`;
+  return `<div style="background-color:#EEF4EE;padding:0 0 28px;">
+    ${banner}
+    <div style="max-width:420px;margin:0 auto;color:#14213D;padding:12px 16px 0;">
+      ${innerHtml}
+    </div>
+    ${banner}
+  </div>`;
 }
 
 // One-off: sends a test copy of a screenshot-upgraded version of the
