@@ -9,8 +9,58 @@
 // (scripts/founding-status.ts).
 import { Router } from 'express';
 import { foundingSpotsSummary, backfillAutoDeclinedNoResponse } from '../adminCleanup';
+import { sendEmail, emailLogoHeader, emailLoginButton } from '../email';
+import { SLOTS_SCREENSHOT_B64, CONFIRMED_SCREENSHOT_B64 } from '../previewAssets/pickAPlanScreenshots';
 
 const router = Router();
+
+const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function pickAPlanPreviewShotFrame(b64: string, alt: string): string {
+  return `<div style="border:1px solid #E2E1D8;border-radius:12px;overflow:hidden;margin:16px 0 6px;">
+    <div style="padding:9px 12px;background:#F5F5F0;border-bottom:1px solid #E2E1D8;font-size:0;">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D8D7CC;margin-right:6px;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D8D7CC;margin-right:6px;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D8D7CC;"></span>
+    </div>
+    <img src="data:image/png;base64,${b64}" alt="${alt}" width="560" style="display:block;width:100%;height:auto;">
+  </div>`;
+}
+
+// One-off: sends a test copy of a screenshot-upgraded version of the
+// no-plan reminder email (billing.routes.ts still sends the plain-text
+// original to real reps) — lets us see how it actually renders in a real
+// inbox before deciding whether to replace that one. Both screenshots are
+// real captures of the live app, not staged artwork; see
+// previewAssets/pickAPlanScreenshots.ts. Defaults to the admin's own inbox
+// so a bare hit of the URL can't be used to spam an arbitrary address.
+router.get('/send-pick-a-plan-preview', async (req, res) => {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret || req.query.secret !== secret) return res.status(404).end();
+  try {
+    const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to.trim() : 'pdrogero@gmail.com';
+    if (!SIMPLE_EMAIL_RE.test(to)) return res.status(400).send('Invalid "to" address');
+
+    const html = `${emailLogoHeader()}
+<p>Hi there,</p>
+<p>You signed up for Arrowhead Access, but haven't started your 14-day free trial yet. Here's what's open at offices near you right now:</p>
+${pickAPlanPreviewShotFrame(SLOTS_SCREENSHOT_B64, 'Open visit slots waiting to be claimed')}
+<p style="text-align:center;font-size:11.5px;color:#5B6760;margin:6px 0 20px;">A live look at your Available Slots screen — these are real open times right now.</p>
+<p>Claiming one (or messaging an office) needs a plan picked first. It only takes a minute, and you won't be charged until the trial ends.</p>
+<p>And once an office accepts your request, here's what you get:</p>
+${pickAPlanPreviewShotFrame(CONFIRMED_SCREENSHOT_B64, 'A confirmed lunch booking, with calendar sync, messaging, attendance tracking, and expense logging')}
+<p style="text-align:center;font-size:11.5px;color:#5B6760;margin:6px 0 20px;">Calendar sync, direct messaging, attendance tracking, expense logging, and ratings — all in one place once you're confirmed.</p>
+${emailLoginButton('Choose your plan')}
+<p style="font-size:12.5px;color:#5B6760;margin-top:18px;border-top:1px solid #E2E1D8;padding-top:16px;">TEST SEND — this is a preview of a possible upgrade to the no-plan reminder, not a live reminder about your own account.</p>`;
+
+    const sent = await sendEmail({ to, subject: '[TEST] Your free trial is waiting on Arrowhead Access', html });
+    if (!sent) return res.status(502).type('text/plain').send('sendEmail() returned false — check RESEND_API_KEY and server logs.');
+    res.type('text/plain').send(`Sent to ${to}.`);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error sending preview email');
+  }
+});
 
 router.get('/founding-status', async (req, res) => {
   const secret = process.env.ADMIN_SECRET;
