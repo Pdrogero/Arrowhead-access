@@ -15,6 +15,14 @@ const router = Router();
 
 const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// A real rep's name (rep.name) is stored full ("Jane Doe"), but greeting
+// someone by their whole name reads more like a form letter than an
+// actual message — this is what billing.routes.ts's live reminder would
+// need to switch to as well if this preview replaces it.
+function firstNameOf(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] || fullName;
+}
+
 // Plain text responses render fine in a desktop browser, but some mobile
 // browsers (seen with DuckDuckGo's iOS app) treat a text/plain response
 // with no file extension as a download instead of displaying it, and that
@@ -79,9 +87,11 @@ router.get('/send-pick-a-plan-preview', async (req, res) => {
   try {
     const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to.trim() : 'pdrogero@gmail.com';
     if (!SIMPLE_EMAIL_RE.test(to)) return res.status(400).type('text/html').send(adminResultPage('Invalid "to" address'));
+    const name = typeof req.query.name === 'string' && req.query.name.trim() ? req.query.name.trim() : 'Hailey Morgan';
+    const firstName = firstNameOf(name);
 
     const html = pickAPlanPreviewWrap(`${emailLogoHeader()}
-<p>Hi there,</p>
+<p>Hi ${firstName},</p>
 <p>You signed up for Arrowhead Access, but haven't started your 14-day free trial yet. Here's what's open at offices near you right now:</p>
 ${pickAPlanPreviewShotFrame('email-assets/pick-a-plan-slots.png', 'Open visit slots waiting to be claimed')}
 <p style="text-align:center;font-size:11.5px;color:#5B6472;margin:6px 0 20px;">A live look at your Available Slots screen — these are real open times right now.</p>
