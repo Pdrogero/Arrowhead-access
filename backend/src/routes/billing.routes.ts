@@ -17,6 +17,7 @@ import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
 import { sendEmail, emailLogoHeader, emailLoginButton } from '../email';
+import { pickAPlanReminderHtml, firstNameOf } from '../emailTemplates/pickAPlanReminder';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -318,7 +319,7 @@ router.post('/check-no-plan-reminders', async (req, res) => {
       sendEmail({
         to: rep.email,
         subject: 'Your free trial is waiting on Arrowhead Access',
-        html: `${emailLogoHeader()}<p>Hi ${rep.name},</p><p>You signed up for Arrowhead Access, but haven't started your 14-day free trial yet — you can browse open visit slots anytime, but claiming one (or messaging an office) needs a plan picked first. It only takes a minute, and you won't be charged until the trial ends.</p>${emailLoginButton('Choose your plan')}`,
+        html: pickAPlanReminderHtml(firstNameOf(rep.name)),
       }).catch(() => {});
       await prisma.rep.update({ where: { id: rep.id }, data: { noPlanReminder2dSent: true } });
       remindersSent++;
