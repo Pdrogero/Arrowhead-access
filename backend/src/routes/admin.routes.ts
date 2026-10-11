@@ -80,7 +80,7 @@ ${pickAPlanPreviewShotFrame('email-assets/pick-a-plan-slots.png', 'Open visit sl
 <p>And once an office accepts your request, here's what you get:</p>
 ${pickAPlanPreviewShotFrame('email-assets/pick-a-plan-confirmed.png', 'A confirmed lunch booking, with calendar sync, messaging, attendance tracking, and expense logging')}
 <p style="text-align:center;font-size:11.5px;color:#5B6472;margin:6px 0 20px;">Calendar sync, direct messaging, attendance tracking, expense logging, and ratings — all in one place once you're confirmed.</p>
-${emailLoginButton('Choose your plan')}
+<div style="text-align:center;">${emailLoginButton('Choose your plan')}</div>
 <p style="font-size:12.5px;color:#5B6472;margin-top:18px;border-top:1px solid #DED6C0;padding-top:16px;">TEST SEND — this is a preview of a possible upgrade to the no-plan reminder, not a live reminder about your own account.</p>`);
 
     const sent = await sendEmail({ to, subject: '[TEST] Your free trial is waiting on Arrowhead Access', html });
