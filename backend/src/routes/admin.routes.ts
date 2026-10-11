@@ -44,12 +44,23 @@ function pickAPlanPreviewShotFrame(path: string, alt: string): string {
   </div>`;
 }
 
-// Navy/gold "business card" palette from index.html's :root block — kept as
-// literal hex here rather than shared constants since this is the one place
-// in the backend assembling homepage-styled (not app-styled) email HTML,
-// and index.html's own comment there explains the --teal/--coral naming.
+// Reproduces app.html's body.medical-bg exactly (the tiled teal "+"
+// cross pattern plus two soft gold/navy gradient blooms over a mint-to-
+// peach gradient, used on the role-selection/login screens) as an inline
+// background on the email wrapper, since email HTML can't reference an
+// external stylesheet class. background-attachment is dropped (meaningless
+// without scroll, and a risk in stricter clients) but otherwise identical.
+// Layered background-image support varies by email client — this may not
+// render everywhere app.html does, but Gmail (confirmed working for the
+// hosted screenshots above) should display it.
 function pickAPlanPreviewWrap(innerHtml: string): string {
-  return `<div style="background:#F7F2E5;padding:28px 16px;">
+  const medicalBg = [
+    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cg fill='none' stroke='%232D6F5E' stroke-width='3' stroke-linecap='round' opacity='0.22'%3E%3Cpath d='M32 18v28M18 32h28'/%3E%3C/g%3E%3C/svg%3E")`,
+    `radial-gradient(circle at 12% 8%, rgba(201,162,39,0.16) 0%, transparent 45%)`,
+    `radial-gradient(circle at 90% 85%, rgba(27,42,78,0.16) 0%, transparent 50%)`,
+    `linear-gradient(180deg, #EAF7F1 0%, #FDF4F0 100%)`,
+  ].join(', ');
+  return `<div style="background-image:${medicalBg};background-repeat:repeat, no-repeat, no-repeat, no-repeat;background-size:64px 64px, cover, cover, cover;padding:28px 16px;">
     <div style="max-width:420px;margin:0 auto;color:#14213D;">
       ${innerHtml}
     </div>
