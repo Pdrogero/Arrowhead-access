@@ -85,8 +85,8 @@ router.get('/send-pick-a-plan-preview', async (req, res) => {
 <p>You signed up for Arrowhead Access, but haven't started your 14-day free trial yet. Here's what's open at offices near you right now:</p>
 ${pickAPlanPreviewShotFrame('email-assets/pick-a-plan-slots.png', 'Open visit slots waiting to be claimed')}
 <p style="text-align:center;font-size:11.5px;color:#5B6472;margin:6px 0 20px;">A live look at your Available Slots screen — these are real open times right now.</p>
-<p>Claiming one (or messaging an office) needs a plan picked first. It only takes a minute, and you won't be charged until the trial ends.</p>
-<p>And once an office accepts your request, here's what you get:</p>
+<p>Pick a plan: Monthly or Annual. It only takes a minute, and you won't be charged until the trial ends.</p>
+<p>Once an office accepts your request, here's what you get:</p>
 ${pickAPlanPreviewShotFrame('email-assets/pick-a-plan-confirmed.png', 'A confirmed lunch booking, with calendar sync, messaging, attendance tracking, and expense logging')}
 <p style="text-align:center;font-size:11.5px;color:#5B6472;margin:6px 0 20px;">Calendar sync, direct messaging, attendance tracking, expense logging, and ratings — all in one place once you're confirmed.</p>
 <div style="text-align:center;">${emailLoginButton('Choose your plan')}</div>
