@@ -16,6 +16,16 @@ const router = Router();
 
 const SIMPLE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Plain text responses render fine in a desktop browser, but some mobile
+// browsers (seen with DuckDuckGo's iOS app) treat a text/plain response
+// with no file extension as a download instead of displaying it, and that
+// download view doesn't reliably render the content either — so this
+// result line is useless for debugging from a phone. Wrapping it as a tiny
+// HTML page instead makes every browser just display it.
+function adminResultPage(message: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:-apple-system,sans-serif;padding:24px;font-size:16px;">${message.replace(/</g, '&lt;')}</body></html>`;
+}
+
 function pickAPlanPreviewShotFrame(b64: string, alt: string): string {
   return `<div style="border:1px solid #E2E1D8;border-radius:12px;overflow:hidden;margin:16px 0 6px;">
     <div style="padding:9px 12px;background:#F5F5F0;border-bottom:1px solid #E2E1D8;font-size:0;">
@@ -39,7 +49,7 @@ router.get('/send-pick-a-plan-preview', async (req, res) => {
   if (!secret || req.query.secret !== secret) return res.status(404).end();
   try {
     const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to.trim() : 'pdrogero@gmail.com';
-    if (!SIMPLE_EMAIL_RE.test(to)) return res.status(400).send('Invalid "to" address');
+    if (!SIMPLE_EMAIL_RE.test(to)) return res.status(400).type('text/html').send(adminResultPage('Invalid "to" address'));
 
     const html = `${emailLogoHeader()}
 <p>Hi there,</p>
@@ -54,11 +64,11 @@ ${emailLoginButton('Choose your plan')}
 <p style="font-size:12.5px;color:#5B6760;margin-top:18px;border-top:1px solid #E2E1D8;padding-top:16px;">TEST SEND — this is a preview of a possible upgrade to the no-plan reminder, not a live reminder about your own account.</p>`;
 
     const sent = await sendEmail({ to, subject: '[TEST] Your free trial is waiting on Arrowhead Access', html });
-    if (!sent) return res.status(502).type('text/plain').send('sendEmail() returned false — check RESEND_API_KEY and server logs.');
-    res.type('text/plain').send(`Sent to ${to}.`);
+    if (!sent) return res.status(502).type('text/html').send(adminResultPage('sendEmail() returned false — check RESEND_API_KEY and server logs.'));
+    res.type('text/html').send(adminResultPage(`Sent to ${to}.`));
   } catch (err) {
     console.error(err);
-    res.status(500).send('Error sending preview email');
+    res.status(500).type('text/html').send(adminResultPage(`Error sending preview email: ${err instanceof Error ? err.message : String(err)}`));
   }
 });
 
