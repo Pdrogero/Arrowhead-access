@@ -34,13 +34,25 @@ function adminResultPage(message: string): string {
 // something for them to reveal — a data URI in Gmail never shows at all.
 function pickAPlanPreviewShotFrame(path: string, alt: string): string {
   const appUrl = process.env.APP_URL || 'https://arrowheadaccess.com';
-  return `<div style="border:1px solid #E2E1D8;border-radius:12px;overflow:hidden;margin:16px auto 6px;max-width:360px;">
-    <div style="padding:9px 12px;background:#F5F5F0;border-bottom:1px solid #E2E1D8;font-size:0;">
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D8D7CC;margin-right:6px;"></span>
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D8D7CC;margin-right:6px;"></span>
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D8D7CC;"></span>
+  return `<div style="border:1px solid #DED6C0;border-radius:12px;overflow:hidden;margin:16px auto 6px;max-width:360px;background:#fff;">
+    <div style="padding:9px 12px;background:#EFE6CF;border-bottom:1px solid #DED6C0;font-size:0;">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#DED6C0;margin-right:6px;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#DED6C0;margin-right:6px;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#DED6C0;"></span>
     </div>
     <img src="${appUrl}/${path}" alt="${alt}" width="360" style="display:block;width:100%;height:auto;">
+  </div>`;
+}
+
+// Navy/gold "business card" palette from index.html's :root block — kept as
+// literal hex here rather than shared constants since this is the one place
+// in the backend assembling homepage-styled (not app-styled) email HTML,
+// and index.html's own comment there explains the --teal/--coral naming.
+function pickAPlanPreviewWrap(innerHtml: string): string {
+  return `<div style="background:#F7F2E5;padding:28px 16px;">
+    <div style="max-width:420px;margin:0 auto;color:#14213D;">
+      ${innerHtml}
+    </div>
   </div>`;
 }
 
@@ -59,17 +71,17 @@ router.get('/send-pick-a-plan-preview', async (req, res) => {
     const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to.trim() : 'pdrogero@gmail.com';
     if (!SIMPLE_EMAIL_RE.test(to)) return res.status(400).type('text/html').send(adminResultPage('Invalid "to" address'));
 
-    const html = `${emailLogoHeader()}
+    const html = pickAPlanPreviewWrap(`${emailLogoHeader()}
 <p>Hi there,</p>
 <p>You signed up for Arrowhead Access, but haven't started your 14-day free trial yet. Here's what's open at offices near you right now:</p>
 ${pickAPlanPreviewShotFrame('email-assets/pick-a-plan-slots.png', 'Open visit slots waiting to be claimed')}
-<p style="text-align:center;font-size:11.5px;color:#5B6760;margin:6px 0 20px;">A live look at your Available Slots screen — these are real open times right now.</p>
+<p style="text-align:center;font-size:11.5px;color:#5B6472;margin:6px 0 20px;">A live look at your Available Slots screen — these are real open times right now.</p>
 <p>Claiming one (or messaging an office) needs a plan picked first. It only takes a minute, and you won't be charged until the trial ends.</p>
 <p>And once an office accepts your request, here's what you get:</p>
 ${pickAPlanPreviewShotFrame('email-assets/pick-a-plan-confirmed.png', 'A confirmed lunch booking, with calendar sync, messaging, attendance tracking, and expense logging')}
-<p style="text-align:center;font-size:11.5px;color:#5B6760;margin:6px 0 20px;">Calendar sync, direct messaging, attendance tracking, expense logging, and ratings — all in one place once you're confirmed.</p>
+<p style="text-align:center;font-size:11.5px;color:#5B6472;margin:6px 0 20px;">Calendar sync, direct messaging, attendance tracking, expense logging, and ratings — all in one place once you're confirmed.</p>
 ${emailLoginButton('Choose your plan')}
-<p style="font-size:12.5px;color:#5B6760;margin-top:18px;border-top:1px solid #E2E1D8;padding-top:16px;">TEST SEND — this is a preview of a possible upgrade to the no-plan reminder, not a live reminder about your own account.</p>`;
+<p style="font-size:12.5px;color:#5B6472;margin-top:18px;border-top:1px solid #DED6C0;padding-top:16px;">TEST SEND — this is a preview of a possible upgrade to the no-plan reminder, not a live reminder about your own account.</p>`);
 
     const sent = await sendEmail({ to, subject: '[TEST] Your free trial is waiting on Arrowhead Access', html });
     if (!sent) return res.status(502).type('text/html').send(adminResultPage('sendEmail() returned false — check RESEND_API_KEY and server logs.'));
