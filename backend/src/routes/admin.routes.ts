@@ -8,7 +8,7 @@
 // per-rep email list) restricted to the Shell-only script instead
 // (scripts/founding-status.ts).
 import { Router } from 'express';
-import { foundingSpotsSummary, backfillAutoDeclinedNoResponse } from '../adminCleanup';
+import { foundingSpotsSummary, backfillAutoDeclinedNoResponse, noPlanReminderSummary } from '../adminCleanup';
 import { sendEmail } from '../email';
 import { firstNameOf, pickAPlanReminderHtml } from '../emailTemplates/pickAPlanReminder';
 
@@ -63,6 +63,18 @@ router.get('/founding-status', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).send('Error generating report');
+  }
+});
+
+router.get('/no-plan-reminder-status', async (req, res) => {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret || req.query.secret !== secret) return res.status(404).end();
+  try {
+    const { everSent, pendingNextRun } = await noPlanReminderSummary();
+    res.type('text/html').send(adminResultPage(`${everSent} rep(s) have ever been sent the no-plan reminder. ${pendingNextRun} rep(s) currently qualify and haven't been sent yet — they'll get it on the next scheduled run (every 3 hours).`));
+  } catch (err) {
+    console.error(err);
+    res.status(500).type('text/html').send(adminResultPage('Error generating report'));
   }
 });
 
