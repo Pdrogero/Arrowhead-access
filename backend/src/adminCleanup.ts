@@ -147,6 +147,31 @@ export async function foundingSpotsSummary(): Promise<{ taken: number; limit: nu
   }
 }
 
+// --- Read-only: how many reps have ever gotten the "haven't picked a
+// plan" reminder (billing.routes.ts's check-no-plan-reminders — one-time
+// per rep, gated by noPlanReminder2dSent), plus how many currently qualify
+// but haven't been sent yet (will go out on the next 3-hourly cron run).
+// Counts only, no rep PII — safe to expose over the HTTP admin route.
+export async function noPlanReminderSummary(): Promise<{ everSent: number; pendingNextRun: number }> {
+  try {
+    const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const [everSent, pendingNextRun] = await Promise.all([
+      prisma.rep.count({ where: { noPlanReminder2dSent: true } }),
+      prisma.rep.count({
+        where: {
+          stripeCustomerId: null,
+          complimentaryAccess: false,
+          noPlanReminder2dSent: false,
+          createdAt: { lte: cutoff },
+        },
+      }),
+    ]);
+    return { everSent, pendingNextRun };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 // --- Read-only: how many founding-rep spots (of 30) are still available,
 // and who currently holds one — for checking without logging in as a rep.
 // Includes rep emails, so this is for the Shell-only script
