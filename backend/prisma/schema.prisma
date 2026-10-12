@@ -280,11 +280,15 @@ model StaffUser {
   role           StaffRole     @default(STAFF)
   twoFactorEnabled Boolean     @default(false)
   createdAt      DateTime      @default(now())
+  // True once the in-app "rate the site" prompt has been submitted or
+  // dismissed, so it only ever shows once per login.
+  feedbackPromptDismissed Boolean @default(false)
 
   createdSlots   Slot[]
   loginOtps      StaffLoginOtp[]
   trustedDevices StaffTrustedDevice[]
   pendingSchedulesCreated PendingOfficeSchedule[]
+  feedbackSubmissions     PlatformFeedback[]
 }
 
 // Mirrors RepLoginOtp, but for office staff logins.
@@ -403,11 +407,15 @@ model Rep {
   // Date (YYYY-MM-DD) of the Monday the weekly Sunday "your week ahead"
   // digest was last sent for, so it only sends once per week.
   lastWeeklyReminderWeek String?
+  // True once the in-app "rate the site" prompt has been submitted or
+  // dismissed, so it only ever shows once per account.
+  feedbackPromptDismissed Boolean           @default(false)
 
   // Private token embedded in this rep's calendar subscription URL, so
   // Google/Apple Calendar can fetch their bookings.ics feed without logging in.
   calendarToken        String?             @unique
 
+  feedbackSubmissions  PlatformFeedback[]
   verificationRequests VerificationRequest[]
   bookings             Booking[]
   transfersSent        BookingTransfer[]   @relation("TransfersSent")
@@ -792,4 +800,29 @@ model LiteratureAttachment {
   createdAt        DateTime       @default(now())
 
   @@index([literatureItemId])
+}
+
+enum FeedbackAuthorType {
+  REP
+  STAFF
+}
+
+// Platform-level "how's it going" feedback — distinct from VisitReview
+// above, which rates a specific visit between a rep and an office. This is
+// a one-time, dismissible prompt shown in-app (rep and office dashboards
+// both) a couple weeks after signup, asking how the site itself is going.
+// There's no admin dashboard in this app, so GET /api/admin/feedback (see
+// admin.routes.ts) IS the review UI — same pattern as everywhere else here.
+model PlatformFeedback {
+  id         String             @id @default(cuid())
+  authorType FeedbackAuthorType
+  repId      String?
+  rep        Rep?               @relation(fields: [repId], references: [id])
+  staffId    String?
+  staffUser  StaffUser?         @relation(fields: [staffId], references: [id])
+  rating     Int
+  comment    String?
+  createdAt  DateTime           @default(now())
+
+  @@index([createdAt])
 }

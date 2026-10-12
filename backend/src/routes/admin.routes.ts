@@ -8,7 +8,7 @@
 // per-rep email list) restricted to the Shell-only script instead
 // (scripts/founding-status.ts).
 import { Router } from 'express';
-import { foundingSpotsSummary, backfillAutoDeclinedNoResponse, noPlanReminderSummary } from '../adminCleanup';
+import { foundingSpotsSummary, backfillAutoDeclinedNoResponse, noPlanReminderSummary, platformFeedbackReport } from '../adminCleanup';
 import { sendEmail } from '../email';
 import { firstNameOf, pickAPlanReminderHtml } from '../emailTemplates/pickAPlanReminder';
 
@@ -72,6 +72,19 @@ router.get('/no-plan-reminder-status', async (req, res) => {
   try {
     const { everSent, pendingNextRun } = await noPlanReminderSummary();
     res.type('text/html').send(adminResultPage(`${everSent} rep(s) have ever been sent the no-plan reminder. ${pendingNextRun} rep(s) currently qualify and haven't been sent yet — they'll get it on the next scheduled run (every 3 hours).`));
+  } catch (err) {
+    console.error(err);
+    res.status(500).type('text/html').send(adminResultPage('Error generating report'));
+  }
+});
+
+router.get('/feedback', async (req, res) => {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret || req.query.secret !== secret) return res.status(404).end();
+  try {
+    const report = await platformFeedbackReport();
+    const escaped = report.replace(/</g, '&lt;');
+    res.type('text/html').send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:-apple-system,sans-serif;padding:24px;font-size:16px;"><pre style="white-space:pre-wrap;font-family:inherit;margin:0;">${escaped}</pre></body></html>`);
   } catch (err) {
     console.error(err);
     res.status(500).type('text/html').send(adminResultPage('Error generating report'));
