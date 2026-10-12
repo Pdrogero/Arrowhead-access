@@ -172,6 +172,31 @@ export async function noPlanReminderSummary(): Promise<{ everSent: number; pendi
   }
 }
 
+// --- Read-only: every submitted platform-feedback entry (rating, comment,
+// whether it came from a rep or an office, and when), newest first. No
+// admin dashboard exists, so this HTML list (served by GET
+// /api/admin/feedback) IS the review UI — name/email intentionally left
+// out even though this isn't the strict "counts only" pattern the other
+// admin routes follow, since actually reading what people wrote is the
+// whole point here.
+export async function platformFeedbackReport(): Promise<string> {
+  try {
+    const entries = await prisma.platformFeedback.findMany({ orderBy: { createdAt: 'desc' }, take: 200 });
+    if (!entries.length) return 'No feedback submitted yet.';
+    const avg = entries.reduce((sum, e) => sum + e.rating, 0) / entries.length;
+    const lines = [`${entries.length} submission(s), average rating ${avg.toFixed(1)} / 5.\n`];
+    entries.forEach(e => {
+      const stars = '★'.repeat(e.rating) + '☆'.repeat(5 - e.rating);
+      lines.push(`${stars}  (${e.authorType.toLowerCase()})  —  ${e.createdAt.toISOString().slice(0, 10)}`);
+      if (e.comment) lines.push(`  "${e.comment}"`);
+      lines.push('');
+    });
+    return lines.join('\n');
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 // --- Read-only: how many founding-rep spots (of 30) are still available,
 // and who currently holds one — for checking without logging in as a rep.
 // Includes rep emails, so this is for the Shell-only script

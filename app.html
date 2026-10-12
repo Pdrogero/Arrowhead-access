@@ -4646,6 +4646,7 @@ function screenDashboardOffice() {
   return `
     <div class="wrap wide">
       <div id="officeHeaderBox">${officeHeaderHtml()}</div>
+      <div id="feedbackPromptBox"></div>
       <p style="font-size:13px;font-weight:600;margin:18px 0 2px;">This week's ledger</p>
       <p class="sub">Your upcoming and pending rep visits and scheduled lunches at this location.</p>
       <div id="pendingRequestsBox"></div>
@@ -4706,6 +4707,81 @@ async function loadRepHeader() {
   } catch (err) {}
 }
 
+// ========== "RATE THE SITE" PROMPT (rep + office dashboards) ==========
+// One-time, dismissible — shown a couple weeks after signup, gated
+// server-side by GET /api/feedback/status so it only ever appears once per
+// account regardless of how many times the dashboard reloads.
+let feedbackPromptRating = 0;
+
+function feedbackPromptBannerHtml() {
+  return `
+    <div class="card" style="background:#FFF8E8;border:1px solid #F0D9B5;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div>
+          <p style="font-size:14px;font-weight:700;margin:0 0 4px;">How's Arrowhead Access going so far?</p>
+          <p class="sub" style="margin:0 0 10px;">A quick rating helps us know what to fix next.</p>
+        </div>
+        <button type="button" onclick="dismissFeedbackPrompt()" aria-label="Dismiss" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--slate);padding:0;line-height:1;">✕</button>
+      </div>
+      <div id="feedbackPromptStars" style="margin-bottom:10px;"></div>
+      <textarea id="feedbackPromptComment" rows="3" placeholder="Anything you'd change? (optional)" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:10px;font-family:inherit;"></textarea>
+      <div id="feedbackPromptErr"></div>
+      <button class="primary" style="margin:0;padding:9px 16px;font-size:13px;" onclick="submitFeedbackPrompt()">Submit feedback</button>
+    </div>`;
+}
+
+function renderFeedbackPromptStars() {
+  const box = document.getElementById('feedbackPromptStars');
+  if (!box) return;
+  box.innerHTML = [1, 2, 3, 4, 5].map(n => `
+    <button type="button" onclick="setFeedbackPromptRating(${n})" style="background:none;border:none;font-size:24px;cursor:pointer;padding:2px;line-height:1;">${n <= feedbackPromptRating ? '⭐' : '☆'}</button>
+  `).join('');
+}
+
+window.setFeedbackPromptRating = function(n) {
+  feedbackPromptRating = n;
+  renderFeedbackPromptStars();
+};
+
+async function loadFeedbackPrompt() {
+  const box = document.getElementById('feedbackPromptBox');
+  if (!box) return;
+  try {
+    const { show } = await api('/api/feedback/status');
+    if (!show) { box.innerHTML = ''; return; }
+    feedbackPromptRating = 0;
+    box.innerHTML = feedbackPromptBannerHtml();
+    renderFeedbackPromptStars();
+  } catch (err) {}
+}
+
+window.submitFeedbackPrompt = async function() {
+  if (!feedbackPromptRating) {
+    const errBox = document.getElementById('feedbackPromptErr');
+    if (errBox) errBox.innerHTML = `<div class="msg err" style="margin-bottom:10px;">Please select a rating.</div>`;
+    return;
+  }
+  const comment = document.getElementById('feedbackPromptComment')?.value || '';
+  try {
+    await api('/api/feedback/submit', { method: 'POST', body: JSON.stringify({ rating: feedbackPromptRating, comment }) });
+    const box = document.getElementById('feedbackPromptBox');
+    if (box) box.innerHTML = `<div class="card" style="background:#EEF7F1;border:1px solid #BFE0CC;margin-bottom:16px;"><p style="margin:0;font-size:13.5px;font-weight:600;">Thanks for the feedback! 🙏</p></div>`;
+  } catch (err) {
+    const errBox = document.getElementById('feedbackPromptErr');
+    if (errBox) errBox.innerHTML = `<div class="msg err" style="margin-bottom:10px;">${err.message}</div>`;
+  }
+};
+
+window.dismissFeedbackPrompt = async function() {
+  // Optimistic — hides immediately rather than waiting on the network, since
+  // there's nothing meaningful to show while the dismiss call is in flight.
+  const box = document.getElementById('feedbackPromptBox');
+  if (box) box.innerHTML = '';
+  try {
+    await api('/api/feedback/dismiss', { method: 'POST' });
+  } catch (err) {}
+};
+
 function screenDashboardRep() {
   const status = state.me?.verificationStatus;
   const verified = status === 'VERIFIED';
@@ -4720,6 +4796,8 @@ function screenDashboardRep() {
             ? `<p style="margin:0;font-size:13.5px;font-weight:600;">⏳ Your ID is under review</p><p style="margin:4px 0 0;font-size:12.5px;color:var(--slate);">We'll email you as soon as it's been checked — usually within one business day.</p>`
             : `<p style="margin:0;font-size:13.5px;font-weight:600;">🪪 Your account isn't verified yet</p><p style="margin:4px 0 10px;font-size:12.5px;color:var(--slate);">Booking is on hold until you're verified. Upload a photo of your company ID or badge — it only takes a minute.</p><button class="primary" style="margin:0;padding:9px 16px;font-size:13px;" onclick="setState({screen:'idVerification'})">Verify your identity now</button>`}
         </div>` : ''}
+
+      <div id="feedbackPromptBox"></div>
 
       <div id="billingBox" class="card" style="margin-bottom:24px;"><div class="empty">Loading plan…</div></div>
 
@@ -7103,8 +7181,8 @@ function render() {
   else if (state.screen === 'reviewList') { app.innerHTML = screenReviewList(); loadReviewList(); }
   else if (state.screen === 'calendar') { app.innerHTML = screenCalendar(); }
   else if (state.screen === 'officeCalendar') { app.innerHTML = screenOfficeCalendar(); }
-  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeHeader(); loadOfficeLedger(); loadLocationSwitcher(); loadUnreadMessageCount(); }
-  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadRepHeader(); loadMyBookings(); loadBillingStatus(); loadUnreadMessageCount(); loadPendingTeammateInviteCount(); }
+  else if (state.screen === 'dashboard' && state.role === 'office') { app.innerHTML = screenDashboardOffice(); loadOfficeHeader(); loadOfficeLedger(); loadLocationSwitcher(); loadUnreadMessageCount(); loadFeedbackPrompt(); }
+  else if (state.screen === 'dashboard' && state.role === 'rep') { app.innerHTML = screenDashboardRep(); loadRepHeader(); loadMyBookings(); loadBillingStatus(); loadUnreadMessageCount(); loadPendingTeammateInviteCount(); loadFeedbackPrompt(); }
   else if (state.screen === 'visitHistory' && state.role === 'office') { app.innerHTML = screenVisitHistory(); loadOfficeHistory(); }
   else if (state.screen === 'visitHistory' && state.role === 'rep') { app.innerHTML = screenVisitHistory(); loadRepHistory(); }
 
