@@ -225,6 +225,13 @@
 
   @media (max-width:860px){
     .hero-grid{grid-template-columns:1fr;}
+    /* Stacked single-column hero (below) was left-aligning the headline and
+       lede inside the full 1160px .wrap, leaving a big empty gap on the
+       right on tablet/narrow-desktop widths — center the text column and
+       the width-capped lede/CTA row instead. */
+    .hero-grid > div:first-child{text-align:center;}
+    .hero p.lede{margin-left:auto;margin-right:auto;}
+    .hero-ctas{justify-content:center;}
     .split{grid-template-columns:1fr;}
     .trust-grid{grid-template-columns:1fr;gap:32px;}
     nav.links{display:none;}
