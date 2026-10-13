@@ -80,7 +80,12 @@
   }
   .mobile-topic-nav::-webkit-scrollbar{display:none;}
   .mobile-topic-nav a{
-    flex:0 0 auto;
+    /* Fixed width (not flex:0 0 auto) so every pill is the same size
+       regardless of label length -- "Verification" no longer makes its
+       pill visibly wider than "For reps". 132px comfortably fits the
+       longest label ("Verification") at this font-size/padding. */
+    flex:0 0 132px;
+    text-align:center;
     background:var(--paper-raised);
     color:var(--ink);
     font-size:13px;
