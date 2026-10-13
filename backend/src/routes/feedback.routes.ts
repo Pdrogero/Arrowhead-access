@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../auth/auth.guard';
+import { notifyAdmin } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -41,6 +42,18 @@ router.get('/status', requireAuth, async (req, res) => {
   }
 });
 
+// Pings the same admin inbox every other "something happened" notification
+// in this app goes to (new signups, verification requests, etc.) — so
+// feedback shows up the moment it's submitted instead of only being
+// visible by remembering to check GET /api/admin/feedback.
+function notifyAdminOfFeedback(authorType: 'REP' | 'STAFF', name: string, email: string, rating: number, comment: string | null) {
+  const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+  notifyAdmin(
+    `New feedback (${stars}) — Arrowhead Access`,
+    `<p><strong>${name}</strong> (${authorType === 'REP' ? 'rep' : 'office staff'}, ${email}) rated Arrowhead Access <strong>${stars}</strong>.</p>${comment ? `<p>"${comment.replace(/</g, '&lt;')}"</p>` : '<p>(no comment left)</p>'}`
+  );
+}
+
 // --- Submit a rating (+ optional comment) — counts as dismissed too --------
 router.post('/submit', requireAuth, async (req, res) => {
   try {
@@ -51,17 +64,23 @@ router.post('/submit', requireAuth, async (req, res) => {
     const comment = typeof req.body.comment === 'string' ? req.body.comment.trim().slice(0, 2000) || null : null;
 
     if (req.user!.role === 'rep') {
+      const rep = await prisma.rep.findUnique({ where: { id: req.user!.sub }, select: { name: true, email: true } });
+      if (!rep) return res.status(404).json({ error: 'Rep not found' });
       await prisma.$transaction([
         prisma.platformFeedback.create({ data: { authorType: 'REP', repId: req.user!.sub, rating, comment } }),
         prisma.rep.update({ where: { id: req.user!.sub }, data: { feedbackPromptDismissed: true } }),
       ]);
+      notifyAdminOfFeedback('REP', rep.name, rep.email, rating, comment);
       return res.status(201).json({ ok: true });
     }
     if (isStaff(req.user!.role)) {
+      const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub }, select: { name: true, email: true } });
+      if (!staff) return res.status(404).json({ error: 'Staff account not found' });
       await prisma.$transaction([
         prisma.platformFeedback.create({ data: { authorType: 'STAFF', staffId: req.user!.sub, rating, comment } }),
         prisma.staffUser.update({ where: { id: req.user!.sub }, data: { feedbackPromptDismissed: true } }),
       ]);
+      notifyAdminOfFeedback('STAFF', staff.name || staff.email, staff.email, rating, comment);
       return res.status(201).json({ ok: true });
     }
     res.status(403).json({ error: 'Not permitted for this role' });
