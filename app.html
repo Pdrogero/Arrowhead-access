@@ -2312,7 +2312,7 @@ function screenCalendar() {
               <span class="chip ${b.status}">${b.status}</span>
             </div>`).join('') : '<div class="empty">No bookings match that search.</div>'}
         </div>` : ''}
-      <button class="link" style="text-align:left;margin-bottom:14px;" onclick="toggleCalendarSync()">🔗 Sync with Apple/Google Calendar</button>
+      <button class="link" style="text-align:left;margin-bottom:14px;" onclick="toggleCalendarSync()">🔗 Sync with Apple/Google/Outlook Calendar</button>
       <div id="calendarSyncBox"></div>
       <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;font-size:12px;color:var(--slate);">
         <span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:3px;background:#E3F1EC;border:1px solid #215947;display:inline-block;"></span>Confirmed</span>
@@ -2434,6 +2434,8 @@ function screenOfficeCalendar() {
       <div style="background:#EAF2FB;border:1px solid #CFE0F3;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:#2B5A8C;">
         💡 <strong>Already arranged a visit outside the app?</strong> Tap the day on the calendar below, then "➕ Add a lunch/visit manually" to add it — pick one of your reps, or enter a new rep's email to invite them and confirm the visit in one step.
       </div>
+      <button class="link" style="text-align:left;margin-bottom:14px;" onclick="toggleOfficeCalendarSync()">🔗 Sync with Apple/Google/Outlook Calendar</button>
+      <div id="officeCalendarSyncBox"></div>
       <div style="position:relative;margin-bottom:8px;">
         <input id="officeCalendarSearch" type="text" placeholder="🔍 Search upcoming lunches/breakfasts by rep name…" autocomplete="off" oninput="filterOfficeCalendarSearch(this.value)" onblur="setTimeout(hideOfficeCalendarSearchResults, 150)" style="margin-bottom:0;width:100%;">
         <div id="officeCalendarSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:10;max-height:260px;overflow-y:auto;"></div>
@@ -6744,7 +6746,8 @@ window.toggleCalendarSync = async function() {
         </div>
         <p style="font-size:12px;color:var(--slate);line-height:1.6;">
           <strong>Apple Calendar (iPhone/Mac):</strong> tap "Open in Apple Calendar" above, or in the Calendar app go to Settings → Add Account → Other → Add Subscribed Calendar, and paste the link.<br><br>
-          <strong>Google Calendar:</strong> on Google Calendar's website, click the "+" next to "Other calendars" → "From URL", and paste the link.
+          <strong>Google Calendar:</strong> on Google Calendar's website, click the "+" next to "Other calendars" → "From URL", and paste the link.<br><br>
+          <strong>Outlook / Microsoft Calendar:</strong> on Outlook's website, go to Add calendar → Subscribe from web, and paste the link.
         </p>
       </div>`;
   } catch (err) {
@@ -6756,6 +6759,38 @@ window.copyCalendarLink = function(url) {
   navigator.clipboard.writeText(url)
     .then(() => alert('Link copied'))
     .catch(() => alert('Could not copy automatically — tap the link field above and select the text instead.'));
+};
+
+// Office-side mirror of toggleCalendarSync above — same subscription-link
+// mechanics, just keyed to the office's location instead of a rep.
+window.toggleOfficeCalendarSync = async function() {
+  const box = document.getElementById('officeCalendarSyncBox');
+  if (!box) return;
+  if (box.innerHTML.trim()) {
+    box.innerHTML = '';
+    return;
+  }
+  box.innerHTML = '<p style="font-size:13px;color:var(--slate);margin-bottom:16px;">Loading your link…</p>';
+  try {
+    const { url, webcalUrl } = await api(`/api/bookings/locations/${state.me.locationId}/calendar-link`);
+    box.innerHTML = `
+      <div class="card" style="margin-bottom:20px;">
+        <p style="font-size:13px;font-weight:600;margin-bottom:6px;">This office's private calendar link</p>
+        <p style="font-size:12.5px;color:var(--slate);margin-bottom:10px;">Add this once and confirmed visits will keep showing up automatically — no need to re-add it.</p>
+        <input type="text" readonly value="${url}" onclick="this.select()" style="margin-bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:12px;">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
+          <button type="button" class="link" style="width:auto;margin:0;" onclick="copyCalendarLink('${url}')">📋 Copy link</button>
+          <a href="${webcalUrl}" style="font-size:13px;color:var(--teal);text-decoration:underline;">📱 Open in Apple Calendar</a>
+        </div>
+        <p style="font-size:12px;color:var(--slate);line-height:1.6;">
+          <strong>Apple Calendar (iPhone/Mac):</strong> tap "Open in Apple Calendar" above, or in the Calendar app go to Settings → Add Account → Other → Add Subscribed Calendar, and paste the link.<br><br>
+          <strong>Google Calendar:</strong> on Google Calendar's website, click the "+" next to "Other calendars" → "From URL", and paste the link.<br><br>
+          <strong>Outlook / Microsoft Calendar:</strong> on Outlook's website, go to Add calendar → Subscribe from web, and paste the link.
+        </p>
+      </div>`;
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${err.message}</div>`;
+  }
 };
 
 let incomingTransfersData = [];

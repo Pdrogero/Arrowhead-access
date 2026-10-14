@@ -142,6 +142,11 @@ model Location {
   // goes out to every office every month regardless of activity.
   noSlotsReminder2dSent       Boolean  @default(false)
 
+  // Private token embedded in this location's calendar subscription URL, so
+  // Google/Apple/Outlook can fetch its booked-visits .ics feed without
+  // logging in — same pattern as Rep.calendarToken below.
+  calendarToken                String?  @unique
+
   staff  StaffUser[]
   slots  Slot[]
   policy OfficePolicy?
