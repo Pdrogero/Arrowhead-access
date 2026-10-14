@@ -211,6 +211,9 @@ let officeCancelDraft = null; // { bookingId, repName, timeLabel, reason } once 
 let repCancelDraft = null; // { bookingId, officeName, timeLabel, reason } once a reason has been given
 let openSlotsData = [];
 let browseOfficeRatings = {};
+// Every office on the platform (id + name), for the "Select offices" filter
+// panel — loaded once and cached, same pattern as favoriteOfficesData below.
+let allOfficesData = null;
 // Whether the logged-in rep currently has an active (or trialing) Stripe
 // subscription — browsing open slots is allowed either way, but claiming
 // one still isn't, so claimButtonOrStatusHtml checks this to show a
@@ -1356,9 +1359,11 @@ function screenBrowseSlots() {
 }
 
 // Lets a rep jump straight to one office's open slots by picking from a
-// list, instead of scrolling past every other office's slots or typing a
-// name into search — built from the offices that actually have open slots
-// right now, so there's nothing to pick that would show an empty list.
+// list. Built from every office signed up on the platform (not just ones
+// with open slots posted right now) so a rep can find and filter to an
+// office they know about even before that office has anything open —
+// each one shows its current open-slot count (0 for most, since most
+// offices aren't actively posting at any given moment).
 window.toggleBrowseOfficePanel = function() {
   const panel = document.getElementById('browseOfficePanel');
   if (!panel) return;
@@ -1367,20 +1372,32 @@ window.toggleBrowseOfficePanel = function() {
   renderBrowseOfficePanel();
 };
 
-function renderBrowseOfficePanel() {
+async function renderBrowseOfficePanel() {
   const panel = document.getElementById('browseOfficePanel');
   if (!panel) return;
-  const byOffice = new Map();
+
+  if (allOfficesData === null) {
+    panel.innerHTML = `<div class="listcard"><div class="empty">Loading…</div></div>`;
+    try {
+      allOfficesData = await api('/api/locations/all');
+    } catch (err) {
+      allOfficesData = null; // allow retry next time the panel opens
+      panel.innerHTML = `<div class="listcard"><div class="empty">Could not load offices.</div></div>`;
+      return;
+    }
+    // The panel may have been closed again while this was loading.
+    if (document.getElementById('browseOfficePanel')?.style.display !== 'block') return;
+  }
+
+  const openSlotCounts = new Map();
   openSlotsData.forEach(s => {
     if (s.eventType === 'OFFICE_CLOSED') return;
-    const entry = byOffice.get(s.location.id) || { id: s.location.id, name: s.location.name, count: 0 };
-    entry.count++;
-    byOffice.set(s.location.id, entry);
+    openSlotCounts.set(s.location.id, (openSlotCounts.get(s.location.id) || 0) + 1);
   });
-  const offices = [...byOffice.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const offices = [...allOfficesData].sort((a, b) => a.name.localeCompare(b.name));
 
   if (!offices.length) {
-    panel.innerHTML = `<div class="listcard"><div class="empty">No open slots to pick an office from right now.</div></div>`;
+    panel.innerHTML = `<div class="listcard"><div class="empty">No offices on Arrowhead Access yet.</div></div>`;
     return;
   }
   panel.innerHTML = `<div class="listcard" style="max-height:320px;overflow-y:auto;">
@@ -1388,14 +1405,17 @@ function renderBrowseOfficePanel() {
       <input type="checkbox" id="browseOfficeSelectAll" ${offices.length && browseSelectedOfficeIds.size === offices.length ? 'checked' : ''} onchange="toggleBrowseOfficeSelectAll(this.checked)">
       Select all
     </label>
-    ${offices.map(o => `
+    ${offices.map(o => {
+      const count = openSlotCounts.get(o.id) || 0;
+      return `
       <label class="row" style="cursor:pointer;display:flex;align-items:center;gap:10px;">
         <input type="checkbox" class="browseOfficeCb" value="${o.id}" ${browseSelectedOfficeIds.has(o.id) ? 'checked' : ''} onchange="toggleBrowseOfficeSelection('${o.id}', this.checked)">
         <div class="mid">
           <div class="who">${o.name}</div>
-          <div class="what">${o.count} open slot${o.count === 1 ? '' : 's'}</div>
+          <div class="what">${count ? `${count} open slot${count === 1 ? '' : 's'}` : 'No open slots right now'}</div>
         </div>
-      </label>`).join('')}
+      </label>`;
+    }).join('')}
   </div>`;
 }
 
