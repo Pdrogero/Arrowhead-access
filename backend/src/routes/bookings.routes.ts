@@ -246,6 +246,71 @@ router.get('/calendar/:token', async (req, res) => {
   res.send(ics);
 });
 
+// --- Office staff: get (or create) this location's private calendar ------
+// --- subscription link -----------------------------------------------
+router.get('/locations/:locationId/calendar-link', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
+  try {
+    assertOwnsLocation(req, req.params.locationId);
+  } catch (err) {
+    return res.status(403).json({ error: (err as Error).message });
+  }
+  try {
+    let location = await prisma.location.findUniqueOrThrow({ where: { id: req.params.locationId } });
+    if (!location.calendarToken) {
+      location = await prisma.location.update({
+        where: { id: location.id },
+        data: { calendarToken: crypto.randomBytes(24).toString('hex') },
+      });
+    }
+    const url = `${API_URL}/api/bookings/location-calendar/${location.calendarToken}.ics`;
+    res.json({ url, webcalUrl: url.replace(/^https?:\/\//, 'webcal://') });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not get calendar link' });
+  }
+});
+
+// --- Public: the actual .ics feed Google/Apple/Outlook subscribes to for -
+// --- an office's booked visits — same "secret address" pattern as the ----
+// --- rep feed above, keyed to the location instead of the rep. -----------
+router.get('/location-calendar/:token', async (req, res) => {
+  const token = req.params.token.replace(/\.ics$/i, '');
+  const location = await prisma.location.findUnique({ where: { calendarToken: token } });
+  if (!location) return res.status(404).send('Calendar not found');
+
+  const slots = await prisma.slot.findMany({
+    where: { locationId: location.id, booking: { status: { in: ['CONFIRMED', 'COMPLETED'] } } },
+    include: { booking: { include: { rep: true } } },
+    orderBy: { startTime: 'asc' },
+  });
+
+  const events = slots.map(s => [
+    'BEGIN:VEVENT',
+    `UID:slot-${s.id}@arrowheadaccess.com`,
+    `DTSTAMP:${toIcsDate(new Date())}`,
+    `DTSTART:${toIcsDate(s.startTime)}`,
+    `DTEND:${toIcsDate(s.endTime)}`,
+    `SUMMARY:${icsEscape('Visit: ' + (s.booking?.rep.name || s.booking?.rep.companyName || 'Rep'))}`,
+    s.booking?.topic ? `DESCRIPTION:${icsEscape(s.booking.topic)}` : null,
+    'END:VEVENT',
+  ].filter(Boolean).join('\r\n')).join('\r\n');
+
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Arrowhead Access//Office Calendar//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:Arrowhead Access Visits',
+    events,
+    'END:VCALENDAR',
+  ].filter(Boolean).join('\r\n');
+
+  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Content-Disposition', 'inline; filename="arrowhead-visits.ics"');
+  res.send(ics);
+});
+
 // --- Office staff: view this location's ledger ---------------------------
 router.get('/locations/:locationId/ledger', requireAuth, requireRole('office_admin', 'office_staff'), async (req, res) => {
   try {
