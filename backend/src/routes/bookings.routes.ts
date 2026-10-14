@@ -1494,4 +1494,48 @@ router.post('/check-monthly-schedule-reminders', async (req, res) => {
   }
 });
 
+// --- Daily check: nudge offices that signed up but never posted a single --
+// slot at all, called by the same kind of external scheduled trigger as
+// the other daily reminder checks. Separate from the monthly/weekly
+// reminders above, which go to every office every month/week regardless of
+// activity — this is a one-time nudge for the office that created an
+// account and then just... never touched their calendar. Same one-time,
+// 2-day-after-signup cadence as the rep no-plan reminder.
+const NO_SLOTS_REMINDER_DELAY_MS = 2 * 24 * 60 * 60 * 1000;
+
+router.post('/check-no-slots-reminders', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const cutoff = new Date(Date.now() - NO_SLOTS_REMINDER_DELAY_MS);
+    const locations = await prisma.location.findMany({
+      where: {
+        noSlotsReminder2dSent: false,
+        createdAt: { lte: cutoff },
+        slots: { none: {} },
+      },
+      include: { staff: true },
+    });
+
+    let remindersSent = 0;
+    for (const location of locations) {
+      for (const staff of location.staff) {
+        sendEmail({
+          to: staff.email,
+          subject: 'Your Arrowhead Access calendar is still empty',
+          html: `${emailLogoHeader()}<p>Hi there,</p><p>You signed up <strong>${location.name}</strong> for Arrowhead Access, but haven't posted any open slots yet — reps can't book a visit until there's something on your calendar to claim.</p><p>It only takes a minute to post a lunch slot, a rep-visit window, or set up a recurring schedule.</p>${emailLoginButton('Set up your calendar')}`,
+        }).catch(() => {});
+      }
+      await prisma.location.update({ where: { id: location.id }, data: { noSlotsReminder2dSent: true } });
+      remindersSent++;
+    }
+
+    res.json({ checked: locations.length, remindersSent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check no-slots reminders' });
+  }
+});
+
 export default router;

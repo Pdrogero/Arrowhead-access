@@ -135,6 +135,12 @@ model Location {
   // Date (YYYY-MM-DD) of the Monday the weekly Sunday "your week ahead"
   // digest was last sent for, so it only sends once per week.
   lastWeeklyReminderWeek      String?
+  // Set once the one-time "you signed up but haven't set up your calendar
+  // yet" nudge has gone out (sent only if this location still has zero
+  // slots, ever, a couple days after signup) -- so the daily cron never
+  // sends it twice. Distinct from lastMonthlyReminderMonth above, which
+  // goes out to every office every month regardless of activity.
+  noSlotsReminder2dSent       Boolean  @default(false)
 
   staff  StaffUser[]
   slots  Slot[]
