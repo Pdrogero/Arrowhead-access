@@ -16,7 +16,7 @@ import { Router } from 'express';
 import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
-import { sendEmail, emailLogoHeader, emailLoginButton } from '../email';
+import { sendEmail, emailLogoHeader, emailLoginButton, notifyAdmin } from '../email';
 import { pickAPlanReminderHtml, firstNameOf } from '../emailTemplates/pickAPlanReminder';
 
 const prisma = new PrismaClient();
@@ -209,6 +209,12 @@ router.post('/webhook', async (req, res) => {
           : 'CANCELED';
         const newPeriodEnd = new Date(sub.current_period_end * 1000);
         const renewed = !rep.currentPeriodEnd || newPeriodEnd.getTime() > rep.currentPeriodEnd.getTime();
+        // Only the moment cancel_at_period_end flips false -> true is the rep
+        // actually choosing to cancel — this same event fires on plenty of
+        // other, unrelated subscription changes too, so comparing against the
+        // value already on file (set before this update) keeps it to one
+        // email instead of one per webhook delivery.
+        const justCancelled = sub.cancel_at_period_end && !rep.cancelAtPeriodEnd;
         await prisma.rep.update({
           where: { id: rep.id },
           data: {
@@ -218,12 +224,22 @@ router.post('/webhook', async (req, res) => {
             ...(renewed ? { renewalReminder30dSent: false, renewalReminder7dSent: false, renewalReminder1dSent: false } : {}),
           },
         });
+        if (justCancelled) {
+          notifyAdmin(
+            `Rep cancelled: ${rep.name}`,
+            `${emailLogoHeader()}<p><strong>${rep.name}</strong> (${rep.companyName}, ${rep.email}) just cancelled their subscription.</p><p>They'll keep access until their current period ends on ${newPeriodEnd.toLocaleDateString()}.</p>`
+          );
+        }
       }
     } else if (event.type === 'customer.subscription.deleted') {
       const sub = event.data.object as Stripe.Subscription;
       const rep = await prisma.rep.findFirst({ where: { stripeSubscriptionId: sub.id } });
       if (rep) {
         await prisma.rep.update({ where: { id: rep.id }, data: { subscriptionStatus: 'CANCELED', cancelAtPeriodEnd: false } });
+        notifyAdmin(
+          `Rep access lapsed: ${rep.name}`,
+          `${emailLogoHeader()}<p><strong>${rep.name}</strong> (${rep.companyName}, ${rep.email})'s subscription has ended — their access is now cut off.</p>`
+        );
       }
     }
     res.json({ received: true });
