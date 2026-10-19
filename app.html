@@ -3905,8 +3905,9 @@ function renderMessages() {
   const box = document.getElementById('messagesBox');
   if (!conversationMessages.length) { box.innerHTML = '<div class="empty">No messages yet — say hello!</div>'; return; }
   const myType = state.role === 'rep' ? 'REP' : 'OFFICE';
+  const lastMessageIndex = conversationMessages.length - 1;
   let lastLabel = null;
-  box.innerHTML = conversationMessages.map(m => {
+  box.innerHTML = conversationMessages.map((m, i) => {
     // Only repeat the "Re: ..." tag when it changes from the message right
     // before it, so a back-and-forth about the same visit isn't relabeled
     // on every single line.
@@ -3914,6 +3915,10 @@ function renderMessages() {
     lastLabel = m.eventLabel || null;
     const links = (state.role === 'office' && m.senderType === 'REP') ? extractMessageLinks(m.body) : [];
     const isMine = m.senderType === myType;
+    // Read receipt — only on the most recent message, same as most chat
+    // apps, since the other side marks everything read at once on open:
+    // if the last one's been seen, so has everything before it.
+    const showSeen = isMine && i === lastMessageIndex && !!m.readAt;
 
     if (editingMessageId === m.id) {
       return `
@@ -3933,7 +3938,7 @@ function renderMessages() {
       ${showLabel ? `<div style="font-size:11px;font-weight:600;color:var(--teal-dark);margin-bottom:4px;">Re: ${m.eventLabel.replace(/</g, '&lt;')}</div>` : ''}
       ${m.senderType === 'OFFICE' && m.senderName ? `<div style="font-size:11px;font-weight:600;color:var(--slate);margin-bottom:2px;">${m.senderName.replace(/</g, '&lt;')}</div>` : ''}
       <div style="font-size:13px;">${linkifyMessageBody(m.body)}</div>
-      <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}${m.editedAt ? ' · edited' : ''}${isMine ? ` · <a href="#" onclick="toggleEditMessage('${m.id}');return false;" style="color:var(--teal);">Edit</a>` : ''}</div>
+      <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}${m.editedAt ? ' · edited' : ''}${showSeen ? ' · <span style="color:var(--teal-dark);font-weight:600;">Seen</span>' : ''}${isMine ? ` · <a href="#" onclick="toggleEditMessage('${m.id}');return false;" style="color:var(--teal);">Edit</a>` : ''}</div>
       ${links.map(link => `
         <button type="button" onclick="emailMessageAttachment('${m.id}', '${link.url.replace(/'/g, "\\'")}', '${link.title.replace(/'/g, "\\'")}')" style="display:inline-block;margin-top:6px;margin-right:6px;background:#F0F0EE;color:var(--ink);border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;">✉️ Email this</button>
       `).join('')}
