@@ -1182,10 +1182,10 @@ router.post('/:bookingId/attendees', requireAuth, requireRole('rep'), async (req
 
 // --- Daily lunch-reminder check, called by a scheduled trigger --------------
 // Not behind requireAuth — guarded by the same shared cron secret used for
-// the renewal-reminder check. Sends a rep one email the calendar day before
-// every confirmed visit (any event type, all grouped into a single email
-// if there's more than one), plus a same-day reminder for lunches
-// specifically, same as before.
+// the renewal-reminder check. Sends both the rep and every staff login at
+// the office a reminder email for every confirmed visit (any event type) —
+// one the calendar day before, and another the morning of — each grouped
+// into a single email per recipient if there's more than one that day.
 router.post('/check-lunch-reminders', async (req, res) => {
   if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -1279,34 +1279,81 @@ router.post('/check-lunch-reminders', async (req, res) => {
     }
     const dayBeforeRemindersSent = sentBookingIds.length;
 
-    // Same-day reminder — unchanged from before: lunch only, one email
-    // per booking (a rep rarely has more than one lunch in a day, so
-    // grouping wasn't asked for here).
+    // Same-day reminder — now every confirmed event type (not just lunch —
+    // same situation as lunchReminder1dSent above, the field predates this
+    // covering more than lunch but still means "the day-of reminder for
+    // this booking has been sent"), and now reaches office staff too,
+    // grouped the same way as the day-before block above.
     const dayOfBookings = await prisma.booking.findMany({
       where: {
         status: 'CONFIRMED',
         lunchReminderDaySent: false,
-        slot: { eventType: 'LUNCH', startTime: { gte: todayStart, lt: tomorrowStart } },
+        slot: { startTime: { gte: todayStart, lt: tomorrowStart } },
       },
-      include: { rep: true, slot: { include: { location: true } } },
+      include: { rep: true, slot: { include: { location: { include: { staff: true } } } } },
+      orderBy: { slot: { startTime: 'asc' } },
     });
 
-    let dayOfRemindersSent = 0;
+    const dayOfByRep = new Map<string, typeof dayOfBookings>();
     for (const booking of dayOfBookings) {
-      const dateStr = booking.slot.startTime.toLocaleString('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-      const endStr = booking.slot.endTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
-      const sent = await sendEmail({
-        to: booking.rep.email,
-        subject: `Reminder: lunch at ${booking.slot.location.name} today`,
-        html: `${emailLogoHeader()}<p>Just a reminder — you have a lunch scheduled at <strong>${booking.slot.location.name}</strong> today, ${dateStr} – ${endStr}.</p><p style="color:#6b7280;">${booking.slot.location.address}</p>${emailLoginButton()}`,
-      });
-      if (sent) {
-        await prisma.booking.update({ where: { id: booking.id }, data: { lunchReminderDaySent: true } });
-        dayOfRemindersSent++;
-      }
+      const list = dayOfByRep.get(booking.repId) || [];
+      list.push(booking);
+      dayOfByRep.set(booking.repId, list);
     }
 
-    res.json({ dayBeforeRemindersSent, officeDayBeforeRemindersSent, dayOfRemindersSent });
+    const dayOfSentBookingIds: string[] = [];
+    for (const repBookings of dayOfByRep.values()) {
+      const itemsHtml = repBookings.map(b => {
+        const startStr = b.slot.startTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const endStr = b.slot.endTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+        return `<li style="margin-bottom:10px;"><strong>${startStr} – ${endStr}</strong> — ${EVENT_TYPE_LABEL[b.slot.eventType] || b.slot.eventType} at ${b.slot.location.name}<br><span style="color:#6b7280;font-size:13px;">${b.slot.location.address}</span></li>`;
+      }).join('');
+      const sent = await sendEmail({
+        to: repBookings[0].rep.email,
+        subject: repBookings.length > 1
+          ? `Reminder: ${repBookings.length} visits today`
+          : `Reminder: ${EVENT_TYPE_LABEL[repBookings[0].slot.eventType] || 'visit'} at ${repBookings[0].slot.location.name} today`,
+        html: `${emailLogoHeader()}<p>Just a reminder — you have ${repBookings.length > 1 ? `${repBookings.length} visits` : 'a visit'} scheduled today:</p><ul style="padding-left:18px;">${itemsHtml}</ul>${emailLoginButton()}`,
+      });
+      if (sent) dayOfSentBookingIds.push(...repBookings.map(b => b.id));
+    }
+
+    const dayOfByLocation = new Map<string, typeof dayOfBookings>();
+    for (const booking of dayOfBookings) {
+      const list = dayOfByLocation.get(booking.slot.locationId) || [];
+      list.push(booking);
+      dayOfByLocation.set(booking.slot.locationId, list);
+    }
+
+    let officeDayOfRemindersSent = 0;
+    for (const locationBookings of dayOfByLocation.values()) {
+      const location = locationBookings[0].slot.location;
+      const itemsHtml = locationBookings.map(b => {
+        const startStr = b.slot.startTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const endStr = b.slot.endTime.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+        return `<li style="margin-bottom:10px;"><strong>${startStr} – ${endStr}</strong> — ${EVENT_TYPE_LABEL[b.slot.eventType] || b.slot.eventType} with ${b.rep.name}${b.rep.companyName ? ` (${b.rep.companyName})` : ''}</li>`;
+      }).join('');
+      for (const staff of location.staff) {
+        sendEmail({
+          to: staff.email,
+          subject: locationBookings.length > 1
+            ? `Reminder: ${locationBookings.length} visits today`
+            : `Reminder: ${EVENT_TYPE_LABEL[locationBookings[0].slot.eventType] || 'visit'} with ${locationBookings[0].rep.name} today`,
+          html: `${emailLogoHeader()}<p>Just a reminder — you have ${locationBookings.length > 1 ? `${locationBookings.length} visits` : 'a visit'} scheduled today:</p><ul style="padding-left:18px;">${itemsHtml}</ul>${emailLoginButton()}`,
+        }).catch(() => {});
+      }
+      officeDayOfRemindersSent += locationBookings.length;
+    }
+
+    if (dayOfSentBookingIds.length) {
+      await prisma.booking.updateMany({
+        where: { id: { in: dayOfSentBookingIds } },
+        data: { lunchReminderDaySent: true },
+      });
+    }
+    const dayOfRemindersSent = dayOfSentBookingIds.length;
+
+    res.json({ dayBeforeRemindersSent, officeDayBeforeRemindersSent, dayOfRemindersSent, officeDayOfRemindersSent });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not check lunch reminders' });
