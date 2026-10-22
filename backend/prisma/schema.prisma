@@ -294,6 +294,11 @@ model StaffUser {
   // True once the in-app "rate the site" prompt has been submitted or
   // dismissed, so it only ever shows once per login.
   feedbackPromptDismissed Boolean @default(false)
+  // Same pair as Rep.lastLoginAt / Rep.inactivityReminderSent above —
+  // stamped on every successful login, reset on login, drives the weekly
+  // inactivity nudge for office accounts too.
+  lastLoginAt             DateTime?
+  inactivityReminderSent  Boolean   @default(false)
 
   createdSlots   Slot[]
   loginOtps      StaffLoginOtp[]
@@ -366,6 +371,15 @@ model Rep {
   // Same idea, a second nudge at day 5 if still unverified then.
   unverifiedReminder5dSent Boolean         @default(false)
   createdAt            DateTime            @default(now())
+  // Stamped on every successful login (not signup) — null means they've
+  // never logged back in since creating the account. Drives the "you've
+  // been away a week" nudge below; falls back to createdAt when null so an
+  // account that was never logged into again still eventually gets one.
+  lastLoginAt           DateTime?
+  // Reset to false on every login, so the one-time weekly-inactivity nudge
+  // can fire again next time they go quiet, but never twice for the same
+  // stretch of inactivity.
+  inactivityReminderSent Boolean           @default(false)
 
   // Profile (RxVantage-style personal info)
   title                String?
