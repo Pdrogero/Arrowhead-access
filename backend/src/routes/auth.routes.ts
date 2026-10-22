@@ -201,6 +201,8 @@ router.post('/rep/login', async (req, res) => {
       verified: rep.verificationStatus === 'VERIFIED',
     });
 
+    await prisma.rep.update({ where: { id: rep.id }, data: { lastLoginAt: new Date(), inactivityReminderSent: false } });
+
     res.json({
       token,
       rep: { id: rep.id, name: rep.name, email: rep.email, verificationStatus: rep.verificationStatus },
@@ -257,6 +259,8 @@ router.post('/rep/verify-otp', async (req, res) => {
       organizationId: rep.organizationId ?? '',
       verified: rep.verificationStatus === 'VERIFIED',
     });
+
+    await prisma.rep.update({ where: { id: rep.id }, data: { lastLoginAt: new Date(), inactivityReminderSent: false } });
 
     res.json({
       token,
@@ -330,6 +334,8 @@ router.post('/staff/login', async (req, res) => {
       locationId: staff.locationId,
     });
 
+    await prisma.staffUser.update({ where: { id: staff.id }, data: { lastLoginAt: new Date(), inactivityReminderSent: false } });
+
     res.json({ token, staff: { id: staff.id, email: staff.email, role: staff.role, locationId: staff.locationId } });
   } catch (err) {
     console.error(err);
@@ -385,6 +391,8 @@ router.post('/staff/verify-otp', async (req, res) => {
       organizationId: organizationId ?? '',
       locationId: staff.locationId,
     });
+
+    await prisma.staffUser.update({ where: { id: staff.id }, data: { lastLoginAt: new Date(), inactivityReminderSent: false } });
 
     res.json({
       token,
@@ -789,6 +797,58 @@ router.post('/change-password', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Unexpected server error' });
+  }
+});
+
+const INACTIVITY_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
+
+// --- Daily check: nudge any rep or office login that's gone quiet for a --
+// week-plus, called by a scheduled trigger. Not behind requireAuth — same
+// shared cron secret as the other check-* routes. "Inactive" means no
+// login since the cutoff (falling back to account creation for one that's
+// never logged back in at all) — inactivityReminderSent keeps this to one
+// nudge per stretch of inactivity, reset the moment they log back in.
+router.post('/check-inactivity-reminders', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const cutoff = new Date(Date.now() - INACTIVITY_THRESHOLD_MS);
+    const staleSince = { OR: [{ lastLoginAt: { lt: cutoff } }, { lastLoginAt: null, createdAt: { lt: cutoff } }] };
+
+    const inactiveReps = await prisma.rep.findMany({
+      where: { inactivityReminderSent: false, ...staleSince },
+    });
+    for (const rep of inactiveReps) {
+      sendEmail({
+        to: rep.email,
+        subject: `It's been a while — new offices are waiting on Arrowhead Access`,
+        html: `${emailLogoHeader()}<p>Hi ${rep.name.split(' ')[0]},</p><p>You haven't logged in for over a week. Offices are posting new open slots all the time — log back in to see what's available and keep your schedule full.</p>${emailLoginButton()}`,
+      }).catch(() => {});
+    }
+    if (inactiveReps.length) {
+      await prisma.rep.updateMany({ where: { id: { in: inactiveReps.map(r => r.id) } }, data: { inactivityReminderSent: true } });
+    }
+
+    const inactiveStaff = await prisma.staffUser.findMany({
+      where: { inactivityReminderSent: false, ...staleSince },
+    });
+    for (const staff of inactiveStaff) {
+      sendEmail({
+        to: staff.email,
+        subject: `It's been a while — keep your Arrowhead Access calendar current`,
+        html: `${emailLogoHeader()}<p>Hi,</p><p>You haven't logged in for over a week. Log back in to review any pending requests and keep your calendar up to date, so reps can find time that actually works.</p>${emailLoginButton()}`,
+      }).catch(() => {});
+    }
+    if (inactiveStaff.length) {
+      await prisma.staffUser.updateMany({ where: { id: { in: inactiveStaff.map(s => s.id) } }, data: { inactivityReminderSent: true } });
+    }
+
+    res.json({ repRemindersSent: inactiveReps.length, officeRemindersSent: inactiveStaff.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check inactivity reminders' });
   }
 });
 
