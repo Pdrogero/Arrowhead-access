@@ -209,6 +209,12 @@ let ledgerSlotsData = [];
 let selectedLedgerSlotIds = new Set();
 let officeCancelDraft = null; // { bookingId, repName, timeLabel, reason } once a reason has been given
 let repCancelDraft = null; // { bookingId, officeName, timeLabel, reason } once a reason has been given
+// Cached last response from /api/billing/founding-status, plus whether the
+// "are you sure" subscription-cancellation box is showing — kept separate
+// from a loading flag so toggling that box re-renders instantly instead of
+// re-fetching billing status from the server every time.
+let repBillingStatusData = null;
+let showCancelSubscriptionConfirm = false;
 let openSlotsData = [];
 let browseOfficeRatings = {};
 // Every office on the platform (id + name), for the "Select offices" filter
@@ -6084,46 +6090,71 @@ window.logConcurExpense = function(locationName, address, whenLabel) {
 async function loadBillingStatus() {
   const box = document.getElementById('billingBox');
   try {
-    const res = await api('/api/billing/founding-status');
-    const { isFoundingRep, foundingSpotsRemaining, complimentaryAccess, hasActiveSubscription, cancelAtPeriodEnd, currentPeriodEnd, billingCycle, subscriptionStatus } = res;
-    repHasActiveSubscription = hasActiveSubscription || complimentaryAccess;
-
-    if (complimentaryAccess) {
-      box.innerHTML = `
-        <h2 style="font-size:16px;margin-bottom:6px;">Your plan</h2>
-        <p style="font-size:13px;color:var(--slate);margin:0;">🎁 Complimentary access — no billing required.</p>
-      `;
-      return;
-    }
-
-    if (hasActiveSubscription) {
-      const cycleLabel = billingCycle === 'ANNUAL' ? 'Annual' : 'Monthly';
-      const dateStr = currentPeriodEnd ? new Date(currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
-      box.innerHTML = cancelAtPeriodEnd ? `
-        <h2 style="font-size:16px;margin-bottom:12px;">Your plan</h2>
-        <div class="note" style="margin-top:0;margin-bottom:12px;">Your ${cycleLabel.toLowerCase()} subscription is set to cancel${dateStr ? ' on ' + dateStr : ''}. You'll keep full access until then, and won't be charged again.</div>
-        <button class="link" style="text-align:left;" onclick="openBillingPortal()">💳 View card &amp; billing history</button>
-      ` : `
-        <h2 style="font-size:16px;margin-bottom:12px;">Your plan</h2>
-        <p style="font-size:13px;color:var(--slate);margin-bottom:12px;">${cycleLabel} plan${subscriptionStatus === 'TRIALING' ? ' (in trial)' : ''}${dateStr ? ' — renews ' + dateStr : ''}.</p>
-        ${subscriptionStatus === 'TRIALING' ? `<button class="link" style="text-align:left;margin-bottom:8px;" onclick="endTrialNow()">⚡ Activate full access now</button>` : ''}
-        <button class="link" style="text-align:left;margin-bottom:8px;" onclick="openBillingPortal()">💳 Update card / view billing history</button>
-        <button class="link" style="text-align:left;color:#C23C3C;" onclick="cancelSubscription()">Cancel subscription</button>
-      `;
-      return;
-    }
-
-    box.innerHTML = `
-      <h2 style="font-size:16px;margin-bottom:12px;">Choose your plan</h2>
-      <p style="font-size:13px;color:var(--slate);margin-bottom:12px;">14-day free trial, cancel anytime during the trial.</p>
-      ${foundingSpotsRemaining > 0
-        ? `<div class="msg ok">🎉 Founding rep rate — $379.99/year, locked in for as long as you stay subscribed. That's $99.41 less than the regular annual price. Only ${foundingSpotsRemaining} of 30 spots left!</div>`
-        : ''}
-      <button class="primary" style="background:var(--ink);" onclick="goToCheckout('monthly')">Monthly — $49.95/mo</button>
-      <button class="primary" style="background:var(--coral);" onclick="goToCheckout('annual')">Annual — ${isFoundingRep ? '$379.99/yr Founding Rate' : '$479.40/yr'}</button>`;
+    repBillingStatusData = await api('/api/billing/founding-status');
+    repHasActiveSubscription = repBillingStatusData.hasActiveSubscription || repBillingStatusData.complimentaryAccess;
+    showCancelSubscriptionConfirm = false;
+    renderBillingBox();
   } catch (err) {
     box.innerHTML = `<div class="msg err">${err.message}</div>`;
   }
+}
+
+// Pure render off the cached founding-status response + the local
+// "are you sure" flag — split out from loadBillingStatus so toggling that
+// confirmation box doesn't need to hit the server again.
+function renderBillingBox() {
+  const box = document.getElementById('billingBox');
+  if (!box || !repBillingStatusData) return;
+  const { isFoundingRep, foundingSpotsRemaining, complimentaryAccess, hasActiveSubscription, cancelAtPeriodEnd, currentPeriodEnd, billingCycle, subscriptionStatus } = repBillingStatusData;
+
+  if (complimentaryAccess) {
+    box.innerHTML = `
+      <h2 style="font-size:16px;margin-bottom:6px;">Your plan</h2>
+      <p style="font-size:13px;color:var(--slate);margin:0;">🎁 Complimentary access — no billing required.</p>
+    `;
+    return;
+  }
+
+  if (hasActiveSubscription) {
+    const cycleLabel = billingCycle === 'ANNUAL' ? 'Annual' : 'Monthly';
+    const dateStr = currentPeriodEnd ? new Date(currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
+    if (showCancelSubscriptionConfirm) {
+      box.innerHTML = `
+        <h2 style="font-size:16px;margin-bottom:12px;">Your plan</h2>
+        <div class="note" style="margin-top:0;margin-bottom:14px;">
+          <p style="margin:0 0 8px;font-weight:600;">We're sorry to see you go 😔</p>
+          <p style="margin:0 0 8px;">If you cancel, you'll keep full access until${dateStr ? ' ' + dateStr : ' the end of your current billing period'}, then it won't renew. No refund is given for unused time, per the Terms of Service.</p>
+          <p style="margin:0;"><strong>Heads up:</strong> if you come back later and subscribe again, you won't get another free trial — you'll be charged right away instead.</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="link" style="width:auto;margin:0;" onclick="keepSubscription()">Never mind, keep my plan</button>
+          <button class="link" style="width:auto;margin:0;color:#C23C3C;" onclick="confirmCancelSubscription()">Yes, cancel my subscription</button>
+        </div>
+      `;
+      return;
+    }
+    box.innerHTML = cancelAtPeriodEnd ? `
+      <h2 style="font-size:16px;margin-bottom:12px;">Your plan</h2>
+      <div class="note" style="margin-top:0;margin-bottom:12px;">Your ${cycleLabel.toLowerCase()} subscription is set to cancel${dateStr ? ' on ' + dateStr : ''}. You'll keep full access until then, and won't be charged again.</div>
+      <button class="link" style="text-align:left;" onclick="openBillingPortal()">💳 View card &amp; billing history</button>
+    ` : `
+      <h2 style="font-size:16px;margin-bottom:12px;">Your plan</h2>
+      <p style="font-size:13px;color:var(--slate);margin-bottom:12px;">${cycleLabel} plan${subscriptionStatus === 'TRIALING' ? ' (in trial)' : ''}${dateStr ? ' — renews ' + dateStr : ''}.</p>
+      ${subscriptionStatus === 'TRIALING' ? `<button class="link" style="text-align:left;margin-bottom:8px;" onclick="endTrialNow()">⚡ Activate full access now</button>` : ''}
+      <button class="link" style="text-align:left;margin-bottom:8px;" onclick="openBillingPortal()">💳 Update card / view billing history</button>
+      <button class="link" style="text-align:left;color:#C23C3C;" onclick="cancelSubscription()">Cancel subscription</button>
+    `;
+    return;
+  }
+
+  box.innerHTML = `
+    <h2 style="font-size:16px;margin-bottom:12px;">Choose your plan</h2>
+    <p style="font-size:13px;color:var(--slate);margin-bottom:12px;">14-day free trial, cancel anytime during the trial.</p>
+    ${foundingSpotsRemaining > 0
+      ? `<div class="msg ok">🎉 Founding rep rate — $379.99/year, locked in for as long as you stay subscribed. That's $99.41 less than the regular annual price. Only ${foundingSpotsRemaining} of 30 spots left!</div>`
+      : ''}
+    <button class="primary" style="background:var(--ink);" onclick="goToCheckout('monthly')">Monthly — $49.95/mo</button>
+    <button class="primary" style="background:var(--coral);" onclick="goToCheckout('annual')">Annual — ${isFoundingRep ? '$379.99/yr Founding Rate' : '$479.40/yr'}</button>`;
 }
 
 window.endTrialNow = async function() {
@@ -6138,9 +6169,19 @@ window.endTrialNow = async function() {
   }
 };
 
-window.cancelSubscription = async function() {
-  const ok = confirm(`Cancel your subscription? You'll keep full access until the end of your current billing period, then it won't renew. No refund is given for unused time, per the Terms of Service.`);
-  if (!ok) return;
+// Shows the "sorry to see you go" box in place of the plan details — no
+// server round-trip yet, nothing is cancelled until confirmCancelSubscription.
+window.cancelSubscription = function() {
+  showCancelSubscriptionConfirm = true;
+  renderBillingBox();
+};
+
+window.keepSubscription = function() {
+  showCancelSubscriptionConfirm = false;
+  renderBillingBox();
+};
+
+window.confirmCancelSubscription = async function() {
   try {
     await api('/api/billing/rep/cancel', { method: 'POST' });
     await loadBillingStatus();
