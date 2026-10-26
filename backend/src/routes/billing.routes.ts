@@ -235,11 +235,36 @@ router.post('/webhook', async (req, res) => {
       const sub = event.data.object as Stripe.Subscription;
       const rep = await prisma.rep.findFirst({ where: { stripeSubscriptionId: sub.id } });
       if (rep) {
+        // Captured before the update below, which resets it — tells us
+        // whether the "Rep cancelled" email already went out when this was
+        // scheduled (cancel_at_period_end flipped true on an earlier
+        // customer.subscription.updated event). A subscription cancelled
+        // immediately rather than scheduled (e.g. the Stripe billing portal
+        // set to cancel right away instead of at period end) skips that
+        // earlier event entirely, so this is the only notice it'll ever get.
+        const alreadyNotifiedCancel = rep.cancelAtPeriodEnd;
         await prisma.rep.update({ where: { id: rep.id }, data: { subscriptionStatus: 'CANCELED', cancelAtPeriodEnd: false } });
-        notifyAdmin(
-          `Rep access lapsed: ${rep.name}`,
-          `${emailLogoHeader()}<p><strong>${rep.name}</strong> (${rep.companyName}, ${rep.email})'s subscription has ended — their access is now cut off.</p>`
-        );
+
+        // Stripe tells us the real reason right on this event — distinguish
+        // a genuine cancellation from a failed/disputed payment instead of
+        // reporting every ended subscription as the same generic "lapsed".
+        const reason = sub.cancellation_details?.reason;
+        if (reason === 'payment_failed' || reason === 'payment_disputed') {
+          notifyAdmin(
+            `Rep payment failed: ${rep.name}`,
+            `${emailLogoHeader()}<p><strong>${rep.name}</strong> (${rep.companyName}, ${rep.email})'s subscription was cancelled because ${reason === 'payment_disputed' ? 'their payment was disputed' : 'a payment failed'} — their access is now cut off. Check Stripe for the card/dispute details.</p>`
+          );
+        } else if (!alreadyNotifiedCancel) {
+          notifyAdmin(
+            `Rep cancelled: ${rep.name}`,
+            `${emailLogoHeader()}<p><strong>${rep.name}</strong> (${rep.companyName}, ${rep.email}) cancelled their subscription — their access is now cut off.</p>`
+          );
+        } else {
+          notifyAdmin(
+            `Rep access lapsed: ${rep.name}`,
+            `${emailLogoHeader()}<p><strong>${rep.name}</strong> (${rep.companyName}, ${rep.email})'s subscription has ended — their access is now cut off.</p>`
+          );
+        }
       }
     }
     res.json({ received: true });
