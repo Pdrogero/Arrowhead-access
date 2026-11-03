@@ -7,7 +7,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRole } from '../auth/auth.guard';
-import { sendEmail, emailLogoHeader } from '../email';
+import { sendEmail, emailLogoHeader, emailLoginButton } from '../email';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -486,6 +486,51 @@ router.delete('/materials/:id', requireAuth, requireRole('rep'), async (req, res
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not remove marketing material' });
+  }
+});
+
+const PROFILE_REMINDER_DELAY_MS = 2 * 24 * 60 * 60 * 1000;
+
+// --- One-time check: nudge a rep who's still missing the basics on their --
+// profile (title, phone, or any specialty/product) 2 days after signup,
+// called by the same scheduled trigger as the other reminder checks.
+// Marketing materials aren't required for this to count as "complete" —
+// the email just encourages adding them too, on top of the basics.
+router.post('/check-profile-reminders', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const cutoff = new Date(Date.now() - PROFILE_REMINDER_DELAY_MS);
+    const reps = await prisma.rep.findMany({
+      where: {
+        profileReminder2dSent: false,
+        createdAt: { lte: cutoff },
+        OR: [
+          { title: null },
+          { title: '' },
+          { phone: null },
+          { phone: '' },
+          { AND: [{ specialties: { isEmpty: true } }, { products: { none: {} } }] },
+        ],
+      },
+    });
+
+    let remindersSent = 0;
+    for (const rep of reps) {
+      sendEmail({
+        to: rep.email,
+        subject: 'Finish your Arrowhead Access profile',
+        html: `${emailLogoHeader()}<p>Hi ${rep.name.split(' ')[0]},</p><p>Your profile's still missing a few basics — title, phone number, and the products you carry — so offices you visit know exactly who they're working with before you show up.</p><p>While you're at it, it's worth adding your photo, credentials, and any marketing materials you'd want an office to see ahead of a visit.</p>${emailLoginButton('Finish my profile')}`,
+      }).catch(() => {});
+      await prisma.rep.update({ where: { id: rep.id }, data: { profileReminder2dSent: true } });
+      remindersSent++;
+    }
+
+    res.json({ checked: reps.length, remindersSent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check profile reminders' });
   }
 });
 
