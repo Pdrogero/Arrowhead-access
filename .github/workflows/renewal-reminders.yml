@@ -56,3 +56,7 @@ jobs:
         run: |
           curl -sS -f -X POST "https://arrowhead-access-api.onrender.com/api/auth/check-inactivity-reminders" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+      - name: Trigger profile-completion reminder check
+        run: |
+          curl -sS -f -X POST "https://arrowhead-access-api.onrender.com/api/profile/check-profile-reminders" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
