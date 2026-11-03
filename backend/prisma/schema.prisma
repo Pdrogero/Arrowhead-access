@@ -141,6 +141,13 @@ model Location {
   // sends it twice. Distinct from lastMonthlyReminderMonth above, which
   // goes out to every office every month regardless of activity.
   noSlotsReminder2dSent       Boolean  @default(false)
+  // Date (YYYY-MM-DD) of the Monday of the week the recurring "nothing on
+  // your calendar right now" nudge was last sent for, so it only sends
+  // once a week. Unlike noSlotsReminder2dSent above (a one-time nudge for
+  // an office that has never posted anything), this re-fires every week an
+  // office has zero upcoming slots, even one that was active before and
+  // let its calendar go empty again.
+  emptyCalendarReminderWeek   String?
 
   // Private token embedded in this location's calendar subscription URL, so
   // Google/Apple/Outlook can fetch its booked-visits .ics feed without

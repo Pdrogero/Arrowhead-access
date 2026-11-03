@@ -1650,4 +1650,53 @@ router.post('/check-no-slots-reminders', async (req, res) => {
   }
 });
 
+// --- Weekly check: nudge any office with nothing upcoming on its calendar
+// right now, called by the same scheduled trigger as the other reminder
+// checks. Unlike check-no-slots-reminders above (a one-time nudge for an
+// office that has never posted a single slot, ever), this looks only at
+// whether anything is scheduled from now on — so it re-fires every week
+// for an office that was active before and let its calendar go empty
+// again, not just a brand-new one. Runs on Wednesdays so it lands between
+// the 1st-of-month nudge and the Sunday "week ahead" digest above instead
+// of piling all three into the same day.
+router.post('/check-empty-calendar-reminders', async (req, res) => {
+  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const now = new Date();
+    let remindersSent = 0;
+
+    if (now.getDay() === 3) {
+      const mondayOfThisWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+      const weekKey = `${mondayOfThisWeek.getFullYear()}-${String(mondayOfThisWeek.getMonth() + 1).padStart(2, '0')}-${String(mondayOfThisWeek.getDate()).padStart(2, '0')}`;
+
+      const locations = await prisma.location.findMany({
+        where: {
+          OR: [{ emptyCalendarReminderWeek: null }, { emptyCalendarReminderWeek: { not: weekKey } }],
+          slots: { none: { startTime: { gte: now } } },
+        },
+        include: { staff: true },
+      });
+
+      for (const location of locations) {
+        for (const staff of location.staff) {
+          sendEmail({
+            to: staff.email,
+            subject: `${location.name} has nothing scheduled right now`,
+            html: `${emailLogoHeader()}<p>Hi there,</p><p><strong>${location.name}</strong> doesn't have anything upcoming on its calendar — reps can't book a visit until there's an open slot to claim.</p><p>It only takes a minute to post a lunch slot, a rep-visit window, or set up a recurring schedule.</p>${emailLoginButton('Set up your calendar')}`,
+          }).catch(() => {});
+        }
+        await prisma.location.update({ where: { id: location.id }, data: { emptyCalendarReminderWeek: weekKey } });
+        remindersSent++;
+      }
+    }
+
+    res.json({ remindersSent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check empty-calendar reminders' });
+  }
+});
+
 export default router;
