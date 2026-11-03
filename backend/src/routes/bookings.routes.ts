@@ -1659,6 +1659,15 @@ router.post('/check-no-slots-reminders', async (req, res) => {
 // again, not just a brand-new one. Runs on Wednesdays so it lands between
 // the 1st-of-month nudge and the Sunday "week ahead" digest above instead
 // of piling all three into the same day.
+//
+// Escalates after two consecutive empty weeks: emptyCalendarReminderWeek
+// already holds the key of the last week this office was flagged, so
+// comparing it against last week's key (rather than this week's) tells us
+// whether they were *also* empty last week, with no extra field needed —
+// if it matches, this is at least their second week straight with nothing
+// posted, so it gets the more pointed "still nothing" email instead of the
+// plain one. A week spent not-empty in between resets it back to the
+// plain copy next time they go quiet, since the stored key will be stale.
 router.post('/check-empty-calendar-reminders', async (req, res) => {
   if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -1669,7 +1678,10 @@ router.post('/check-empty-calendar-reminders', async (req, res) => {
 
     if (now.getDay() === 3) {
       const mondayOfThisWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
-      const weekKey = `${mondayOfThisWeek.getFullYear()}-${String(mondayOfThisWeek.getMonth() + 1).padStart(2, '0')}-${String(mondayOfThisWeek.getDate()).padStart(2, '0')}`;
+      const mondayOfLastWeek = new Date(mondayOfThisWeek.getFullYear(), mondayOfThisWeek.getMonth(), mondayOfThisWeek.getDate() - 7);
+      const weekKeyOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const weekKey = weekKeyOf(mondayOfThisWeek);
+      const lastWeekKey = weekKeyOf(mondayOfLastWeek);
 
       const locations = await prisma.location.findMany({
         where: {
@@ -1680,11 +1692,16 @@ router.post('/check-empty-calendar-reminders', async (req, res) => {
       });
 
       for (const location of locations) {
+        const secondWeekStraight = location.emptyCalendarReminderWeek === lastWeekKey;
         for (const staff of location.staff) {
           sendEmail({
             to: staff.email,
-            subject: `${location.name} has nothing scheduled right now`,
-            html: `${emailLogoHeader()}<p>Hi there,</p><p><strong>${location.name}</strong> doesn't have anything upcoming on its calendar — reps can't book a visit until there's an open slot to claim.</p><p>It only takes a minute to post a lunch slot, a rep-visit window, or set up a recurring schedule.</p>${emailLoginButton('Set up your calendar')}`,
+            subject: secondWeekStraight
+              ? `${location.name} still has nothing scheduled — need a hand?`
+              : `${location.name} has nothing scheduled right now`,
+            html: secondWeekStraight
+              ? `${emailLogoHeader()}<p>Hi there,</p><p>It's been two weeks now with nothing on <strong>${location.name}</strong>'s calendar — reps looking for time with you may be moving on to other offices in the meantime.</p><p>Let us know if you need a hand getting set up, or post an open slot below — it only takes a minute.</p>${emailLoginButton('Set up your calendar')}`
+              : `${emailLogoHeader()}<p>Hi there,</p><p><strong>${location.name}</strong> doesn't have anything upcoming on its calendar — reps can't book a visit until there's an open slot to claim.</p><p>It only takes a minute to post a lunch slot, a rep-visit window, or set up a recurring schedule.</p>${emailLoginButton('Set up your calendar')}`,
           }).catch(() => {});
         }
         await prisma.location.update({ where: { id: location.id }, data: { emptyCalendarReminderWeek: weekKey } });
