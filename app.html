@@ -3369,7 +3369,7 @@ async function loadOfficeDetailSlots(locationId) {
       <div class="row">
         <div class="time">${fmtTime(s.startTime)}<div style="font-size:11px;margin-top:2px;">${fmtDayOfWeek(s.startTime)}</div></div>
         <div class="mid">
-          <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
+          <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}${slotProviderLabelHtml(s)}</div>
           ${lunchDetailsSummaryHtml(s)}
         </div>
         ${claimButtonOrStatusHtml(s)}
