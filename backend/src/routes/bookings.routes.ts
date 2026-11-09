@@ -332,7 +332,7 @@ router.get('/locations/:locationId/ledger', requireAuth, requireRole('office_adm
       locationId: req.params.locationId,
       ...(req.query.scope === 'all' ? {} : { OR: [{ startTime: { gte: todayStart } }, { status: 'REQUESTED' }] }),
     },
-    include: { booking: { include: { rep: true } } },
+    include: { booking: { include: { rep: true } }, provider: true },
     orderBy: { startTime: 'asc' },
   });
   res.json(slots);
@@ -351,7 +351,7 @@ router.get('/locations/:locationId/history', requireAuth, requireRole('office_ad
       endTime: { lt: new Date() },
       booking: { status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } },
     },
-    include: { booking: { include: { rep: true } } },
+    include: { booking: { include: { rep: true } }, provider: true },
     orderBy: { startTime: 'desc' },
   });
   res.json(slots);

@@ -164,6 +164,7 @@ model Location {
   favoritedBy FavoriteLocation[]
   savedReps   SavedRep[]
   pendingSchedules PendingOfficeSchedule[]
+  providers   OfficeProvider[]
 }
 
 // An office manually scheduled a visit for a rep by email who doesn't have
@@ -271,6 +272,24 @@ model RecurringSlotTemplate {
   endsAt       DateTime?  // null = recurring forever
   createdAt    DateTime   @default(now())
 
+  @@index([locationId])
+}
+
+// A reusable, office-saved list of the doctors/providers in their practice,
+// so "post an open slot" can be repeated once per provider (each with its
+// own days/times) and consistently tagged — instead of a free-text field
+// that would let "Dr. Smith" and "Dr Smith" drift into two different names
+// across different recurring schedules.
+model OfficeProvider {
+  id         String   @id @default(cuid())
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+  name       String
+  createdAt  DateTime @default(now())
+
+  slots Slot[]
+
+  @@unique([locationId, name])
   @@index([locationId])
 }
 
@@ -595,6 +614,14 @@ model Slot {
   // loses its "posted by" attribution instead.
   createdByStaff   StaffUser?     @relation(fields: [createdByStaffId], references: [id], onDelete: SetNull)
   createdAt        DateTime       @default(now())
+
+  // Which doctor/provider this slot belongs to, for an office with more
+  // than one — optional, and set at posting time from the office's own
+  // saved OfficeProvider list. SetNull (not a hard block) so deleting a
+  // provider from that list never breaks an already-posted slot; it just
+  // stops showing whose it was.
+  providerId       String?
+  provider         OfficeProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
 
   // Lunch order details — only meaningful when eventType is LUNCH. The
   // office fills these in (at posting time or later); if repHandlesOrder

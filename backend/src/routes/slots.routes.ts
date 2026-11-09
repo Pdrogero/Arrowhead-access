@@ -110,13 +110,26 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Only office staff can post slots' });
   }
   try {
-    const { startTime, endTime, eventType, headCount, allergyNotes, foodOrderNotes, repHandlesOrder, repeatInterval, daysOfWeek, staffTrainingNote } = req.body;
+    const { startTime, endTime, eventType, headCount, allergyNotes, foodOrderNotes, repHandlesOrder, repeatInterval, daysOfWeek, staffTrainingNote, providerId } = req.body;
     if (!startTime || !endTime) {
       return res.status(400).json({ error: 'startTime and endTime are required' });
     }
 
     const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
     if (!staff) return res.status(404).json({ error: 'Staff account not found' });
+
+    // Optional — which doctor/provider this schedule is for, picked from
+    // the office's own saved list. Verified here (not just trusted from the
+    // client) so one office can never tag a slot with another office's
+    // provider by guessing an id.
+    let providerDetails = {};
+    if (providerId) {
+      const provider = await prisma.officeProvider.findUnique({ where: { id: providerId } });
+      if (!provider || provider.locationId !== staff.locationId) {
+        return res.status(400).json({ error: 'Provider not found' });
+      }
+      providerDetails = { providerId: provider.id };
+    }
 
     // Breakfast gets the same headcount/allergy/order-details and
     // repeat-scheduling treatment as lunch — the two are otherwise
@@ -175,6 +188,7 @@ router.post('/', requireAuth, async (req, res) => {
               eventType,
               createdByStaffId: staff.id,
               ...lunchDetails,
+              ...providerDetails,
             });
           }
         }
@@ -199,6 +213,7 @@ router.post('/', requireAuth, async (req, res) => {
         createdByStaffId: staff.id,
         ...lunchDetails,
         ...staffTrainingDetails,
+        ...providerDetails,
       },
     });
 
@@ -221,6 +236,7 @@ router.post('/', requireAuth, async (req, res) => {
           eventType,
           createdByStaffId: staff.id,
           ...lunchDetails,
+          ...providerDetails,
         });
       }
       if (repeats.length) await prisma.slot.createMany({ data: repeats });
@@ -300,7 +316,7 @@ router.get('/open', requireAuth, requireRole('rep'), async (req, res) => {
   const [openSlots, myClaimedSlots] = await Promise.all([
     prisma.slot.findMany({
       where: { status: 'OPEN', startTime: { gte: now }, ...hideInternalOffice },
-      include: { location: true },
+      include: { location: true, provider: true },
       orderBy: { startTime: 'asc' },
       take: 50,
     }),
@@ -309,7 +325,7 @@ router.get('/open', requireAuth, requireRole('rep'), async (req, res) => {
         startTime: { gte: now },
         booking: { repId: req.user!.sub, status: { in: ['REQUESTED', 'CONFIRMED'] } },
       },
-      include: { location: true, booking: true },
+      include: { location: true, booking: true, provider: true },
       orderBy: { startTime: 'asc' },
     }),
   ]);
