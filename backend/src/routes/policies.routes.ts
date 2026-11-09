@@ -187,4 +187,69 @@ async function generateSlotsFromTemplate(locationId: string, template: any, time
   await prisma.slot.createMany({ data: slots });
 }
 
+// --- Office's saved doctor/provider list ----------------------------------
+// Reusable across every "post an open slot" submission, so an office with
+// several doctors can tag each recurring schedule with a consistent name
+// instead of retyping (and potentially misspelling) it each time.
+router.get('/providers', requireAuth, async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const providers = await prisma.officeProvider.findMany({
+      where: { locationId: staff.locationId },
+      orderBy: { name: 'asc' },
+    });
+    res.json(providers);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not fetch providers' });
+  }
+});
+
+router.post('/providers', requireAuth, async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    // Reuse an existing one (case-insensitive) instead of creating a
+    // near-duplicate if the office already saved this doctor under
+    // slightly different casing.
+    let provider = await prisma.officeProvider.findFirst({
+      where: { locationId: staff.locationId, name: { equals: name, mode: 'insensitive' } },
+    });
+    if (!provider) {
+      provider = await prisma.officeProvider.create({ data: { locationId: staff.locationId, name } });
+    }
+    res.status(201).json(provider);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not save provider' });
+  }
+});
+
+router.delete('/providers/:id', requireAuth, async (req, res) => {
+  try {
+    const staff = await prisma.staffUser.findUnique({ where: { id: req.user!.sub } });
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+
+    const provider = await prisma.officeProvider.findUnique({ where: { id: req.params.id } });
+    if (!provider || provider.locationId !== staff.locationId) {
+      return res.status(404).json({ error: 'Provider not found' });
+    }
+    // Slots already tagged with this provider keep their providerId column
+    // pointing at a row that's about to disappear — onDelete: SetNull on
+    // that relation clears it automatically, so they just stop showing a
+    // provider name instead of erroring.
+    await prisma.officeProvider.delete({ where: { id: provider.id } });
+    res.json({ message: 'Removed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not remove provider' });
+  }
+});
+
 export default router;

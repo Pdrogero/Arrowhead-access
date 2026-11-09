@@ -1249,6 +1249,12 @@ function screenPostSlot() {
           <option value="OFFICE_CLOSED">Office closed</option>
         </select>
         <p id="quickVisitNote" style="display:none;font-size:12px;color:var(--slate);margin:-8px 0 12px;"></p>
+        <div id="postSlotProviderField" style="display:none;">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Doctor / provider (optional)</label>
+          <select id="postSlotProvider" style="margin-bottom:12px;" onchange="handlePostSlotProviderChange()">
+            <option value="">No specific doctor</option>
+          </select>
+        </div>
         <div id="officeClosedHolidaysBox" style="display:none;margin:-4px 0 12px;">
           <details>
             <summary style="cursor:pointer;font-size:12.5px;font-weight:600;color:var(--teal);">Major U.S. holidays (ET) — for reference</summary>
@@ -1588,6 +1594,15 @@ function eventTypeChipHtml(t) {
   return `<span class="chip" style="background:${c.bg};color:${c.color};">${eventTypeLabel(t)}</span>`;
 }
 
+// Small "· Dr. Smith" label next to a slot's event-type chip, for offices
+// with more than one doctor — blank (not just hidden) when the slot was
+// never tagged with a provider, so it costs nothing on a single-doctor
+// office's ledger or the browse list.
+function slotProviderLabelHtml(s) {
+  if (!s.provider) return '';
+  return ` <span style="font-size:11px;color:var(--slate);font-weight:600;">· ${s.provider.name.replace(/</g, '&lt;')}</span>`;
+}
+
 // Shared Approve/Decline buttons for a REQUESTED booking — every screen
 // that can show a pending request (ledger, calendar day-view, dashboard's
 // pending-requests box) renders this instead of its own copy, so adding or
@@ -1743,6 +1758,8 @@ window.togglePostSlotLunchFields = function() {
   // headcount/allergy/order-details fields only make sense for a meal.
   const supportsRepeat = hasOrderDetails || isOfficeClosed;
   const label = eventType === 'LUNCH' ? 'lunch' : 'breakfast';
+  // A closure isn't anyone's lunch/visit — no doctor to tag it with.
+  document.getElementById('postSlotProviderField').style.display = isOfficeClosed ? 'none' : '';
   document.getElementById('postSlotOrderDetailsFields').style.display = hasOrderDetails ? '' : 'none';
   document.getElementById('postSlotRepeatFields').style.display = supportsRepeat ? '' : 'none';
   document.getElementById('startTimeLabel').textContent = hasOrderDetails ? `Start time for ${label}` : 'Start time';
@@ -2049,7 +2066,7 @@ function renderBrowseList(slots) {
       <div class="mid">
         <div class="who" style="cursor:pointer;" onclick="viewOfficeDetail('${s.location.id}')">${favoriteStarHtml(s.location.id)} ${s.location.name}</div>
         <div class="what">${addressLinkHtml(s.location.address)}</div>
-        <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
+        <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}${slotProviderLabelHtml(s)}</div>
         ${ratingBadge((browseOfficeRatings[s.location.id] || {}).average, (browseOfficeRatings[s.location.id] || {}).count, 'office', s.location.id, s.location.name)}
         ${lunchDetailsSummaryHtml(s)}
       </div>
@@ -5616,6 +5633,58 @@ async function loadOfficePolicy() {
   } catch (err) {}
 }
 
+// The office's saved doctor/provider list, so this post's "doctor" picker
+// and the "+ Add new doctor" flow don't need to re-fetch on every render.
+let postSlotProvidersData = [];
+const ADD_NEW_PROVIDER_VALUE = '__add_new__';
+
+async function loadPostSlotProviders() {
+  try {
+    postSlotProvidersData = await api('/api/policies/providers');
+  } catch (err) {
+    postSlotProvidersData = [];
+  }
+  renderPostSlotProviderOptions();
+}
+
+// Rebuilds the <option> list from postSlotProvidersData, keeping
+// `selectedId` chosen if it's still in the list (used after adding a new
+// one, so the form ends up pointed at what the office just typed).
+function renderPostSlotProviderOptions(selectedId) {
+  const select = document.getElementById('postSlotProvider');
+  if (!select) return;
+  select.innerHTML = `
+    <option value="">No specific doctor</option>
+    ${postSlotProvidersData.map(p => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${p.name.replace(/</g, '&lt;')}</option>`).join('')}
+    <option value="${ADD_NEW_PROVIDER_VALUE}">＋ Add a new doctor…</option>
+  `;
+}
+
+// Picking "+ Add a new doctor" prompts for a name right there instead of
+// navigating away from the post-slot form — saves it to the office's
+// reusable list, then leaves it selected for this slot.
+window.handlePostSlotProviderChange = async function() {
+  const select = document.getElementById('postSlotProvider');
+  if (select.value !== ADD_NEW_PROVIDER_VALUE) return;
+
+  const name = prompt("Doctor's name (e.g. \"Dr. Smith\") — saved for next time too:");
+  if (!name || !name.trim()) {
+    renderPostSlotProviderOptions(); // revert to "No specific doctor"
+    return;
+  }
+  try {
+    const provider = await api('/api/policies/providers', { method: 'POST', body: JSON.stringify({ name: name.trim() }) });
+    if (!postSlotProvidersData.some(p => p.id === provider.id)) {
+      postSlotProvidersData.push(provider);
+      postSlotProvidersData.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    renderPostSlotProviderOptions(provider.id);
+  } catch (err) {
+    alert(err.message);
+    renderPostSlotProviderOptions();
+  }
+};
+
 // Reads any recurring-schedule templates the office previously saved
 // (from before recurring scheduling moved fully into "Post an open
 // slot") — kept only so prefillPostSlotTimeForEventType can still default
@@ -5643,6 +5712,10 @@ async function submitPostSlot(silent) {
   }
 
   const payload = { startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), eventType };
+  const providerSelect = document.getElementById('postSlotProvider');
+  if (providerSelect && providerSelect.value && providerSelect.value !== ADD_NEW_PROVIDER_VALUE) {
+    payload.providerId = providerSelect.value;
+  }
   if (eventType === 'LUNCH' || eventType === 'BREAKFAST') {
     Object.assign(payload, readLunchDetailsFields('postSlot'));
   } else if (eventType === 'STAFF_TRAINING') {
@@ -5797,7 +5870,7 @@ function renderLedgerRowHtml(s, repRatings) {
         </div>
         <div class="mid">
           ${s.booking?.rep ? `<div class="who">${repNameLinkHtml(s.booking.rep)}</div>${ratingBadge(repRatings[s.booking.rep.id].average, repRatings[s.booking.rep.id].count, 'rep', s.booking.rep.id, s.booking.rep.name)}` : `<div class="what">${s.eventType === 'OFFICE_CLOSED' ? 'Not available for booking' : 'Open slot'}</div>`}
-          <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}</div>
+          <div style="margin-top:4px;">${eventTypeChipHtml(s.eventType)}${slotProviderLabelHtml(s)}</div>
           ${lunchDetailsSummaryHtml(s)}
         </div>
         ${s.eventType === 'OFFICE_CLOSED' ? '' : `<span class="chip ${s.status}">${s.status}</span>`}
@@ -7270,6 +7343,7 @@ function render() {
     updateLunchRepeatHint();
     loadOfficePolicy();
     loadRecurringTemplates().then(prefillPostSlotTimeForEventType);
+    loadPostSlotProviders();
   }
   else if (state.screen === 'browseSlots') { app.innerHTML = screenBrowseSlots(); loadOpenSlots(); }
   else if (state.screen === 'transfers') { app.innerHTML = screenTransfers(); if (transfersTab === 'visits') loadTransfers(); else loadTeamData(); }
