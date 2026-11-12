@@ -822,6 +822,11 @@ model Message {
   readAt         DateTime?
   reminderSent   Boolean           @default(false)
 
+  // Soft-delete: set when the sender deletes a message (e.g. an accidental
+  // duplicate send). Kept in the row rather than hard-deleted so a short
+  // undo window can restore it by clearing this back to null.
+  deletedAt      DateTime?
+
   @@index([conversationId, createdAt])
 }
 

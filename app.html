@@ -286,6 +286,7 @@ let activeConversationTargetId = null;
 let activeConversationEventLabel = null;
 let conversationMessages = [];
 let editingMessageId = null; // id of the message currently showing its inline edit form, if any
+let pendingDeleteUndo = null; // { id, message, index, timer } for the message most recently deleted, while its Undo window is still open
 let literatureRows = [];
 let materialsData = [];
 let idVerificationRequest; // undefined = loading, null = none yet, else the latest request object
@@ -3796,6 +3797,7 @@ window.openConversation = function(id, counterpart, targetId) {
   activeConversationTargetId = targetId;
   activeConversationEventLabel = null;
   editingMessageId = null;
+  if (pendingDeleteUndo) { clearTimeout(pendingDeleteUndo.timer); pendingDeleteUndo = null; }
   setState({ screen: 'conversation' });
 };
 
@@ -3810,6 +3812,7 @@ window.startConversation = async function(targetId, counterpart, eventLabel) {
   activeConversationEventLabel = eventLabel || null;
   conversationMessages = [];
   editingMessageId = null;
+  if (pendingDeleteUndo) { clearTimeout(pendingDeleteUndo.timer); pendingDeleteUndo = null; }
   setState({ screen: 'conversation' });
 
   // A conversation with this counterpart may already exist (e.g. reached via
@@ -3831,6 +3834,7 @@ function screenConversation() {
       <button class="link" style="text-align:left;margin-bottom:16px;" onclick="goBack()">&larr; Back to messages</button>
       <h1 style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);" onclick="${state.role === 'rep' ? `viewOfficeDetail('${activeConversationTargetId}')` : `viewRepProfile('${activeConversationTargetId}', '${activeConversationCounterpart.replace(/'/g, "\\'")}')`}" title="View ${state.role === 'rep' ? 'office' : 'rep'} profile">${activeConversationCounterpart}</h1>
       <div id="messagesBox" class="listcard" style="margin-bottom:12px;max-height:400px;overflow-y:auto;"><div class="empty">Loading…</div></div>
+      <div id="deleteUndoBanner" style="display:none;align-items:center;gap:10px;background:#2F2F2F;color:#fff;border-radius:8px;padding:8px 14px;margin:-4px 0 12px;font-size:12px;"></div>
       ${activeConversationEventLabel ? `
         <div style="display:flex;align-items:center;gap:8px;background:#FFF8F0;border:1px solid #F0D9B5;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
           💬 Messaging about: <strong>${activeConversationEventLabel.replace(/</g, '&lt;')}</strong>
@@ -3961,7 +3965,7 @@ function renderMessages() {
       ${showLabel ? `<div style="font-size:11px;font-weight:600;color:var(--teal-dark);margin-bottom:4px;">Re: ${m.eventLabel.replace(/</g, '&lt;')}</div>` : ''}
       ${m.senderType === 'OFFICE' && m.senderName ? `<div style="font-size:11px;font-weight:600;color:var(--slate);margin-bottom:2px;">${m.senderName.replace(/</g, '&lt;')}</div>` : ''}
       <div style="font-size:13px;">${linkifyMessageBody(m.body)}</div>
-      <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}${m.editedAt ? ' · edited' : ''}${showSeen ? ' · <span style="color:var(--teal-dark);font-weight:600;">Seen</span>' : ''}${isMine ? ` · <a href="#" onclick="toggleEditMessage('${m.id}');return false;" style="color:var(--teal);">Edit</a>` : ''}</div>
+      <div style="font-size:10px;color:var(--slate);margin-top:4px;">${fmtTime(m.createdAt)}${m.editedAt ? ' · edited' : ''}${showSeen ? ' · <span style="color:var(--teal-dark);font-weight:600;">Seen</span>' : ''}${isMine ? ` · <a href="#" onclick="toggleEditMessage('${m.id}');return false;" style="color:var(--teal);">Edit</a> · <a href="#" onclick="deleteMessage('${m.id}');return false;" style="color:#B33A3A;">Delete</a>` : ''}</div>
       ${links.map(link => `
         <button type="button" onclick="emailMessageAttachment('${m.id}', '${link.url.replace(/'/g, "\\'")}', '${link.title.replace(/'/g, "\\'")}')" style="display:inline-block;margin-top:6px;margin-right:6px;background:#F0F0EE;color:var(--ink);border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;">✉️ Email this</button>
       `).join('')}
@@ -3996,6 +4000,66 @@ window.saveEditedMessage = async function(id) {
     renderMessages();
   } catch (err) {
     errBox.innerHTML = `<div class="msg err" style="margin:4px 0;">${err.message}</div>`;
+  }
+};
+
+const DELETE_UNDO_WINDOW_MS = 8000;
+
+window.deleteMessage = async function(id) {
+  const index = conversationMessages.findIndex(m => m.id === id);
+  if (index === -1) return;
+  const message = conversationMessages[index];
+
+  // Optimistically remove it from view right away — the server call to
+  // soft-delete it happens in the background.
+  conversationMessages.splice(index, 1);
+  if (editingMessageId === id) editingMessageId = null;
+  renderMessages();
+
+  try {
+    await api(`/api/messages/${id}`, { method: 'DELETE' });
+    showDeleteUndoBanner(id, message, index);
+  } catch (err) {
+    // Put it back if the delete didn't actually go through server-side.
+    conversationMessages.splice(index, 0, message);
+    renderMessages();
+    alert(err.message);
+  }
+};
+
+function showDeleteUndoBanner(id, message, index) {
+  if (pendingDeleteUndo) clearTimeout(pendingDeleteUndo.timer);
+  const banner = document.getElementById('deleteUndoBanner');
+  if (!banner) return;
+  banner.style.display = 'flex';
+  banner.innerHTML = `
+    <span style="flex:1;">Message deleted.</span>
+    <a href="#" onclick="undoDeleteMessage('${id}');return false;" style="color:#fff;font-weight:700;text-decoration:underline;">Undo</a>`;
+  const timer = setTimeout(() => {
+    if (pendingDeleteUndo && pendingDeleteUndo.id === id) hideDeleteUndoBanner();
+  }, DELETE_UNDO_WINDOW_MS);
+  pendingDeleteUndo = { id, message, index, timer };
+}
+
+function hideDeleteUndoBanner() {
+  if (pendingDeleteUndo) clearTimeout(pendingDeleteUndo.timer);
+  pendingDeleteUndo = null;
+  const banner = document.getElementById('deleteUndoBanner');
+  if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
+}
+
+window.undoDeleteMessage = async function(id) {
+  if (!pendingDeleteUndo || pendingDeleteUndo.id !== id) return;
+  const { message, index } = pendingDeleteUndo;
+  try {
+    const restored = await api(`/api/messages/${id}/undo-delete`, { method: 'POST' });
+    const insertAt = Math.min(index, conversationMessages.length);
+    conversationMessages.splice(insertAt, 0, restored);
+    hideDeleteUndoBanner();
+    renderMessages();
+  } catch (err) {
+    hideDeleteUndoBanner();
+    alert(err.message);
   }
 };
 
