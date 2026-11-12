@@ -52,7 +52,7 @@ router.get('/unread-count', requireAuth, async (req, res) => {
       where = { senderType: 'REP', readAt: null, conversation: { locationId: staff.locationId } };
     }
 
-    const count = await prisma.message.count({ where });
+    const count = await prisma.message.count({ where: { ...where, deletedAt: null } });
     res.json({ count });
   } catch (err) {
     console.error(err);
@@ -77,7 +77,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
       include: {
         rep: { select: { id: true, name: true, companyName: true } },
         location: { select: { id: true, name: true } },
-        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+        messages: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1 },
       },
     });
 
@@ -116,7 +116,7 @@ router.get('/conversations/:id/messages', requireAuth, async (req, res) => {
     });
 
     const messages = await prisma.message.findMany({
-      where: { conversationId: conversation.id },
+      where: { conversationId: conversation.id, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
     res.json(messages);
@@ -220,6 +220,46 @@ router.patch('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// --- Delete a message you sent, e.g. an accidental duplicate send ---------
+// Soft-delete only (deletedAt), so a brief client-side "Undo" window can
+// restore it via the route below without any data actually being lost.
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const message = await prisma.message.findUnique({ where: { id: req.params.id } });
+    if (!message || message.deletedAt) return res.status(404).json({ error: 'Message not found' });
+
+    const senderType = req.user!.role === 'rep' ? 'REP' : 'OFFICE';
+    if (message.senderType !== senderType || message.senderId !== req.user!.sub) {
+      return res.status(403).json({ error: 'You can only delete your own messages' });
+    }
+
+    await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not delete this message' });
+  }
+});
+
+// --- Undo a just-deleted message -------------------------------------------
+router.post('/:id/undo-delete', requireAuth, async (req, res) => {
+  try {
+    const message = await prisma.message.findUnique({ where: { id: req.params.id } });
+    if (!message || !message.deletedAt) return res.status(404).json({ error: 'Nothing to undo' });
+
+    const senderType = req.user!.role === 'rep' ? 'REP' : 'OFFICE';
+    if (message.senderType !== senderType || message.senderId !== req.user!.sub) {
+      return res.status(403).json({ error: 'You can only restore your own messages' });
+    }
+
+    const restored = await prisma.message.update({ where: { id: message.id }, data: { deletedAt: null } });
+    res.json(restored);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not restore this message' });
+  }
+});
+
 // --- Office: email a link a rep dropped into a message to any address -----
 // Reps can attach saved marketing material to a message as a plain link —
 // this lets office staff forward that specific link on without having to
@@ -284,7 +324,7 @@ router.post('/check-unread-reminders', async (req, res) => {
   try {
     const cutoff = new Date(Date.now() - UNREAD_REMINDER_DELAY_MS);
     const messages = await prisma.message.findMany({
-      where: { readAt: null, reminderSent: false, createdAt: { lte: cutoff } },
+      where: { readAt: null, reminderSent: false, deletedAt: null, createdAt: { lte: cutoff } },
       include: { conversation: { include: { rep: true, location: { include: { staff: true } } } } },
     });
 
