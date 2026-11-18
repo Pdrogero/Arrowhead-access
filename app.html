@@ -4734,6 +4734,37 @@ function timeOfDayGreeting() {
   return 'Good evening';
 }
 
+// ========== SEASONAL DASHBOARD BANNER (rep + office homepages) ==========
+// Purely decorative — one lightweight banner per calendar month, picked
+// off the viewer's local clock. No server data involved, so it just
+// re-renders on its own whenever the month turns over.
+const SEASONAL_BANNERS = [
+  { emoji: '🎉❄️', title: 'Happy New Year!', sub: "Here's to a great year of visits ahead.", bg: 'linear-gradient(135deg,#E3F0FA 0%,#C9E3F5 100%)', border: '#A9CEE8', titleColor: '#1F4E6E', subColor: '#3E6E8E' },
+  { emoji: '💝', title: "Happy Valentine's Day", sub: 'Sending appreciation to our offices and reps alike.', bg: 'linear-gradient(135deg,#FCE4ED 0%,#F8C9DC 100%)', border: '#EDA8C3', titleColor: '#8A2A4E', subColor: '#A14866' },
+  { emoji: '🌷☘️', title: 'Happy Spring!', sub: 'Fresh season, fresh scheduling.', bg: 'linear-gradient(135deg,#E6F3E6 0%,#C9E8CB 100%)', border: '#A3D3A7', titleColor: '#2E5E34', subColor: '#4A7A50' },
+  { emoji: '🐣🌼', title: 'Happy Spring', sub: 'Blooming season is here.', bg: 'linear-gradient(135deg,#FBF3DD 0%,#F5E4B0 100%)', border: '#E6CC7E', titleColor: '#7A5E1E', subColor: '#92763C' },
+  { emoji: '🌸', title: 'Flowers are blooming', sub: 'Hope May brings great visits.', bg: 'linear-gradient(135deg,#FCE9F0 0%,#F6D0E0 100%)', border: '#E8A9C8', titleColor: '#7A2E54', subColor: '#92486E' },
+  { emoji: '☀️', title: 'Happy summer kickoff!', sub: "Here's to a sunny June.", bg: 'linear-gradient(135deg,#FFF6D6 0%,#FFE9A3 100%)', border: '#E8CC6E', titleColor: '#7A5E0E', subColor: '#92763C' },
+  { emoji: '🎆🇺🇸', title: 'Happy 4th of July', sub: 'Wishing your team a great holiday.', bg: 'linear-gradient(135deg,#FDE8E8 0%,#E8EEFA 60%,#F5F5F5 100%)', border: '#C9BFE0', titleColor: '#8A2A2A', subColor: '#4E5E8A' },
+  { emoji: '🌻', title: 'Dog days of summer', sub: 'Hope August is treating you well.', bg: 'linear-gradient(135deg,#FFF0D6 0%,#FFD9A3 100%)', border: '#E8B76E', titleColor: '#8A5A1E', subColor: '#A1763C' },
+  { emoji: '🍁', title: 'Happy fall!', sub: 'Cooler days, same great scheduling.', bg: 'linear-gradient(135deg,#FBEAD6 0%,#F3CFA0 100%)', border: '#E0AD6E', titleColor: '#7A4A1E', subColor: '#92663C' },
+  { emoji: '🎃👻', title: 'Happy Halloween', sub: 'No tricks here, just open slots.', bg: 'linear-gradient(135deg,#2B2320 0%,#4A3A2E 100%)', border: '#E8792E', titleColor: '#FFA84D', subColor: '#E0C9A8' },
+  { emoji: '🦃🍂', title: 'Happy Thanksgiving season!', sub: "We're grateful for you — wishing your team a great November.", bg: 'linear-gradient(135deg,#FBE9D0 0%,#F6D3A8 100%)', border: '#E8BD82', titleColor: '#7A4A1E', subColor: '#8A6A3E' },
+  { emoji: '🎄❄️', title: 'Happy Holidays', sub: 'Wishing you a joyful end to the year.', bg: 'linear-gradient(135deg,#FCE8E8 0%,#E8F3E8 100%)', border: '#C9A8A8', titleColor: '#8A2A2A', subColor: '#2E5E34' },
+];
+
+function seasonalBannerHtml() {
+  const theme = SEASONAL_BANNERS[new Date().getMonth()];
+  return `
+    <div style="display:flex;align-items:center;gap:10px;background:${theme.bg};border:1px solid ${theme.border};border-radius:10px;padding:10px 14px;margin-bottom:16px;">
+      <span style="font-size:22px;line-height:1;">${theme.emoji}</span>
+      <div>
+        <p style="margin:0;font-size:13.5px;font-weight:700;color:${theme.titleColor};">${theme.title}</p>
+        <p style="margin:0;font-size:12px;color:${theme.subColor};">${theme.sub}</p>
+      </div>
+    </div>`;
+}
+
 function officeHeaderHtml() {
   const me = state.me;
   const firstName = (me?.name || '').trim().split(' ')[0] || me?.email || 'there';
@@ -4766,6 +4797,7 @@ function screenDashboardOffice() {
   return `
     <div class="wrap wide">
       <div id="officeHeaderBox">${officeHeaderHtml()}</div>
+      ${seasonalBannerHtml()}
       <div id="feedbackPromptBox"></div>
       <p style="font-size:13px;font-weight:600;margin:18px 0 2px;">This week's ledger</p>
       <p class="sub">Your upcoming and pending rep visits and scheduled lunches at this location.</p>
@@ -4909,6 +4941,7 @@ function screenDashboardRep() {
   return `
     <div class="wrap wide">
       <div id="repHeaderBox">${repHeaderHtml()}</div>
+      ${seasonalBannerHtml()}
 
       ${!verified ? `
         <div style="background:#FFF7E8;border:1px solid #EBCB8B;border-radius:10px;padding:14px 16px;margin-bottom:20px;">
