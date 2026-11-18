@@ -110,7 +110,7 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Only office staff can post slots' });
   }
   try {
-    const { startTime, endTime, eventType, headCount, allergyNotes, foodOrderNotes, repHandlesOrder, repeatInterval, daysOfWeek, staffTrainingNote, providerId } = req.body;
+    const { startTime, endTime, eventType, headCount, allergyNotes, foodOrderNotes, repHandlesOrder, callRepDayOf, repeatInterval, daysOfWeek, staffTrainingNote, providerId } = req.body;
     if (!startTime || !endTime) {
       return res.status(400).json({ error: 'startTime and endTime are required' });
     }
@@ -140,6 +140,7 @@ router.post('/', requireAuth, async (req, res) => {
       allergyNotes: allergyNotes || null,
       foodOrderNotes: foodOrderNotes || null,
       repHandlesOrder: !!repHandlesOrder,
+      callRepDayOf: !!callRepDayOf,
     } : {};
     // Staff training swaps the office's general Visit Policies for a
     // one-off free-text note to whichever rep books this slot.
@@ -267,7 +268,7 @@ router.patch('/:id/lunch-details', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Only lunch or breakfast slots can have order details' });
     }
 
-    const { headCount, allergyNotes, foodOrderNotes, repHandlesOrder, startTime, endTime } = req.body;
+    const { headCount, allergyNotes, foodOrderNotes, repHandlesOrder, callRepDayOf, startTime, endTime } = req.body;
     if ((startTime && !endTime) || (!startTime && endTime)) {
       return res.status(400).json({ error: 'startTime and endTime must be updated together' });
     }
@@ -282,6 +283,7 @@ router.patch('/:id/lunch-details', requireAuth, async (req, res) => {
         allergyNotes: allergyNotes || null,
         foodOrderNotes: foodOrderNotes || null,
         repHandlesOrder: !!repHandlesOrder,
+        callRepDayOf: !!callRepDayOf,
         ...(startTime && endTime ? { startTime: new Date(startTime), endTime: new Date(endTime) } : {}),
       },
     });
