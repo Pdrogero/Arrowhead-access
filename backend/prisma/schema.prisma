@@ -632,6 +632,10 @@ model Slot {
   allergyNotes     String?
   foodOrderNotes   String?
   repHandlesOrder  Boolean        @default(false)
+  // Office is skipping advance order details entirely and will instead call
+  // the rep the day of to place the order — independent of repHandlesOrder,
+  // since either side can still be the one who calls.
+  callRepDayOf     Boolean        @default(false)
 
   // Free-text note from the office to whichever rep books this slot — only
   // meaningful (and only shown as an editable field) when eventType is
