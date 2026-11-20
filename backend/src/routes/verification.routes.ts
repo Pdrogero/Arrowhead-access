@@ -221,9 +221,9 @@ router.get('/review', async (req, res) => {
 
 // --- Daily check: nudge reps who are still unverified, called by an -------
 // external scheduled trigger. Guarded by the same shared cron secret as
-// the other daily reminder checks. Two stages, same pattern as the
-// multi-threshold renewal-reminder check: a first nudge at day 2, and a
-// second, firmer one at day 5 if they're still unverified by then.
+// the other daily reminder checks. Two one-time stages, same pattern as
+// the multi-threshold renewal-reminder check: a first nudge at day 2, and
+// a second, firmer one at day 5 if they're still unverified by then.
 const UNVERIFIED_REMINDER_STAGES: Array<{ delayDays: number; field: 'unverifiedReminder2dSent' | 'unverifiedReminder5dSent'; html: (name: string) => string }> = [
   {
     delayDays: 2,
@@ -236,6 +236,13 @@ const UNVERIFIED_REMINDER_STAGES: Array<{ delayDays: number; field: 'unverifiedR
     html: (name) => `<p>Hi ${name},</p><p>Just a follow-up — your Arrowhead Access account is still unverified, five days after signing up. You won't be able to claim visits, message offices, or book anything until you upload a photo of your company ID or badge. It's quick, and keeps your account from sitting idle.</p>${emailLoginButton('Upload ID to get verified')}`,
   },
 ];
+
+// After the day-5 nudge, keep nudging once a week for as long as the rep
+// stays unverified — unlike the two stages above, this one repeats
+// (gated by unverifiedWeeklyReminderSentAt instead of a one-time flag).
+const UNVERIFIED_WEEKLY_REMINDER_START_DELAY_DAYS = 12; // day-5 stage + 7 more days
+const UNVERIFIED_WEEKLY_REMINDER_INTERVAL_DAYS = 7;
+const unverifiedWeeklyReminderHtml = (name: string) => `<p>Hi ${name},</p><p>Your Arrowhead Access account is still unverified. It's been sitting idle since you signed up — you won't be able to claim visits, message offices, or book anything until you upload a photo of your company ID or badge. It only takes a minute.</p>${emailLoginButton('Upload ID to get verified')}`;
 
 router.post('/check-unverified-reminders', async (req, res) => {
   if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
@@ -261,6 +268,30 @@ router.post('/check-unverified-reminders', async (req, res) => {
         await prisma.rep.update({ where: { id: rep.id }, data: { [stage.field]: true } });
         remindersSent++;
       }
+    }
+
+    const weeklyStartCutoff = new Date(Date.now() - UNVERIFIED_WEEKLY_REMINDER_START_DELAY_DAYS * 24 * 60 * 60 * 1000);
+    const weeklyRepeatCutoff = new Date(Date.now() - UNVERIFIED_WEEKLY_REMINDER_INTERVAL_DAYS * 24 * 60 * 60 * 1000);
+    const weeklyReps = await prisma.rep.findMany({
+      where: {
+        verificationStatus: 'UNVERIFIED',
+        createdAt: { lte: weeklyStartCutoff },
+        OR: [
+          { unverifiedWeeklyReminderSentAt: null },
+          { unverifiedWeeklyReminderSentAt: { lte: weeklyRepeatCutoff } },
+        ],
+      },
+    });
+    checked += weeklyReps.length;
+
+    for (const rep of weeklyReps) {
+      sendEmail({
+        to: rep.email,
+        subject: "You're not verified yet on Arrowhead Access",
+        html: `${emailLogoHeader()}${unverifiedWeeklyReminderHtml(rep.name)}`,
+      }).catch(() => {});
+      await prisma.rep.update({ where: { id: rep.id }, data: { unverifiedWeeklyReminderSentAt: new Date() } });
+      remindersSent++;
     }
 
     res.json({ checked, remindersSent });
