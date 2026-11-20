@@ -396,6 +396,10 @@ model Rep {
   unverifiedReminder2dSent Boolean         @default(false)
   // Same idea, a second nudge at day 5 if still unverified then.
   unverifiedReminder5dSent Boolean         @default(false)
+  // After the day-5 nudge, keeps nudging weekly for as long as the rep
+  // stays unverified — set to the time of the last weekly nudge so the
+  // cron check only sends the next one 7+ days later.
+  unverifiedWeeklyReminderSentAt DateTime?
   createdAt            DateTime            @default(now())
   // Stamped on every successful login (not signup) — null means they've
   // never logged back in since creating the account. Drives the "you've
